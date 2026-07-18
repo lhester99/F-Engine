@@ -325,6 +325,105 @@ input[type="range"]::-moz-range-thumb {
 .confidence-control input[type="range"]::-webkit-slider-thumb { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
 .confidence-control .control-val { color: var(--green-glow); }
 
+/* ===================== SCENARIO ARCHIVE ===================== */
+.scenario-archive {
+  border-top: 1px dashed var(--panel-border);
+  padding-top: 16px;
+}
+.save-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+#scenario-name {
+  flex: 1;
+  min-width: 0;
+  background: #06100c;
+  border: 1px solid var(--panel-border);
+  color: var(--green-glow);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 6px 8px;
+  border-radius: 2px;
+  outline: none;
+  text-transform: uppercase;
+}
+#scenario-name:focus { border-color: var(--green-dim); }
+#scenario-name::placeholder { color: var(--text-dim); letter-spacing: 1px; text-transform: none; }
+#save-scenario {
+  background: transparent;
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+#save-scenario:hover { border-color: var(--amber); box-shadow: 0 0 8px rgba(255,176,0,0.35); }
+
+#scenario-list { display: flex; flex-direction: column; gap: 8px; }
+.scenario-row {
+  border: 1px solid var(--panel-border);
+  border-left: 2px solid var(--panel-border);
+  border-radius: 2px;
+  padding: 7px 8px;
+  background: rgba(6,16,12,0.5);
+}
+.scenario-row.overlaid { border-left-color: var(--ovl-color, var(--green-glow)); }
+.scenario-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.scenario-name-lbl {
+  color: var(--green);
+  font-size: 11px;
+  letter-spacing: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scenario-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.scenario-actions button {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.scenario-actions button:hover { border-color: var(--green-dim); color: var(--green); }
+.scenario-actions .ovl-toggle.active {
+  color: var(--ovl-color, var(--amber));
+  border-color: var(--ovl-color, var(--amber));
+  box-shadow: 0 0 6px var(--ovl-color, var(--amber));
+}
+.scenario-actions .del-btn:hover { border-color: var(--red); color: var(--red); }
+.scenario-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.scenario-stats b { color: var(--amber); font-weight: normal; }
+.scenario-stats .stat-crit b { color: var(--red); }
+.scenario-hint {
+  margin-top: 10px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
 /* ===================== TAX PANEL ===================== */
 #tax-readout { font-size: 11px; margin-bottom: 8px; }
 .tax-row {

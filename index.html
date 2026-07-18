@@ -103,6 +103,16 @@
           <label>CONFIDENCE BAND <span class="control-val" id="val-confidence"></span></label>
           <input type="range" id="slider-confidence" min="50" max="99" step="1">
         </div>
+
+        <div class="control scenario-archive">
+          <label>SCENARIO ARCHIVE <span class="control-val" id="scenario-count"></span></label>
+          <div class="save-row">
+            <input type="text" id="scenario-name" maxlength="24" placeholder="DESIGNATION…" autocomplete="off" spellcheck="false">
+            <button id="save-scenario">SAVE</button>
+          </div>
+          <div id="scenario-list"></div>
+          <div class="scenario-hint" id="scenario-hint">SAVE THE CURRENT CONFIG, THEN TOGGLE ▤ TO OVERLAY IT ON THE TRAJECTORY.</div>
+        </div>
       </section>
 
       <!-- SUBSYSTEM PANEL: TAX -->

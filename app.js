@@ -21,7 +21,33 @@ const state = {
 
 let lastResult = null;
 let lastBands = null;
+let lastSummary = null;
 let hazardShownForThisRun = false;
+
+// -------------------- SCENARIO ARCHIVE --------------------
+const SCENARIO_STORE_KEY = 'enginef.scenarios.v1';
+// Distinct phosphor hues for overlaid comparison lines (live median is green).
+const OVERLAY_COLORS = ['#ffb000', '#4de1ff', '#ff6ad5', '#c8ff4d'];
+let comparisonOverlays = []; // [{ id, name, years, medianPath, color }]
+
+function getScenarios() {
+  try {
+    return JSON.parse(localStorage.getItem(SCENARIO_STORE_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+function setScenarios(arr) {
+  try {
+    localStorage.setItem(SCENARIO_STORE_KEY, JSON.stringify(arr));
+  } catch (e) {
+    // storage unavailable/full — archive just won't persist this session
+  }
+}
+function newScenarioId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 's' + Date.now() + Math.random().toString(36).slice(2);
+}
 
 // -------------------- BOOT SEQUENCE --------------------
 const bootLogLines = [
@@ -103,7 +129,11 @@ function finishBoot() {
   document.getElementById('dashboard').classList.remove('hidden');
   startAmbientDrone();
   initControls();
+  // Size the canvas now that the dashboard is visible — at window-load time
+  // the dashboard was display:none, so its parent measured 0 wide.
+  resizeCanvas();
   recompute(true);
+  renderScenarioList();
 }
 
 function initBoot() {
@@ -162,6 +192,12 @@ function initControls() {
   document.getElementById('hazard-ack').addEventListener('click', () => {
     document.getElementById('hazard-modal').classList.add('hidden');
   });
+
+  // scenario archive controls
+  document.getElementById('save-scenario').addEventListener('click', saveScenario);
+  document.getElementById('scenario-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveScenario();
+  });
 }
 
 let recomputeTimer = null;
@@ -198,10 +234,28 @@ function recompute() {
   const percentilesNeeded = Array.from(new Set([5, 25, 50, 75, 95, lower, upper])).sort((a,b)=>a-b);
   lastBands = computePercentileBands(lastResult.paths, percentilesNeeded);
 
+  // Snapshot of this run's headline results, for the scenario archive.
+  const median = lastBands[50];
+  lastSummary = {
+    successProbability: successProbability(lastResult.paths),
+    finalMedian: median[median.length - 1],
+    peakMedian: Math.max(...median),
+    medianPath: median.slice(),
+    years: lastResult.years.slice(),
+    combinedMarginalRate: combinedMarginalRate(state.annualIncome, lastResult.years[0]),
+    creepCount: 0, // filled in by updateTaxPanel below
+  };
+
   drawChart(lastResult.years, lastBands, lower, upper);
   updateStatusReadouts(lastResult, lower, upper);
   updateTaxPanel(lastResult);
   checkHazard(lastResult);
+}
+
+function redrawChart() {
+  if (!lastResult) return;
+  const { lower, upper } = confidenceToPercentiles(state.confidence);
+  drawChart(lastResult.years, lastBands, lower, upper);
 }
 
 // -------------------- CHART --------------------
@@ -223,7 +277,8 @@ function drawChart(years, bands, lowerP, upperP) {
   ctx2d.clearRect(0, 0, w, h);
 
   const allVals = [].concat(bands[5] || [], bands[95] || []);
-  const maxVal = Math.max(...allVals, 1);
+  const overlayVals = comparisonOverlays.reduce((acc, o) => acc.concat(o.medianPath), []);
+  const maxVal = Math.max(...allVals, ...overlayVals, 1);
   const padding = { top: 20 * devicePixelRatio, bottom: 30 * devicePixelRatio, left: 70 * devicePixelRatio, right: 20 * devicePixelRatio };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
@@ -284,6 +339,30 @@ function drawChart(years, bands, lowerP, upperP) {
   pathFor(bands[50]);
   ctx2d.stroke();
   ctx2d.shadowBlur = 0;
+
+  // comparison overlays — saved scenarios' median lines, dashed + labeled
+  comparisonOverlays.forEach((o) => {
+    const n = o.medianPath.length;
+    if (n < 2) return;
+    ctx2d.strokeStyle = o.color;
+    ctx2d.lineWidth = 1.6 * devicePixelRatio;
+    ctx2d.setLineDash([5 * devicePixelRatio, 3 * devicePixelRatio]);
+    ctx2d.beginPath();
+    o.medianPath.forEach((v, i) => {
+      const px = padding.left + (i / (n - 1)) * chartW;
+      const py = y(v);
+      if (i === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+    });
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    // label near the line's end
+    ctx2d.fillStyle = o.color;
+    ctx2d.font = `${10 * devicePixelRatio}px Consolas, monospace`;
+    const endY = y(o.medianPath[n - 1]);
+    const label = o.name.length > 12 ? o.name.slice(0, 12) : o.name;
+    const textW = label.length * 6.2 * devicePixelRatio;
+    ctx2d.fillText(label, padding.left + chartW - textW, endY - 5 * devicePixelRatio);
+  });
 
   // retirement age marker
   const retireIdx = state.retireAge - state.currentAge;
@@ -362,6 +441,7 @@ function updateTaxPanel(result) {
 
   const creepEvents = detectBracketCreep(incomePath);
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
+  if (lastSummary) lastSummary.creepCount = creepEvents.length;
 
   const log = document.getElementById('creep-log');
   log.innerHTML = '';
@@ -370,6 +450,161 @@ function updateTaxPanel(result) {
     div.className = ev.direction;
     div.textContent = `${ev.year} — bracket ${ev.direction === 'up' ? '↑' : '↓'} ${(ev.fromRate*100).toFixed(0)}% → ${(ev.toRate*100).toFixed(0)}%`;
     log.appendChild(div);
+  });
+}
+
+// -------------------- SCENARIO ARCHIVE UI --------------------
+function saveScenario() {
+  if (!lastSummary) return;
+  const nameInput = document.getElementById('scenario-name');
+  let name = (nameInput.value || '').trim();
+  if (!name) name = 'SCENARIO ' + (getScenarios().length + 1);
+  name = name.toUpperCase().slice(0, 24);
+
+  const scenario = {
+    id: newScenarioId(),
+    name,
+    createdAt: Date.now(),
+    inputs: {
+      currentAge: state.currentAge,
+      retireAge: state.retireAge,
+      endAge: state.endAge,
+      startingBalance: state.startingBalance,
+      annualIncome: state.annualIncome,
+      savingsRate: state.savingsRate,
+      retirementSpend: state.retirementSpend,
+      expectedReturn: state.expectedReturn,
+      returnStdDev: state.returnStdDev,
+      inflation: state.inflation,
+      confidence: state.confidence,
+      numSims: state.numSims,
+    },
+    summary: { ...lastSummary },
+  };
+
+  const arr = getScenarios();
+  arr.push(scenario);
+  setScenarios(arr);
+  nameInput.value = '';
+  renderScenarioList();
+}
+
+function deleteScenario(id) {
+  setScenarios(getScenarios().filter((s) => s.id !== id));
+  comparisonOverlays = comparisonOverlays.filter((o) => o.id !== id);
+  renderScenarioList();
+  redrawChart();
+}
+
+function toggleOverlay(id) {
+  const existing = comparisonOverlays.findIndex((o) => o.id === id);
+  if (existing >= 0) {
+    comparisonOverlays.splice(existing, 1);
+  } else {
+    if (comparisonOverlays.length >= OVERLAY_COLORS.length) return; // cap reached
+    const s = getScenarios().find((x) => x.id === id);
+    if (!s) return;
+    const used = comparisonOverlays.map((o) => o.color);
+    const color = OVERLAY_COLORS.find((c) => !used.includes(c)) || OVERLAY_COLORS[0];
+    comparisonOverlays.push({
+      id: s.id,
+      name: s.name,
+      years: s.summary.years,
+      medianPath: s.summary.medianPath,
+      color,
+    });
+  }
+  renderScenarioList();
+  redrawChart();
+}
+
+function loadScenario(id) {
+  const s = getScenarios().find((x) => x.id === id);
+  if (!s) return;
+  const inp = s.inputs;
+  // restore fields with no dedicated slider directly
+  state.currentAge = inp.currentAge;
+  state.endAge = inp.endAge;
+  state.startingBalance = inp.startingBalance;
+  state.annualIncome = inp.annualIncome;
+  state.inflation = inp.inflation;
+  state.numSims = inp.numSims;
+  // restore slider-backed fields (dispatch 'input' to refresh state + labels)
+  setSliderValue('slider-retireAge', inp.retireAge);
+  setSliderValue('slider-savingsRate', inp.savingsRate * 100);
+  setSliderValue('slider-retirementSpend', inp.retirementSpend);
+  setSliderValue('slider-expectedReturn', (inp.expectedReturn * 100).toFixed(1));
+  setSliderValue('slider-returnStdDev', (inp.returnStdDev * 100).toFixed(1));
+  setSliderValue('slider-confidence', inp.confidence);
+  recompute(false);
+}
+
+function setSliderValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value;
+  el.dispatchEvent(new Event('input'));
+}
+
+function renderScenarioList() {
+  const scenarios = getScenarios();
+  const list = document.getElementById('scenario-list');
+  const countEl = document.getElementById('scenario-count');
+  const hintEl = document.getElementById('scenario-hint');
+  if (countEl) countEl.textContent = scenarios.length ? `${scenarios.length} STORED` : '';
+  if (hintEl) hintEl.style.display = scenarios.length ? 'none' : '';
+
+  list.innerHTML = '';
+  scenarios.forEach((s) => {
+    const overlay = comparisonOverlays.find((o) => o.id === s.id);
+    const row = document.createElement('div');
+    row.className = 'scenario-row' + (overlay ? ' overlaid' : '');
+    if (overlay) row.style.setProperty('--ovl-color', overlay.color);
+
+    const prob = Math.round((s.summary.successProbability || 0) * 100);
+    const solvClass = prob < 60 ? ' stat-crit' : '';
+
+    const head = document.createElement('div');
+    head.className = 'scenario-row-head';
+    const nameLbl = document.createElement('span');
+    nameLbl.className = 'scenario-name-lbl';
+    nameLbl.textContent = s.name;
+    nameLbl.title = s.name;
+
+    const actions = document.createElement('span');
+    actions.className = 'scenario-actions';
+
+    const ovlBtn = document.createElement('button');
+    ovlBtn.className = 'ovl-toggle' + (overlay ? ' active' : '');
+    ovlBtn.textContent = '▤';
+    ovlBtn.title = overlay ? 'Hide overlay' : 'Overlay on chart';
+    if (overlay) ovlBtn.style.setProperty('--ovl-color', overlay.color);
+    ovlBtn.addEventListener('click', () => toggleOverlay(s.id));
+
+    const loadBtn = document.createElement('button');
+    loadBtn.className = 'load-btn';
+    loadBtn.textContent = 'LOAD';
+    loadBtn.title = 'Load into sliders';
+    loadBtn.addEventListener('click', () => loadScenario(s.id));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-btn';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete scenario';
+    delBtn.addEventListener('click', () => deleteScenario(s.id));
+
+    actions.append(ovlBtn, loadBtn, delBtn);
+    head.append(nameLbl, actions);
+
+    const stats = document.createElement('div');
+    stats.className = 'scenario-stats';
+    stats.innerHTML =
+      `<span class="stat-solv${solvClass}">SOLV <b>${prob}%</b></span>` +
+      `<span>END <b>$${formatCompact(s.summary.finalMedian || 0)}</b></span>` +
+      `<span>CREEP <b>${s.summary.creepCount ?? '—'}</b></span>`;
+
+    row.append(head, stats);
+    list.appendChild(row);
   });
 }
 
