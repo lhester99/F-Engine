@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ENGINE F</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ BOOT SEQUENCE ============ -->
+  <div id="boot-screen">
+    <div class="boot-stage" id="boot-logo-stage">
+      <div class="logo-scene">
+        <div class="logo-cube">
+          <div class="face front">F</div>
+          <div class="face back">F</div>
+          <div class="face right"></div>
+          <div class="face left"></div>
+          <div class="face top"></div>
+          <div class="face bottom"></div>
+        </div>
+      </div>
+      <div class="boot-title">ENGINE&nbsp;F</div>
+      <div class="boot-sub">PERSONAL TRAJECTORY SYSTEM</div>
+    </div>
+    <div class="boot-stage boot-log" id="boot-log-stage">
+      <pre id="boot-log-text"></pre>
+    </div>
+    <button id="skip-boot">SKIP ▸</button>
+  </div>
+
+  <!-- ============ MAIN DASHBOARD ============ -->
+  <div id="dashboard" class="hidden">
+
+    <header id="topbar">
+      <div class="brand">ENGINE&nbsp;F<span class="brand-sub">// TRAJECTORY CONSOLE</span></div>
+      <div id="status-readouts">
+        <div class="readout" id="readout-solvency">
+          <span class="readout-label">SOLVENCY</span>
+          <span class="readout-value">—</span>
+        </div>
+        <div class="readout" id="readout-trajectory">
+          <span class="readout-label">TRAJECTORY</span>
+          <span class="readout-value">—</span>
+        </div>
+        <div class="readout" id="readout-confidence">
+          <span class="readout-label">CONF. BAND</span>
+          <span class="readout-value">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-grid">
+
+      <!-- HERO CHART -->
+      <section id="chart-panel" class="panel">
+        <div class="panel-header">
+          <span>NET WORTH TRAJECTORY</span>
+          <span class="panel-tag">SIM.CORE // MONTE CARLO</span>
+        </div>
+        <canvas id="hero-chart"></canvas>
+        <div id="chart-legend">
+          <span><i class="swatch swatch-median"></i>MEDIAN</span>
+          <span><i class="swatch swatch-band"></i>LIKELY RANGE</span>
+          <span><i class="swatch swatch-tail"></i>TAIL RANGE</span>
+        </div>
+      </section>
+
+      <!-- SIDE PANEL: SLIDERS -->
+      <section id="controls-panel" class="panel">
+        <div class="panel-header">
+          <span>SCENARIO CONTROLS</span>
+          <span class="panel-tag">INPUT.ARRAY</span>
+        </div>
+
+        <div class="control">
+          <label>RETIREMENT AGE <span class="control-val" id="val-retireAge"></span></label>
+          <input type="range" id="slider-retireAge" min="35" max="75" step="1">
+        </div>
+
+        <div class="control">
+          <label>SAVINGS RATE <span class="control-val" id="val-savingsRate"></span></label>
+          <input type="range" id="slider-savingsRate" min="0" max="90" step="1">
+        </div>
+
+        <div class="control">
+          <label>RETIREMENT SPEND / YR <span class="control-val" id="val-retirementSpend"></span></label>
+          <input type="range" id="slider-retirementSpend" min="10000" max="400000" step="1000">
+        </div>
+
+        <div class="control">
+          <label>EXPECTED RETURN <span class="control-val" id="val-expectedReturn"></span></label>
+          <input type="range" id="slider-expectedReturn" min="0" max="14" step="0.1">
+        </div>
+
+        <div class="control">
+          <label>VOLATILITY (σ) <span class="control-val" id="val-returnStdDev"></span></label>
+          <input type="range" id="slider-returnStdDev" min="1" max="30" step="0.5">
+        </div>
+
+        <div class="control confidence-control">
+          <label>CONFIDENCE BAND <span class="control-val" id="val-confidence"></span></label>
+          <input type="range" id="slider-confidence" min="50" max="99" step="1">
+        </div>
+      </section>
+
+      <!-- SUBSYSTEM PANEL: TAX -->
+      <section id="tax-panel" class="panel">
+        <div class="panel-header">
+          <span>MARGINAL RATE MONITOR</span>
+          <span class="panel-tag">TAX.SYS // FED+NC</span>
+        </div>
+        <div id="tax-readout">
+          <div class="tax-row"><span>CURRENT MARGINAL RATE</span><span id="tax-current-rate">—</span></div>
+          <div class="tax-row"><span>BRACKET CROSSINGS DETECTED</span><span id="tax-creep-count">—</span></div>
+        </div>
+        <div id="creep-log"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ============ HAZARD / RUIN WARNING ============ -->
+  <div id="hazard-modal" class="hidden">
+    <div class="hazard-box">
+      <div class="hazard-icon">⚠</div>
+      <div class="hazard-title">WARNING</div>
+      <div class="hazard-body">SIMULATED TRAJECTORY DEPLETES BEFORE END OF PLAN.<br>SOLVENCY FAILURE DETECTED IN A MATERIAL SHARE OF OUTCOMES.</div>
+      <button id="hazard-ack">ACKNOWLEDGE</button>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
