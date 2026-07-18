@@ -4,8 +4,9 @@
 // ============================================================
 
 // --- Tax bracket data (single filer, versioned by year) -----
-// NOTE: these are placeholder 2025-ish figures. Update yearly.
-// Structure lets the tax engine stay agnostic to the actual numbers.
+// NOTE: single-filer figures, versioned by year. Update yearly; keep prior
+// years in place so past scenarios can be re-derived.
+// getYearData picks the newest entry at or below the requested year.
 const FEDERAL_BRACKETS = {
   2025: {
     standardDeduction: 15000,
@@ -19,6 +20,18 @@ const FEDERAL_BRACKETS = {
       { rate: 0.37, upTo: Infinity },
     ],
   },
+  2026: {
+    standardDeduction: 16100,
+    brackets: [
+      { rate: 0.10, upTo: 12400 },
+      { rate: 0.12, upTo: 50400 },
+      { rate: 0.22, upTo: 105700 },
+      { rate: 0.24, upTo: 201775 },
+      { rate: 0.32, upTo: 256225 },
+      { rate: 0.35, upTo: 640600 },
+      { rate: 0.37, upTo: Infinity },
+    ],
+  },
 };
 
 // NC has moved toward a flat rate structure in recent years.
@@ -26,6 +39,10 @@ const NC_TAX = {
   2025: {
     standardDeduction: 12750,
     flatRate: 0.0425,
+  },
+  2026: {
+    standardDeduction: 12750,
+    flatRate: 0.0409,
   },
 };
 
@@ -36,7 +53,7 @@ function getYearData(table, year) {
 }
 
 // Progressive federal tax on taxable income (after standard deduction)
-function computeFederalTax(grossIncome, year = 2025) {
+function computeFederalTax(grossIncome, year = 2026) {
   const data = getYearData(FEDERAL_BRACKETS, year);
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   let tax = 0;
@@ -52,7 +69,7 @@ function computeFederalTax(grossIncome, year = 2025) {
 }
 
 // Marginal federal rate at a given income level
-function marginalFederalRate(grossIncome, year = 2025) {
+function marginalFederalRate(grossIncome, year = 2026) {
   const data = getYearData(FEDERAL_BRACKETS, year);
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   for (const b of data.brackets) {
@@ -61,21 +78,21 @@ function marginalFederalRate(grossIncome, year = 2025) {
   return data.brackets[data.brackets.length - 1].rate;
 }
 
-function computeNCTax(grossIncome, year = 2025) {
+function computeNCTax(grossIncome, year = 2026) {
   const data = getYearData(NC_TAX, year);
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   return taxable * data.flatRate;
 }
 
-function marginalNCRate(_grossIncome, year = 2025) {
+function marginalNCRate(_grossIncome, year = 2026) {
   return getYearData(NC_TAX, year).flatRate; // flat, so constant
 }
 
-function combinedMarginalRate(grossIncome, year = 2025) {
+function combinedMarginalRate(grossIncome, year = 2026) {
   return marginalFederalRate(grossIncome, year) + marginalNCRate(grossIncome, year);
 }
 
-function totalTax(grossIncome, year = 2025) {
+function totalTax(grossIncome, year = 2026) {
   return computeFederalTax(grossIncome, year) + computeNCTax(grossIncome, year);
 }
 
@@ -199,16 +216,14 @@ function confidenceToPercentiles(confidence) {
   return { lower: tail, upper: 100 - tail };
 }
 
-// Probability of "success" (never hitting zero before endAge)
+// Probability of "success" (never hitting zero before endAge).
+// The sim clamps balance at zero, so a path that touches zero at any point
+// after the start has depleted ("ruin"). Checking for a single zero — rather
+// than two consecutive zeros — also catches depletion in the final year.
 function successProbability(paths) {
-  const successes = paths.filter((p) => p[p.length - 1] > 0 && !p.some((v, i) => i > 0 && v === 0 && p[i-1] > 0 === false)).length;
-  // Simpler + correct definition: success = balance never permanently pinned at 0 mid-path in a way that indicates ruin
-  const ruinCount = paths.filter((p) => {
-    for (let i = 1; i < p.length; i++) {
-      if (p[i] === 0 && p[i - 1] === 0) return true; // stayed at zero = ran out
-    }
-    return false;
-  }).length;
+  const ruinCount = paths.filter((p) =>
+    p.some((v, i) => i > 0 && v <= 0)
+  ).length;
   return 1 - ruinCount / paths.length;
 }
 
