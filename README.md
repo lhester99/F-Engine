@@ -33,6 +33,13 @@ handled gracefully).
   default). Bracket-creep ("creep") detection now runs on the **actual
   ordinary taxable income** from a deterministic projection of the account
   model — not a spend proxy.
+- **IRMAA cliff detection** (`engine.js`) — Medicare Part B surcharge tiers
+  (single filer, 2025 figures), driven by the projected MAGI with the SSA
+  **2-year look-back** (so a high final working year can trip IRMAA in the
+  first Medicare years). Thresholds are inflation-indexed forward so a long
+  retirement isn't pushed into phantom cliffs by nominal growth. The tax
+  panel shows cliff count, peak annual surcharge, and each crossing in the
+  event log.
 - **Hero chart** (`app.js`, canvas-based) — median line, 25–75 "likely" band,
   and a confidence-driven tail band that widens/narrows with the toggle.
   Retirement age marked with a dashed line. Saved scenarios can be overlaid
@@ -59,8 +66,9 @@ handled gracefully).
 - Tax bracket data is single-filer, hardcoded in `engine.js` (`FEDERAL_
   BRACKETS` / `NC_TAX`) — add filing status or new years there; the engine
   is agnostic to the actual figures.
-- **No IRMAA cliff detection yet** — the ordinary-income projection now
-  exists to drive it (next priority).
+- IRMAA is Part B only, single-filer, 2025 tiers (inflation-indexed
+  forward). Part D IRMAA and filing-status variants aren't modeled; MAGI is
+  approximated by the model's ordinary taxable income.
 - Taxable-brokerage withdrawals are **not** cost-basis tracked, so they add
   no ordinary income and pay no capital-gains tax in the model (a real LTCG
   schedule + basis tracking is future work). Traditional/Roth *contribution*
@@ -73,8 +81,9 @@ handled gracefully).
 
 ## Natural next steps
 
-- IRMAA cliff detection layered onto the tax panel (uses the new ordinary-
-  income projection as MAGI input)
-- Taxable-account cost-basis + long-term capital-gains modeling
-- Real subsystem names + copy pass
 - GitHub Pages deploy config
+- Taxable-account cost-basis + long-term capital-gains modeling (would also
+  sharpen MAGI for IRMAA)
+- Part D IRMAA + filing-status variants
+- Real subsystem names + copy pass
+- Visual polish (tail-band opacity contrast, ambient drone)

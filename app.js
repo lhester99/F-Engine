@@ -489,12 +489,36 @@ function updateTaxPanel(result) {
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
   if (lastSummary) lastSummary.creepCount = creepEvents.length;
 
+  // IRMAA cliffs (Medicare Part B surcharge), driven by the same projected
+  // MAGI, inflation-indexed with the model's inflation assumption.
+  const irmaaEvents = detectIrmaaCliffs(incomePath, {
+    currentAge: state.currentAge,
+    startYear: result.years[0],
+    inflation: state.inflation,
+  });
+  document.getElementById('tax-irmaa-count').textContent = irmaaEvents.length;
+  const peakSurcharge = irmaaEvents.reduce((m, e) => Math.max(m, e.surchargeAnnual || 0), 0);
+  document.getElementById('tax-irmaa-peak').textContent =
+    peakSurcharge > 0 ? `$${Math.round(peakSurcharge).toLocaleString()}/YR` : '—';
+  if (lastSummary) lastSummary.irmaaCliffs = irmaaEvents.length;
+
+  // Merge bracket + IRMAA events into one chronological log.
+  const merged = [
+    ...creepEvents.map((e) => ({ kind: 'bracket', ...e })),
+    ...irmaaEvents.map((e) => ({ kind: 'irmaa', ...e })),
+  ].sort((a, b) => a.year - b.year);
+
   const log = document.getElementById('creep-log');
   log.innerHTML = '';
-  creepEvents.slice(0, 12).forEach((ev) => {
+  merged.slice(0, 16).forEach((ev) => {
     const div = document.createElement('div');
-    div.className = ev.direction;
-    div.textContent = `${ev.year} — bracket ${ev.direction === 'up' ? '↑' : '↓'} ${(ev.fromRate*100).toFixed(0)}% → ${(ev.toRate*100).toFixed(0)}%`;
+    if (ev.kind === 'bracket') {
+      div.className = ev.direction;
+      div.textContent = `${ev.year} — bracket ${ev.direction === 'up' ? '↑' : '↓'} ${(ev.fromRate*100).toFixed(0)}% → ${(ev.toRate*100).toFixed(0)}%`;
+    } else {
+      div.className = 'irmaa ' + ev.direction;
+      div.textContent = `${ev.year} — IRMAA ${ev.direction === 'up' ? '▲' : '▼'} tier ${ev.toTier} (+$${Math.round(ev.surchargeAnnual).toLocaleString()}/yr)`;
+    }
     log.appendChild(div);
   });
 }

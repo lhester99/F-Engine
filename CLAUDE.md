@@ -59,8 +59,11 @@ understand what's already working, then extend from there.
 
 1. **Tax model**: single-filer only. Federal + NC brackets shipped for 2025
    and 2026 in `engine.js` (`FEDERAL_BRACKETS`, `NC_TAX`), 2026 is the
-   default. **No IRMAA cliff detection yet** (next priority — the ordinary-
-   income projection it needs now exists, see #2).
+   default. IRMAA cliff detection is now in (`detectIrmaaCliffs`,
+   `IRMAA_PARTB`) — Part B, single-filer, 2025 tiers inflation-indexed
+   forward, MAGI from `projectTaxableIncome`. Remaining: Part D IRMAA,
+   filing-status variants, and MAGI is still approximated by ordinary
+   taxable income.
 2. ~~**Retirement income proxy**~~ **DONE**: there's now an account-type
    model (Traditional / Roth / taxable brokerage) with tax-aware,
    sequenced withdrawals (`withdrawForSpend`, `runMonteCarlo`,
@@ -85,14 +88,15 @@ understand what's already working, then extend from there.
 1. ~~Scenario save/compare~~ — **DONE**
 2. ~~Account-type-aware modeling~~ — **DONE** (Traditional/Roth/taxable
    buckets, withdrawals taxed by type)
-3. **IRMAA cliff detection layered onto the tax panel** — NEXT. Feed the
-   ordinary-income projection (`projectTaxableIncome`) into MAGI-based
-   IRMAA tier detection; surface tier crossings alongside bracket creep.
-4. GitHub Pages deploy config
+3. ~~IRMAA cliff detection~~ — **DONE** (Part B, MAGI from
+   `projectTaxableIncome`, 2-year look-back, inflation-indexed tiers;
+   surfaced in the tax panel alongside bracket creep).
+4. **GitHub Pages deploy config** — NEXT.
 5. Visual polish pass once the above is solid: refine the tail-band opacity
    contrast (currently subtle), consider ambient audio drone refinements
 6. Taxable-account cost-basis + LTCG modeling (deferred from the account
-   model)
+   model; would also sharpen MAGI for IRMAA)
+7. Part D IRMAA + filing-status variants
 
 ## Working style for this project
 

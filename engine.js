@@ -119,6 +119,102 @@ function detectBracketCreep(incomePath) {
 }
 
 // ============================================================
+// IRMAA — Medicare Part B income-related monthly adjustment
+// ============================================================
+// A "cliff" surcharge: cross a MAGI threshold by $1 and the whole Part B
+// premium jumps to the next tier. Applies at age 65+ and is based on MAGI
+// from `lookbackYears` prior — so a high FINAL WORKING YEAR can trigger
+// IRMAA in the first Medicare years.
+//
+// Single-filer, versioned like the tax tables. 2025 tiers are the real
+// figures. Thresholds (and the surcharge shown) are inflation-indexed
+// forward to each premium year with the model's inflation assumption —
+// real IRMAA brackets are CPI-indexed, so without this a 30-year
+// retirement of nominally-growing withdrawals would trip phantom cliffs.
+// Add a dated entry when new official figures publish.
+const IRMAA_PARTB = {
+  2025: {
+    lookbackYears: 2,
+    eligibleAge: 65,
+    standardMonthly: 185.0,
+    // upTo = MAGI ceiling for the tier; surchargeMonthly = amount ABOVE
+    // the standard premium.
+    tiers: [
+      { upTo: 106000, surchargeMonthly: 0 },
+      { upTo: 133000, surchargeMonthly: 74.0 },
+      { upTo: 167000, surchargeMonthly: 185.0 },
+      { upTo: 200000, surchargeMonthly: 295.9 },
+      { upTo: 500000, surchargeMonthly: 406.9 },
+      { upTo: Infinity, surchargeMonthly: 443.9 },
+    ],
+  },
+};
+
+// Newest table year at or below `year` (companion to getYearData, but
+// returns the matched key so callers can index inflation from it).
+function matchedTableYear(table, year) {
+  const years = Object.keys(table).map(Number).sort((a, b) => a - b);
+  return years.filter((y) => y <= year).pop() ?? years[0];
+}
+
+// Tier index for a MAGI against a set of (already inflation-adjusted) tiers.
+function irmaaTierIndex(magi, tiers) {
+  for (let i = 0; i < tiers.length; i++) {
+    if (magi <= tiers[i].upTo) return i;
+  }
+  return tiers.length - 1;
+}
+
+// Detect IRMAA tier crossings across a projected income path.
+// incomePath: [{ year, income }]  (income ~ MAGI in this model)
+// opts: { currentAge, startYear, inflation }
+// Returns [{ year, magiYear, magi, fromTier, toTier, direction,
+//            surchargeAnnual, standardMonthly }].
+function detectIrmaaCliffs(incomePath, opts) {
+  const { currentAge, startYear, inflation = 0 } = opts || {};
+  const key = matchedTableYear(IRMAA_PARTB, startYear);
+  const data = IRMAA_PARTB[key];
+  const magiByYear = {};
+  incomePath.forEach((p) => { magiByYear[p.year] = p.income; });
+
+  const events = [];
+  let prevTier = 0; // implicit standard-premium baseline before Medicare
+  let started = false;
+  for (const p of incomePath) {
+    const age = currentAge + (p.year - startYear);
+    if (age < data.eligibleAge) continue;
+
+    const factor = Math.pow(1 + inflation, p.year - key);
+    const tiers = data.tiers.map((t) => ({
+      upTo: t.upTo === Infinity ? Infinity : t.upTo * factor,
+    }));
+    const magiYear = p.year - data.lookbackYears;
+    const magi = magiByYear[magiYear] != null ? magiByYear[magiYear] : p.income;
+    const tier = irmaaTierIndex(magi, tiers);
+    const surchargeAnnual = data.tiers[tier].surchargeMonthly * 12 * factor;
+
+    if (started && tier !== prevTier) {
+      events.push({
+        year: p.year, magiYear, magi,
+        fromTier: prevTier, toTier: tier,
+        direction: tier > prevTier ? 'up' : 'down',
+        surchargeAnnual, standardMonthly: data.standardMonthly * factor,
+      });
+    } else if (!started && tier > 0) {
+      // enters Medicare already in an IRMAA tier — that's a cliff too
+      events.push({
+        year: p.year, magiYear, magi,
+        fromTier: 0, toTier: tier, direction: 'up',
+        surchargeAnnual, standardMonthly: data.standardMonthly * factor,
+      });
+    }
+    prevTier = tier;
+    started = true;
+  }
+  return events;
+}
+
+// ============================================================
 // ACCOUNT-TYPE WITHDRAWAL MODEL
 // ============================================================
 // Retirement withdrawals are sequenced across three account types and
@@ -413,6 +509,8 @@ if (typeof module !== 'undefined') {
     combinedMarginalRate,
     totalTax,
     detectBracketCreep,
+    detectIrmaaCliffs,
+    irmaaTierIndex,
     normalizeAllocation,
     grossUpTraditional,
     withdrawForSpend,

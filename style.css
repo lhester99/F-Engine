@@ -451,6 +451,8 @@ input[type="range"]::-moz-range-thumb {
 }
 #creep-log div.up { color: var(--red); }
 #creep-log div.down { color: var(--green-glow); }
+#creep-log div.irmaa { color: var(--amber); }
+#creep-log div.irmaa.down { color: var(--green-dim); }
 
 /* ===================== HAZARD MODAL ===================== */
 #hazard-modal {
