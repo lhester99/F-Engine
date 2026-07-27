@@ -321,6 +321,13 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
+.account-start { border-top: 1px dashed var(--panel-border); padding-top: 16px; }
+.alloc-control { margin-bottom: 12px; }
+.alloc-control label { color: var(--text-dim); }
+.alloc-control .control-val { color: var(--green-glow); }
+.alloc-control input[type="range"]::-webkit-slider-thumb { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.alloc-control input[type="range"]::-moz-range-thumb { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
 .confidence-control { border-top: 1px dashed var(--panel-border); padding-top: 16px; }
 .confidence-control input[type="range"]::-webkit-slider-thumb { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
 .confidence-control .control-val { color: var(--green-glow); }

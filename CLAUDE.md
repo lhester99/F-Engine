@@ -55,20 +55,26 @@ understand what's already working, then extend from there.
 - Default scenario boots into a stable (~85% success) baseline rather than
   already-broken state
 
-## Known simplifications in v1 — pick up from here
+## Known simplifications — pick up from here
 
-1. **Tax model**: single-filer only, placeholder 2025 bracket figures
-   hardcoded in `engine.js` (`FEDERAL_BRACKETS`, `NC_TAX`). No IRMAA cliff
-   detection yet.
-2. **Retirement income proxy**: bracket-creep detection during retirement
-   uses withdrawal amount as a stand-in for taxable income — there's no
-   real account-type model (Traditional vs. Roth vs. taxable brokerage)
-   driving actual taxable withdrawals yet.
+1. **Tax model**: single-filer only. Federal + NC brackets shipped for 2025
+   and 2026 in `engine.js` (`FEDERAL_BRACKETS`, `NC_TAX`), 2026 is the
+   default. **No IRMAA cliff detection yet** (next priority — the ordinary-
+   income projection it needs now exists, see #2).
+2. ~~**Retirement income proxy**~~ **DONE**: there's now an account-type
+   model (Traditional / Roth / taxable brokerage) with tax-aware,
+   sequenced withdrawals (`withdrawForSpend`, `runMonteCarlo`,
+   `projectTaxableIncome`). Bracket-creep detection runs on the real
+   ordinary taxable income the withdrawals produce. Remaining gap: taxable-
+   brokerage withdrawals aren't cost-basis tracked (no LTCG schedule yet),
+   and accumulation-phase Traditional-vs-Roth contribution tax treatment
+   isn't differentiated.
 3. **Single return distribution**: one normal distribution (mean/stdev) for
    all years — no glide path, no different volatility pre- vs.
    post-retirement.
-4. **No persistence**: refreshing the page resets to the default scenario.
-   No scenario save/compare yet.
+4. ~~**No persistence**~~ **DONE**: scenario save/compare exists — name a
+   scenario, persist slider state + result snapshot to `localStorage`,
+   overlay/load/delete, compare on the chart.
 5. **Subsystem naming**: panel/subsystem labels are still generic
    (e.g. "MARGINAL RATE MONITOR"). Cryptic MU-TH-UR-style designations are
    intentionally left for Logan to name — don't invent final names, just
@@ -76,14 +82,17 @@ understand what's already working, then extend from there.
 
 ## Suggested next build priorities (in order)
 
-1. Scenario save/compare — name a scenario, persist slider state + result,
-   allow comparing 2+ scenarios side by side
-2. Account-type-aware modeling — split starting balance into Traditional /
-   Roth / taxable buckets, tax withdrawals accordingly
-3. IRMAA cliff detection layered onto the tax panel
+1. ~~Scenario save/compare~~ — **DONE**
+2. ~~Account-type-aware modeling~~ — **DONE** (Traditional/Roth/taxable
+   buckets, withdrawals taxed by type)
+3. **IRMAA cliff detection layered onto the tax panel** — NEXT. Feed the
+   ordinary-income projection (`projectTaxableIncome`) into MAGI-based
+   IRMAA tier detection; surface tier crossings alongside bracket creep.
 4. GitHub Pages deploy config
 5. Visual polish pass once the above is solid: refine the tail-band opacity
    contrast (currently subtle), consider ambient audio drone refinements
+6. Taxable-account cost-basis + LTCG modeling (deferred from the account
+   model)
 
 ## Working style for this project
 

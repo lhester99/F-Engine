@@ -119,6 +119,100 @@ function detectBracketCreep(incomePath) {
 }
 
 // ============================================================
+// ACCOUNT-TYPE WITHDRAWAL MODEL
+// ============================================================
+// Retirement withdrawals are sequenced across three account types and
+// taxed by type, so the portfolio feels the real drag of taxes and the
+// bracket monitor sees actual ordinary taxable income (not a proxy):
+//
+//   - taxable brokerage : drawn FIRST. Gains are not tracked to a cost
+//     basis in this model, so these withdrawals add NO ordinary income
+//     (a long-term cap-gains schedule is out of scope for now — README).
+//   - traditional (tax-deferred) : drawn NEXT. 100% ordinary taxable
+//     income; withdrawals are grossed up so the AFTER-TAX proceeds meet
+//     the spend target.
+//   - roth (tax-free) : drawn LAST, preserving tax-free growth longest.
+//
+// retirementSpend is treated as an after-tax spending target.
+
+// Normalize raw allocation weights into fractions that sum to 1.
+// Extreme/degenerate inputs are allowed (no clamping philosophy); an
+// all-zero mix falls back to 100% traditional so nothing divides by zero.
+function normalizeAllocation(a) {
+  const t = Math.max(0, (a && a.traditional) || 0);
+  const r = Math.max(0, (a && a.roth) || 0);
+  const x = Math.max(0, (a && a.taxable) || 0);
+  const sum = t + r + x;
+  if (sum <= 0) return { traditional: 1, roth: 0, taxable: 0 };
+  return { traditional: t / sum, roth: r / sum, taxable: x / sum };
+}
+
+// Gross up a traditional (fully taxable) withdrawal so the after-tax
+// proceeds equal netNeed: solve f(G) = G - tax(G) - netNeed = 0.
+// Newton-Raphson with f'(G) = 1 - marginalRate(G) converges in a few
+// steps; a fixed-point fallback (G = netNeed + tax(G), a contraction
+// since rates < 1) guards the piecewise kinks at bracket boundaries.
+// Assumes traditional is the only ordinary income for the year.
+function grossUpTraditional(netNeed, year) {
+  if (netNeed <= 0) return 0;
+  let g = netNeed;
+  for (let k = 0; k < 40; k++) {
+    const f = g - totalTax(g, year) - netNeed;
+    if (Math.abs(f) < 1e-7) break;
+    const slope = 1 - combinedMarginalRate(g, year); // df/dG
+    const next = slope > 1e-9 ? g - f / slope : netNeed + totalTax(g, year);
+    g = next > 0 ? next : netNeed + totalTax(g, year);
+  }
+  return g;
+}
+
+// Draw `netSpend` after-tax dollars from the buckets in tax-aware order.
+// Pure: returns new bucket balances plus the ordinary income / tax it
+// generated and any shortfall (unfunded spend => the plan has broken).
+function withdrawForSpend(buckets, netSpend, year) {
+  let taxable = buckets.taxable;
+  let traditional = buckets.traditional;
+  let roth = buckets.roth;
+  let remaining = netSpend;
+  let ordinaryIncome = 0;
+
+  // 1) taxable brokerage — no ordinary income in this model
+  const fromTaxable = Math.min(taxable, remaining);
+  taxable -= fromTaxable;
+  remaining -= fromTaxable;
+
+  // 2) traditional — grossed up so after-tax proceeds cover the need
+  if (remaining > 0 && traditional > 0) {
+    const grossNeeded = grossUpTraditional(remaining, year);
+    if (grossNeeded <= traditional) {
+      traditional -= grossNeeded;
+      ordinaryIncome += grossNeeded;
+      remaining = 0;
+    } else {
+      // bucket can't cover the full gross-up: drain it entirely
+      ordinaryIncome += traditional;
+      const netFromTrad = traditional - totalTax(traditional, year);
+      remaining -= Math.max(0, netFromTrad);
+      traditional = 0;
+    }
+  }
+
+  // 3) roth — tax-free
+  if (remaining > 0 && roth > 0) {
+    const fromRoth = Math.min(roth, remaining);
+    roth -= fromRoth;
+    remaining -= fromRoth;
+  }
+
+  return {
+    buckets: { taxable, traditional, roth },
+    ordinaryIncome,
+    tax: totalTax(ordinaryIncome, year),
+    shortfall: remaining, // > 0 => spend could not be funded this year
+  };
+}
+
+// ============================================================
 // MONTE CARLO ENGINE
 // ============================================================
 
@@ -137,9 +231,13 @@ function randomNormal(mean, stdDev) {
  *   startingBalance, currentAge, retireAge, endAge,
  *   annualIncome, savingsRate, retirementSpend,
  *   expectedReturn, returnStdDev, inflation,
+ *   allocation: { traditional, roth, taxable },  // raw weights, normalized
  *   numSims, startYear
  * }
  * Returns: { years: number[], paths: number[][] }  paths[sim][yearIndex]
+ *
+ * Balances are held in three account buckets; contributions split by the
+ * allocation, retirement withdrawals sequenced + taxed by bucket type.
  */
 function runMonteCarlo(params) {
   const {
@@ -153,18 +251,21 @@ function runMonteCarlo(params) {
     expectedReturn,
     returnStdDev,
     inflation,
+    allocation = { traditional: 1, roth: 0, taxable: 0 },
     numSims = 2000,
     startYear = new Date().getFullYear(),
   } = params;
 
+  const alloc = normalizeAllocation(allocation);
   const totalYears = Math.max(1, endAge - currentAge);
   const years = Array.from({ length: totalYears + 1 }, (_, i) => startYear + i);
   const paths = [];
-  const incomePaths = []; // for tax bracket creep, use the median-ish deterministic path separately
 
   for (let s = 0; s < numSims; s++) {
-    let balance = startingBalance;
-    const path = [balance];
+    let traditional = startingBalance * alloc.traditional;
+    let roth = startingBalance * alloc.roth;
+    let taxable = startingBalance * alloc.taxable;
+    const path = [startingBalance];
     let income = annualIncome;
 
     for (let i = 1; i <= totalYears; i++) {
@@ -172,21 +273,97 @@ function runMonteCarlo(params) {
       const isRetired = age >= retireAge;
       const yearReturn = randomNormal(expectedReturn, returnStdDev);
 
+      // every bucket earns the same market return this year
+      traditional *= (1 + yearReturn);
+      roth *= (1 + yearReturn);
+      taxable *= (1 + yearReturn);
+
       if (!isRetired) {
         const contribution = income * savingsRate;
-        balance = balance * (1 + yearReturn) + contribution;
+        traditional += contribution * alloc.traditional;
+        roth += contribution * alloc.roth;
+        taxable += contribution * alloc.taxable;
         income = income * (1 + inflation * 0.6); // wage growth assumption, damped
       } else {
         const spend = retirementSpend * Math.pow(1 + inflation, i);
-        balance = balance * (1 + yearReturn) - spend;
+        const res = withdrawForSpend({ taxable, traditional, roth }, spend, years[i]);
+        traditional = res.buckets.traditional;
+        roth = res.buckets.roth;
+        taxable = res.buckets.taxable;
       }
-      balance = Math.max(0, balance); // can't go negative — plan "breaks"
-      path.push(balance);
+
+      traditional = Math.max(0, traditional);
+      roth = Math.max(0, roth);
+      taxable = Math.max(0, taxable);
+      path.push(traditional + roth + taxable); // total net worth
     }
     paths.push(path);
   }
 
   return { years, paths };
+}
+
+/**
+ * Deterministic (expected-return, no volatility) projection of ordinary
+ * taxable income per year. Pre-retirement it's the growing wage; in
+ * retirement it's the ACTUAL ordinary income the account-type withdrawal
+ * model produces (traditional withdrawals), so the bracket monitor and
+ * IRMAA logic see real taxable income rather than the spend proxy.
+ * Returns: [{ year, income, retired }]
+ */
+function projectTaxableIncome(params) {
+  const {
+    startingBalance,
+    currentAge,
+    retireAge,
+    endAge,
+    annualIncome,
+    savingsRate,
+    retirementSpend,
+    expectedReturn,
+    inflation,
+    allocation = { traditional: 1, roth: 0, taxable: 0 },
+    startYear = new Date().getFullYear(),
+  } = params;
+
+  const alloc = normalizeAllocation(allocation);
+  const totalYears = Math.max(1, endAge - currentAge);
+  let traditional = startingBalance * alloc.traditional;
+  let roth = startingBalance * alloc.roth;
+  let taxable = startingBalance * alloc.taxable;
+  let wage = annualIncome;
+
+  const path = [];
+  const retiredNow = currentAge >= retireAge;
+  path.push({ year: startYear, income: retiredNow ? 0 : wage, retired: retiredNow });
+
+  for (let i = 1; i <= totalYears; i++) {
+    const age = currentAge + i;
+    const isRetired = age >= retireAge;
+
+    traditional *= (1 + expectedReturn);
+    roth *= (1 + expectedReturn);
+    taxable *= (1 + expectedReturn);
+
+    let ordinaryIncome;
+    if (!isRetired) {
+      const contribution = wage * savingsRate;
+      traditional += contribution * alloc.traditional;
+      roth += contribution * alloc.roth;
+      taxable += contribution * alloc.taxable;
+      ordinaryIncome = wage;
+      wage = wage * (1 + inflation * 0.6);
+    } else {
+      const spend = retirementSpend * Math.pow(1 + inflation, i);
+      const res = withdrawForSpend({ taxable, traditional, roth }, spend, startYear + i);
+      traditional = Math.max(0, res.buckets.traditional);
+      roth = Math.max(0, res.buckets.roth);
+      taxable = Math.max(0, res.buckets.taxable);
+      ordinaryIncome = res.ordinaryIncome;
+    }
+    path.push({ year: startYear + i, income: ordinaryIncome, retired: isRetired });
+  }
+  return path;
 }
 
 // Compute percentile bands from simulated paths at each year index.
@@ -236,7 +413,11 @@ if (typeof module !== 'undefined') {
     combinedMarginalRate,
     totalTax,
     detectBracketCreep,
+    normalizeAllocation,
+    grossUpTraditional,
+    withdrawForSpend,
     runMonteCarlo,
+    projectTaxableIncome,
     computePercentileBands,
     confidenceToPercentiles,
     successProbability,

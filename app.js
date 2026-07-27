@@ -10,11 +10,15 @@ const state = {
   endAge: 92,
   startingBalance: 250000,
   annualIncome: 120000,
-  savingsRate: 0.20,
-  retirementSpend: 65000,
+  savingsRate: 0.24,
+  retirementSpend: 58000,
   expectedReturn: 0.07,
   returnStdDev: 0.12,
   inflation: 0.025,
+  // account-type mix (raw weights, normalized by the engine)
+  allocTrad: 55,
+  allocRoth: 15,
+  allocTaxable: 30,
   confidence: 90,
   numSims: 600,
 };
@@ -25,7 +29,9 @@ let lastSummary = null;
 let hazardShownForThisRun = false;
 
 // -------------------- SCENARIO ARCHIVE --------------------
-const SCENARIO_STORE_KEY = 'enginef.scenarios.v1';
+// v2: account-type model changed what a saved result means (tax-aware), so
+// a new key avoids mixing pre-tax snapshots into comparisons.
+const SCENARIO_STORE_KEY = 'enginef.scenarios.v2';
 // Distinct phosphor hues for overlaid comparison lines (live median is green).
 const OVERLAY_COLORS = ['#ffb000', '#4de1ff', '#ff6ad5', '#c8ff4d'];
 let comparisonOverlays = []; // [{ id, name, years, medianPath, color }]
@@ -169,10 +175,20 @@ function initControls() {
     state.returnStdDev = v / 100;
     return `${(+v).toFixed(1)}%`;
   });
+  bindSlider('slider-startBalance', 'val-startBalance', (v) => {
+    state.startingBalance = +v;
+    updateAllocationLabels(); // per-bucket dollar amounts depend on the total
+    return `$${(+v).toLocaleString()}`;
+  });
   bindSlider('slider-confidence', 'val-confidence', (v) => {
     state.confidence = +v;
     return `${v}%`;
   });
+
+  // allocation sliders share one label updater (labels show normalized % + $)
+  bindAllocSlider('slider-allocTrad', 'allocTrad');
+  bindAllocSlider('slider-allocRoth', 'allocRoth');
+  bindAllocSlider('slider-allocTaxable', 'allocTaxable');
 
   // set defaults into the inputs
   document.getElementById('slider-retireAge').value = state.retireAge;
@@ -180,14 +196,19 @@ function initControls() {
   document.getElementById('slider-retirementSpend').value = state.retirementSpend;
   document.getElementById('slider-expectedReturn').value = (state.expectedReturn * 100).toFixed(1);
   document.getElementById('slider-returnStdDev').value = (state.returnStdDev * 100).toFixed(1);
+  document.getElementById('slider-startBalance').value = state.startingBalance;
+  document.getElementById('slider-allocTrad').value = state.allocTrad;
+  document.getElementById('slider-allocRoth').value = state.allocRoth;
+  document.getElementById('slider-allocTaxable').value = state.allocTaxable;
   document.getElementById('slider-confidence').value = state.confidence;
 
   // trigger initial label paint
-  ['retireAge','savingsRate','retirementSpend','expectedReturn','returnStdDev','confidence']
+  ['retireAge','savingsRate','retirementSpend','expectedReturn','returnStdDev','startBalance','confidence']
     .forEach((id) => {
       const el = document.getElementById('slider-' + id);
       el.dispatchEvent(new Event('input'));
     });
+  updateAllocationLabels();
 
   document.getElementById('hazard-ack').addEventListener('click', () => {
     document.getElementById('hazard-modal').classList.add('hidden');
@@ -212,10 +233,34 @@ function bindSlider(sliderId, labelId, updateFn) {
   });
 }
 
+// Allocation sliders are interdependent (labels show each bucket as a share
+// of the normalized total), so they update all three labels together.
+function bindAllocSlider(sliderId, field) {
+  const slider = document.getElementById(sliderId);
+  slider.addEventListener('input', () => {
+    state[field] = +slider.value;
+    updateAllocationLabels();
+    clearTimeout(recomputeTimer);
+    recomputeTimer = setTimeout(() => recompute(false), 40);
+  });
+}
+
+function updateAllocationLabels() {
+  const alloc = normalizeAllocation({
+    traditional: state.allocTrad,
+    roth: state.allocRoth,
+    taxable: state.allocTaxable,
+  });
+  const bal = state.startingBalance;
+  const fmt = (frac) => `${Math.round(frac * 100)}% · $${formatCompact(bal * frac)}`;
+  document.getElementById('val-allocTrad').textContent = fmt(alloc.traditional);
+  document.getElementById('val-allocRoth').textContent = fmt(alloc.roth);
+  document.getElementById('val-allocTaxable').textContent = fmt(alloc.taxable);
+}
+
 // -------------------- SIMULATION + RENDER --------------------
-function recompute() {
-  const startYear = new Date().getFullYear();
-  lastResult = runMonteCarlo({
+function scenarioParams(startYear) {
+  return {
     startingBalance: state.startingBalance,
     currentAge: state.currentAge,
     retireAge: state.retireAge,
@@ -226,9 +271,19 @@ function recompute() {
     expectedReturn: state.expectedReturn,
     returnStdDev: state.returnStdDev,
     inflation: state.inflation,
+    allocation: {
+      traditional: state.allocTrad,
+      roth: state.allocRoth,
+      taxable: state.allocTaxable,
+    },
     numSims: state.numSims,
     startYear,
-  });
+  };
+}
+
+function recompute() {
+  const startYear = new Date().getFullYear();
+  lastResult = runMonteCarlo(scenarioParams(startYear));
 
   const { lower, upper } = confidenceToPercentiles(state.confidence);
   const percentilesNeeded = Array.from(new Set([5, 25, 50, 75, 95, lower, upper])).sort((a,b)=>a-b);
@@ -425,19 +480,10 @@ function updateTaxPanel(result) {
   const currentRate = combinedMarginalRate(state.annualIncome, result.years[0]);
   document.getElementById('tax-current-rate').textContent = (currentRate * 100).toFixed(1) + '%';
 
-  // Build a deterministic income path (no randomness) purely for bracket-creep display:
-  // pre-retirement income grows with damped inflation; post-retirement "income" ~ withdrawal.
-  const incomePath = [];
-  let income = state.annualIncome;
-  for (let i = 0; i < result.years.length; i++) {
-    const age = state.currentAge + i;
-    const isRetired = age >= state.retireAge;
-    const yearIncome = isRetired
-      ? state.retirementSpend * Math.pow(1 + state.inflation, i) // proxy for taxable withdrawal
-      : income;
-    incomePath.push({ year: result.years[i], income: yearIncome });
-    if (!isRetired) income *= (1 + state.inflation * 0.6);
-  }
+  // Deterministic (mean-return) projection of ACTUAL ordinary taxable income:
+  // pre-retirement wages, post-retirement the real traditional-withdrawal
+  // income the account-type model produces (no longer a spend proxy).
+  const incomePath = projectTaxableIncome(scenarioParams(result.years[0]));
 
   const creepEvents = detectBracketCreep(incomePath);
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
@@ -476,6 +522,9 @@ function saveScenario() {
       expectedReturn: state.expectedReturn,
       returnStdDev: state.returnStdDev,
       inflation: state.inflation,
+      allocTrad: state.allocTrad,
+      allocRoth: state.allocRoth,
+      allocTaxable: state.allocTaxable,
       confidence: state.confidence,
       numSims: state.numSims,
     },
@@ -525,16 +574,20 @@ function loadScenario(id) {
   // restore fields with no dedicated slider directly
   state.currentAge = inp.currentAge;
   state.endAge = inp.endAge;
-  state.startingBalance = inp.startingBalance;
   state.annualIncome = inp.annualIncome;
   state.inflation = inp.inflation;
   state.numSims = inp.numSims;
-  // restore slider-backed fields (dispatch 'input' to refresh state + labels)
+  // restore slider-backed fields (dispatch 'input' to refresh state + labels).
+  // Older scenarios predate the account model — fall back to current defaults.
   setSliderValue('slider-retireAge', inp.retireAge);
   setSliderValue('slider-savingsRate', inp.savingsRate * 100);
   setSliderValue('slider-retirementSpend', inp.retirementSpend);
   setSliderValue('slider-expectedReturn', (inp.expectedReturn * 100).toFixed(1));
   setSliderValue('slider-returnStdDev', (inp.returnStdDev * 100).toFixed(1));
+  setSliderValue('slider-startBalance', inp.startingBalance ?? state.startingBalance);
+  setSliderValue('slider-allocTrad', inp.allocTrad ?? state.allocTrad);
+  setSliderValue('slider-allocRoth', inp.allocRoth ?? state.allocRoth);
+  setSliderValue('slider-allocTaxable', inp.allocTaxable ?? state.allocTaxable);
   setSliderValue('slider-confidence', inp.confidence);
   recompute(false);
 }
