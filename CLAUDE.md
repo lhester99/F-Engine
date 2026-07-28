@@ -55,48 +55,51 @@ understand what's already working, then extend from there.
 - Default scenario boots into a stable (~85% success) baseline rather than
   already-broken state
 
+## Current model (post "mega update")
+
+The engine is now an income-driven household cash-flow model, not a
+savings-rate toy. One shared `stepYear` drives both the Monte Carlo and the
+deterministic `projectPlan`, so they never drift. Working years: (household +
+spouse) income − tax − expenses − per-account contributions = surplus → taxable
+brokerage. Retirement: Social Security (85% taxable) + RMDs cover spend first,
+then withdrawals sequence taxable → Traditional (grossed up on top of the SS/RMD
+base) → Roth. `projectPlan` returns rich per-year rows (buckets, income, tax)
+that power the chart-inspect snapshot and the tax panel.
+
 ## Known simplifications — pick up from here
 
-1. **Tax model**: single-filer only. Federal + NC brackets shipped for 2025
-   and 2026 in `engine.js` (`FEDERAL_BRACKETS`, `NC_TAX`), 2026 is the
-   default. IRMAA cliff detection is now in (`detectIrmaaCliffs`,
-   `IRMAA_PARTB`) — Part B, single-filer, 2025 tiers inflation-indexed
-   forward, MAGI from `projectTaxableIncome`. Remaining: Part D IRMAA,
-   filing-status variants, and MAGI is still approximated by ordinary
-   taxable income.
-2. ~~**Retirement income proxy**~~ **DONE**: there's now an account-type
-   model (Traditional / Roth / taxable brokerage) with tax-aware,
-   sequenced withdrawals (`withdrawForSpend`, `runMonteCarlo`,
-   `projectTaxableIncome`). Bracket-creep detection runs on the real
-   ordinary taxable income the withdrawals produce. Remaining gap: taxable-
-   brokerage withdrawals aren't cost-basis tracked (no LTCG schedule yet),
-   and accumulation-phase Traditional-vs-Roth contribution tax treatment
-   isn't differentiated.
-3. **Single return distribution**: one normal distribution (mean/stdev) for
-   all years — no glide path, no different volatility pre- vs.
-   post-retirement.
-4. ~~**No persistence**~~ **DONE**: scenario save/compare exists — name a
-   scenario, persist slider state + result snapshot to `localStorage`,
-   overlay/load/delete, compare on the chart.
-5. **Subsystem naming**: panel/subsystem labels are still generic
-   (e.g. "MARGINAL RATE MONITOR"). Cryptic MU-TH-UR-style designations are
-   intentionally left for Logan to name — don't invent final names, just
-   leave clear labels swappable.
+1. **Filing status**: Single + MFJ supported (`filingStatus` threaded through
+   the tax/IRMAA functions). MFJ is derived as 2× single — exact except the
+   federal top bracket. NC/IRMAA MFJ are exactly 2×.
+2. **Social Security**: flat 85%-taxable for federal + NC (real rule uses
+   provisional-income thresholds; NC exempts SS). One combined household of
+   accounts under MFJ; RMD uses the primary's birth year, not per-spouse.
+3. **Taxable brokerage**: no cost-basis tracking / LTCG schedule yet;
+   withdrawals add no ordinary income and windfalls are treated as after-tax
+   cash. This is the main remaining tax-accuracy gap.
+4. **Single return distribution**: one normal (mean/stdev) — no glide path,
+   no pre/post-retirement volatility split.
+5. **2026 estimates**: contribution limits and IRMAA/tax 2026 figures are
+   best-estimate where the IRS/CMS haven't published; update the versioned
+   tables.
+6. **Subsystem naming**: panel labels are still generic (e.g. "MARGINAL RATE
+   MONITOR"). Cryptic MU-TH-UR-style designations are left for Logan to name —
+   don't invent final names, just leave clear labels swappable.
 
 ## Suggested next build priorities (in order)
 
 1. ~~Scenario save/compare~~ — **DONE**
-2. ~~Account-type-aware modeling~~ — **DONE** (Traditional/Roth/taxable
-   buckets, withdrawals taxed by type)
-3. ~~IRMAA cliff detection~~ — **DONE** (Part B, MAGI from
-   `projectTaxableIncome`, 2-year look-back, inflation-indexed tiers;
-   surfaced in the tax panel alongside bracket creep).
-4. **GitHub Pages deploy config** — NEXT.
-5. Visual polish pass once the above is solid: refine the tail-band opacity
-   contrast (currently subtle), consider ambient audio drone refinements
-6. Taxable-account cost-basis + LTCG modeling (deferred from the account
-   model; would also sharpen MAGI for IRMAA)
-7. Part D IRMAA + filing-status variants
+2. ~~Account-type-aware modeling~~ — **DONE**
+3. ~~IRMAA cliff detection~~ — **DONE**
+4. ~~GitHub Pages deploy config~~ — **DONE** (`.nojekyll`; served from branch)
+5. ~~Income-driven cash flow + per-account contributions + chart inspect +
+   today's-dollars~~ — **DONE** (mega update stage 1)
+6. ~~Filing status/MFJ + Social Security + RMDs~~ — **DONE** (stage 2)
+7. ~~Goals & debt timeline events~~ — **DONE** (stage 3)
+8. Taxable-account cost-basis + LTCG modeling — **NEXT** (main tax-accuracy gap)
+9. Full per-spouse modeling (separate accounts/RMD ages) + explicit MFJ tables
+10. Provisional-income SS taxation; Part D IRMAA; healthcare/ACA expense line
+11. Export / printable plan summary; visual polish; real subsystem names
 
 ## Working style for this project
 

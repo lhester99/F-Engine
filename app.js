@@ -14,7 +14,7 @@ const state = {
   // INCOME & EXPENSES
   householdIncome: 120000,
   spouseIncome: 60000,         // used only when filingStatus === 'mfj'
-  monthlyExpenses: 5500,       // annualExpenses = *12
+  monthlyExpenses: 6200,       // annualExpenses = *12
   retirementReplacement: 85,   // % of working expenses spent in retirement
   // CONTRIBUTIONS ($/yr)
   contribTrad401k: 12000,

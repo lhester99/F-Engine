@@ -18,72 +18,68 @@ handled gracefully).
 
 ## What's working
 
-- **Monte Carlo engine** (`engine.js`) — simulates thousands of net-worth
-  paths given savings rate, retirement age, spend, expected return, and
-  volatility. Outputs percentile bands (5/25/50/75/95, plus whatever the
-  confidence toggle needs).
-- **Account-type model** (`engine.js`) — starting balance and contributions
-  split across three buckets (Traditional / Roth / taxable brokerage) by an
-  allocation mix. Retirement withdrawals are sequenced taxable → Traditional
-  → Roth and **taxed by type**: Traditional withdrawals are grossed up
-  (Newton solve on `G − tax(G) = need`) so after-tax proceeds meet the
-  spend, Roth is tax-free. `retirementSpend` is an **after-tax** target.
-- **Tax engine** (`engine.js`) — federal (progressive brackets) + NC (flat
-  rate) marginal tax, versioned by year (2025 and 2026 shipped; 2026 is the
-  default). Bracket-creep ("creep") detection now runs on the **actual
-  ordinary taxable income** from a deterministic projection of the account
-  model — not a spend proxy.
-- **IRMAA cliff detection** (`engine.js`) — Medicare Part B surcharge tiers
-  (single filer, 2025 figures), driven by the projected MAGI with the SSA
-  **2-year look-back** (so a high final working year can trip IRMAA in the
-  first Medicare years). Thresholds are inflation-indexed forward so a long
-  retirement isn't pushed into phantom cliffs by nominal growth. The tax
-  panel shows cliff count, peak annual surcharge, and each crossing in the
-  event log.
-- **Hero chart** (`app.js`, canvas-based) — median line, 25–75 "likely" band,
-  and a confidence-driven tail band that widens/narrows with the toggle.
-  Retirement age marked with a dashed line. Saved scenarios can be overlaid
-  as dashed comparison lines.
-- **Scenario archive** (`app.js`) — name and save the current config +
-  result snapshot to `localStorage` (persists across refresh). Each saved
-  scenario shows SOLV%/END/CREEP, can be overlaid on the chart (up to 4 at
-  once, distinct colors), loaded back into the sliders, or deleted.
-- **Sliders** — retirement age, savings rate, retirement spend, expected
-  return, volatility, starting balance, account mix (Traditional/Roth/
-  taxable), and the confidence-band toggle (50–99%). No clamping — push them
-  to the extremes and the plan will actually break.
-- **Status readouts** — SOLVENCY / TRAJECTORY / CONF. BAND, styled as
-  ship's-computer status lines.
-- **Hazard modal** — fires when simulated success probability drops below
-  50%, styled as a warning klaxon popup.
-- **Boot sequence** — low-poly spinning "F" cube, PS1-style, retro synth
-  stinger, scrolling boot log. Skippable.
-- **Aesthetic** — amber/green CRT phosphor, scanline overlay, holographic
-  panel layout.
+- **Income-driven cash flow** (`engine.js`) — the accumulation engine takes
+  household (and spouse, MFJ) income, computes taxes, subtracts living
+  expenses and every account contribution, and routes the surplus to the
+  taxable brokerage. There is no "savings rate" input — savings is a result.
+- **Per-account contributions** — Traditional 401k, **Roth 401k**,
+  Traditional IRA, Roth IRA, taxable, plus an **employer match** (rate up to
+  a % of pay). Traditional 401k/IRA reduce current taxable income; Roth do
+  not. The UI flags amounts over the age-aware 2026 IRS 401k/IRA limits
+  (guidance only — never clamped).
+- **Account-type model** — three buckets (Traditional / Roth / taxable).
+  Retirement withdrawals are sequenced taxable → Traditional → Roth and
+  taxed by type; Traditional is grossed up (Newton solve) so after-tax
+  proceeds meet the spend, on top of any Social Security / RMD income.
+- **Tax engine** — federal (progressive) + NC (flat), versioned by year
+  (2025/2026, 2026 default) **and filing status** (Single / MFJ; MFJ derived
+  as 2× single, exact except the top bracket). Bracket-creep detection runs
+  on the real projected ordinary taxable income.
+- **Social Security** — per-person benefit + claim age (today's dollars,
+  grows with COLA). SS covers spend first; 85% counts as taxable income.
+- **RMDs** — forced Traditional withdrawals from age 73/75 (by birth year)
+  via the IRS Uniform Lifetime Table; excess over the spend need is
+  reinvested. Drives late-retirement bracket creep and IRMAA.
+- **Goals & debt** — timeline events: one-time spend, windfall/inheritance,
+  or a recurring debt (mortgage) that drops off at a payoff age.
+- **IRMAA cliff detection** — Medicare Part B tiers (2025, filing-status
+  aware), SSA 2-year look-back, inflation-indexed thresholds. Tax panel
+  shows cliff count, peak surcharge, and each crossing.
+- **Hero chart** (`app.js`, canvas) — median line, 25–75 band, confidence
+  tail band, retirement marker. **Tap/hover any point** for a full snapshot
+  (net worth + Traditional/Roth/taxable split + income & tax at that age).
+  A **today's-dollars toggle** switches the whole view to real dollars.
+- **Sectioned controls** — Profile / Income & Expenses / Contributions /
+  Social Security / Goals & Debt / Markets / Display / Archive. No clamping.
+- **Scenario archive** — name + save the full input schema to `localStorage`
+  (persists), overlay up to 4 on the chart, load, delete.
+- **Status readouts**, **hazard modal**, **boot sequence**, and the
+  **amber/green CRT** aesthetic as before.
 
 ## Known simplifications (pick up from here)
 
-- Tax bracket data is single-filer, hardcoded in `engine.js` (`FEDERAL_
-  BRACKETS` / `NC_TAX`) — add filing status or new years there; the engine
-  is agnostic to the actual figures.
-- IRMAA is Part B only, single-filer, 2025 tiers (inflation-indexed
-  forward). Part D IRMAA and filing-status variants aren't modeled; MAGI is
-  approximated by the model's ordinary taxable income.
-- Taxable-brokerage withdrawals are **not** cost-basis tracked, so they add
-  no ordinary income and pay no capital-gains tax in the model (a real LTCG
-  schedule + basis tracking is future work). Traditional/Roth *contribution*
-  tax treatment during accumulation is likewise not differentiated — only
-  the withdrawal side is taxed.
-- One asset-return distribution (normal, single mean/stdev) — no glide path,
-  no separate accumulation vs. retirement volatility.
-- Subsystem naming in the tax/sim panels is still generic — open for your
-  own MU-TH-UR-style designations.
+- MFJ tax/IRMAA tiers are derived as 2× single — exact except the federal
+  top-bracket (37%) threshold. Add explicit MFJ figures if that edge matters.
+- Social Security taxation is a flat 85%-taxable (federal + NC); the real
+  rule uses provisional-income thresholds and NC exempts SS entirely.
+- One combined household of accounts under MFJ (spouse income + two SS
+  benefits + two claim ages, but not separate per-spouse account buckets or
+  per-spouse RMD ages — RMD uses the primary's birth year).
+- Taxable-brokerage withdrawals aren't cost-basis tracked (no LTCG schedule),
+  so they add no ordinary income and pay no capital-gains tax; windfalls are
+  treated as after-tax cash, not ordinary income.
+- One asset-return distribution (normal) — no glide path, no pre/post-
+  retirement volatility split.
+- Contribution and IRMAA/limit figures for 2026 are best-estimate; update the
+  versioned tables when the IRS/CMS publish.
+- Subsystem naming in the panels is still generic — open for MU-TH-UR-style
+  designations.
 
 ## Natural next steps
 
-- GitHub Pages deploy config
-- Taxable-account cost-basis + long-term capital-gains modeling (would also
-  sharpen MAGI for IRMAA)
-- Part D IRMAA + filing-status variants
-- Real subsystem names + copy pass
-- Visual polish (tail-band opacity contrast, ambient drone)
+- Taxable-account cost-basis + long-term capital-gains modeling
+- Full per-spouse modeling (separate accounts, RMD ages) + explicit MFJ tables
+- Provisional-income Social Security taxation; Part D IRMAA
+- Healthcare / ACA-before-65 + Medicare premium expense line
+- Export / printable plan summary
+- Real subsystem names + visual polish
