@@ -60,70 +60,133 @@
           <span class="panel-tag">SIM.CORE // MONTE CARLO</span>
         </div>
         <canvas id="hero-chart"></canvas>
+        <div id="chart-tooltip" class="hidden"></div>
         <div id="chart-legend">
           <span><i class="swatch swatch-median"></i>MEDIAN</span>
           <span><i class="swatch swatch-band"></i>LIKELY RANGE</span>
           <span><i class="swatch swatch-tail"></i>TAIL RANGE</span>
+          <span class="legend-hint">◂ TAP CHART TO INSPECT ▸</span>
         </div>
       </section>
 
-      <!-- SIDE PANEL: SLIDERS -->
+      <!-- SIDE PANEL: SECTIONED CONTROLS -->
       <section id="controls-panel" class="panel">
         <div class="panel-header">
-          <span>SCENARIO CONTROLS</span>
+          <span>PLAN CONTROLS</span>
           <span class="panel-tag">INPUT.ARRAY</span>
         </div>
 
-        <div class="control">
-          <label>RETIREMENT AGE <span class="control-val" id="val-retireAge"></span></label>
-          <input type="range" id="slider-retireAge" min="35" max="75" step="1">
+        <div class="ctrl-section">
+          <div class="section-head">◤ PROFILE</div>
+          <div class="control">
+            <label>CURRENT AGE <span class="control-val" id="val-currentAge"></span></label>
+            <input type="range" id="slider-currentAge" min="18" max="70" step="1">
+          </div>
+          <div class="control">
+            <label>RETIREMENT AGE <span class="control-val" id="val-retireAge"></span></label>
+            <input type="range" id="slider-retireAge" min="35" max="80" step="1">
+          </div>
+          <div class="control">
+            <label>PLAN THROUGH AGE <span class="control-val" id="val-endAge"></span></label>
+            <input type="range" id="slider-endAge" min="70" max="105" step="1">
+          </div>
         </div>
 
-        <div class="control">
-          <label>SAVINGS RATE <span class="control-val" id="val-savingsRate"></span></label>
-          <input type="range" id="slider-savingsRate" min="0" max="90" step="1">
+        <div class="ctrl-section">
+          <div class="section-head">◤ INCOME &amp; EXPENSES</div>
+          <div class="control">
+            <label>HOUSEHOLD INCOME / YR <span class="control-val" id="val-householdIncome"></span></label>
+            <input type="range" id="slider-householdIncome" min="0" max="500000" step="1000">
+          </div>
+          <div class="control">
+            <label>LIVING EXPENSES / MO <span class="control-val" id="val-monthlyExpenses"></span></label>
+            <input type="range" id="slider-monthlyExpenses" min="0" max="20000" step="100">
+          </div>
+          <div class="control">
+            <label>RETIREMENT SPEND <span class="control-val" id="val-retirementReplacement"></span></label>
+            <input type="range" id="slider-retirementReplacement" min="40" max="120" step="1">
+          </div>
         </div>
 
-        <div class="control">
-          <label>RETIREMENT SPEND / YR <span class="control-val" id="val-retirementSpend"></span></label>
-          <input type="range" id="slider-retirementSpend" min="10000" max="400000" step="1000">
+        <div class="ctrl-section">
+          <div class="section-head">◤ CONTRIBUTIONS / YR</div>
+          <div class="control">
+            <label>TRADITIONAL 401(K) <span class="control-val" id="val-contribTrad401k"></span></label>
+            <input type="range" id="slider-contribTrad401k" min="0" max="31000" step="500">
+          </div>
+          <div class="control">
+            <label>ROTH 401(K) <span class="control-val" id="val-contribRoth401k"></span></label>
+            <input type="range" id="slider-contribRoth401k" min="0" max="31000" step="500">
+          </div>
+          <div class="control">
+            <label>TRADITIONAL IRA <span class="control-val" id="val-contribTradIRA"></span></label>
+            <input type="range" id="slider-contribTradIRA" min="0" max="8600" step="100">
+          </div>
+          <div class="control">
+            <label>ROTH IRA <span class="control-val" id="val-contribRothIRA"></span></label>
+            <input type="range" id="slider-contribRothIRA" min="0" max="8600" step="100">
+          </div>
+          <div class="control">
+            <label>TAXABLE BROKERAGE <span class="control-val" id="val-contribTaxable"></span></label>
+            <input type="range" id="slider-contribTaxable" min="0" max="100000" step="1000">
+          </div>
+          <div class="control">
+            <label>EMPLOYER MATCH <span class="control-val" id="val-matchRate"></span></label>
+            <input type="range" id="slider-matchRate" min="0" max="100" step="5">
+          </div>
+          <div class="control">
+            <label>MATCH CAP (% OF PAY) <span class="control-val" id="val-matchCapPct"></span></label>
+            <input type="range" id="slider-matchCapPct" min="0" max="15" step="0.5">
+          </div>
+          <div id="contrib-guidance" class="guidance"></div>
         </div>
 
-        <div class="control">
-          <label>EXPECTED RETURN <span class="control-val" id="val-expectedReturn"></span></label>
-          <input type="range" id="slider-expectedReturn" min="0" max="14" step="0.1">
+        <div class="ctrl-section">
+          <div class="section-head">◤ MARKETS</div>
+          <div class="control">
+            <label>STARTING BALANCE <span class="control-val" id="val-startBalance"></span></label>
+            <input type="range" id="slider-startBalance" min="0" max="5000000" step="10000">
+          </div>
+          <div class="control alloc-control">
+            <label>· TRADITIONAL <span class="control-val" id="val-allocTrad"></span></label>
+            <input type="range" id="slider-allocTrad" min="0" max="100" step="1">
+          </div>
+          <div class="control alloc-control">
+            <label>· ROTH <span class="control-val" id="val-allocRoth"></span></label>
+            <input type="range" id="slider-allocRoth" min="0" max="100" step="1">
+          </div>
+          <div class="control alloc-control">
+            <label>· TAXABLE <span class="control-val" id="val-allocTaxable"></span></label>
+            <input type="range" id="slider-allocTaxable" min="0" max="100" step="1">
+          </div>
+          <div class="control">
+            <label>EXPECTED RETURN <span class="control-val" id="val-expectedReturn"></span></label>
+            <input type="range" id="slider-expectedReturn" min="0" max="14" step="0.1">
+          </div>
+          <div class="control">
+            <label>VOLATILITY (σ) <span class="control-val" id="val-returnStdDev"></span></label>
+            <input type="range" id="slider-returnStdDev" min="1" max="30" step="0.5">
+          </div>
+          <div class="control">
+            <label>INFLATION <span class="control-val" id="val-inflation"></span></label>
+            <input type="range" id="slider-inflation" min="0" max="8" step="0.1">
+          </div>
         </div>
 
-        <div class="control">
-          <label>VOLATILITY (σ) <span class="control-val" id="val-returnStdDev"></span></label>
-          <input type="range" id="slider-returnStdDev" min="1" max="30" step="0.5">
+        <div class="ctrl-section">
+          <div class="section-head">◤ DISPLAY</div>
+          <div class="control confidence-control">
+            <label>CONFIDENCE BAND <span class="control-val" id="val-confidence"></span></label>
+            <input type="range" id="slider-confidence" min="50" max="99" step="1">
+          </div>
+          <div class="toggle-row">
+            <span>VALUES SHOWN IN</span>
+            <button id="toggle-dollars" class="toggle-btn" aria-pressed="false">NOMINAL $</button>
+          </div>
         </div>
 
-        <div class="control account-start">
-          <label>STARTING BALANCE <span class="control-val" id="val-startBalance"></span></label>
-          <input type="range" id="slider-startBalance" min="0" max="5000000" step="10000">
-        </div>
-
-        <div class="control alloc-control">
-          <label>· TRADITIONAL <span class="control-val" id="val-allocTrad"></span></label>
-          <input type="range" id="slider-allocTrad" min="0" max="100" step="1">
-        </div>
-        <div class="control alloc-control">
-          <label>· ROTH <span class="control-val" id="val-allocRoth"></span></label>
-          <input type="range" id="slider-allocRoth" min="0" max="100" step="1">
-        </div>
-        <div class="control alloc-control">
-          <label>· TAXABLE BROKERAGE <span class="control-val" id="val-allocTaxable"></span></label>
-          <input type="range" id="slider-allocTaxable" min="0" max="100" step="1">
-        </div>
-
-        <div class="control confidence-control">
-          <label>CONFIDENCE BAND <span class="control-val" id="val-confidence"></span></label>
-          <input type="range" id="slider-confidence" min="50" max="99" step="1">
-        </div>
-
-        <div class="control scenario-archive">
-          <label>SCENARIO ARCHIVE <span class="control-val" id="scenario-count"></span></label>
+        <div class="ctrl-section scenario-archive">
+          <div class="section-head">◤ SCENARIO ARCHIVE <span class="control-val" id="scenario-count"></span></div>
           <div class="save-row">
             <input type="text" id="scenario-name" maxlength="24" placeholder="DESIGNATION…" autocomplete="off" spellcheck="false">
             <button id="save-scenario">SAVE</button>

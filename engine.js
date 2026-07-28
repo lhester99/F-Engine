@@ -46,6 +46,25 @@ const NC_TAX = {
   },
 };
 
+// --- Contribution limits (single filer), versioned. Guidance only — the
+// engine never clamps to these; the UI flags amounts that exceed them.
+// 2025 are the real figures; 2026 are best-estimate (indexed), update when
+// the IRS publishes. Traditional + Roth 401k share elective401k; Traditional
+// + Roth IRA share ira. catchup* apply at/after catchupAge.
+const CONTRIB_LIMITS = {
+  2025: { elective401k: 23500, catchup401k: 7500, ira: 7000, catchupIra: 1000, catchupAge: 50 },
+  2026: { elective401k: 24500, catchup401k: 8000, ira: 7500, catchupIra: 1100, catchupAge: 50 },
+};
+
+function contributionLimits(year, age) {
+  const d = getYearData(CONTRIB_LIMITS, year);
+  const over = age >= d.catchupAge;
+  return {
+    elective401k: d.elective401k + (over ? d.catchup401k : 0),
+    ira: d.ira + (over ? d.catchupIra : 0),
+  };
+}
+
 function getYearData(table, year) {
   const years = Object.keys(table).map(Number).sort((a, b) => a - b);
   const match = years.filter((y) => y <= year).pop();
@@ -321,145 +340,175 @@ function randomNormal(mean, stdDev) {
   return mean + z * stdDev;
 }
 
+// Wage/contribution growth is damped inflation (wages historically lag CPI).
+const WAGE_GROWTH_DAMP = 0.6;
+
+// Canonicalize plan inputs (fill defaults, normalize allocation). Income is
+// household gross; contributions are per-account annual dollars.
+function normalizePlan(params) {
+  const p = params || {};
+  const contributions = Object.assign(
+    { trad401k: 0, roth401k: 0, tradIRA: 0, rothIRA: 0, taxable: 0 },
+    p.contributions || {}
+  );
+  const employerMatch = Object.assign({ rate: 0, capPct: 0 }, p.employerMatch || {});
+  return {
+    startingBalance: p.startingBalance || 0,
+    currentAge: p.currentAge != null ? p.currentAge : 30,
+    retireAge: p.retireAge != null ? p.retireAge : 65,
+    endAge: p.endAge != null ? p.endAge : 92,
+    householdIncome: p.householdIncome != null ? p.householdIncome : (p.annualIncome || 0),
+    annualExpenses: p.annualExpenses || 0,
+    retirementSpend: p.retirementSpend || 0,
+    contributions,
+    employerMatch,
+    expectedReturn: p.expectedReturn || 0,
+    returnStdDev: p.returnStdDev || 0,
+    inflation: p.inflation || 0,
+    alloc: normalizeAllocation(p.allocation || { traditional: 1, roth: 0, taxable: 0 }),
+    numSims: p.numSims || 2000,
+    startYear: p.startYear || new Date().getFullYear(),
+  };
+}
+
+// Employer match (year-0 dollars): matchRate of employee 401k contributions,
+// capped at capPct of salary. Employer match is always pre-tax (traditional).
+function employerMatchBase(p) {
+  const emp401k = (p.contributions.trad401k || 0) + (p.contributions.roth401k || 0);
+  const cap = (p.employerMatch.capPct / 100) * p.householdIncome;
+  return (p.employerMatch.rate / 100) * Math.min(emp401k, cap);
+}
+
 /**
- * Simulate net worth paths given scenario params.
- * params: {
- *   startingBalance, currentAge, retireAge, endAge,
- *   annualIncome, savingsRate, retirementSpend,
- *   expectedReturn, returnStdDev, inflation,
- *   allocation: { traditional, roth, taxable },  // raw weights, normalized
- *   numSims, startYear
- * }
+ * Advance the household one year. Grows each bucket by the market return,
+ * then applies the year's cash flow:
+ *   working  -> income − pre-tax contributions = ordinary taxable income;
+ *               tax computed; surplus (income − tax − expenses − all
+ *               contributions) flows to the taxable brokerage (may be
+ *               negative = drawing down savings).
+ *   retired  -> withdraw the inflation-grown spend, sequenced + taxed by
+ *               bucket (withdrawForSpend).
+ * Traditional 401k/IRA contributions reduce taxable income now; Roth do not.
+ * Returns the new buckets plus the year's income/tax facts.
+ */
+function stepYear(buckets, i, yearReturn, p, matchBase) {
+  const year = p.startYear + i;
+  const age = p.currentAge + i;
+  const isRetired = age >= p.retireAge;
+  const g = Math.pow(1 + p.inflation * WAGE_GROWTH_DAMP, i); // wage/contrib growth
+  const priceInfl = Math.pow(1 + p.inflation, i);            // price growth
+
+  let traditional = buckets.traditional * (1 + yearReturn);
+  let roth = buckets.roth * (1 + yearReturn);
+  let taxable = buckets.taxable * (1 + yearReturn);
+  let ordinaryIncome = 0;
+  let tax = 0;
+
+  if (!isRetired) {
+    const c = p.contributions;
+    const income = p.householdIncome * g;
+    const expenses = p.annualExpenses * priceInfl;
+    const preTax = (c.trad401k + c.tradIRA) * g;   // reduces taxable income
+    const rothC = (c.roth401k + c.rothIRA) * g;    // after-tax
+    const taxableC = c.taxable * g;                // after-tax
+    const match = matchBase * g;
+
+    ordinaryIncome = Math.max(0, income - preTax);
+    tax = totalTax(ordinaryIncome, year);
+    const surplus = income - tax - expenses - preTax - rothC - taxableC;
+
+    traditional += preTax + match;
+    roth += rothC;
+    taxable += taxableC + surplus; // surplus < 0 draws the brokerage down
+  } else {
+    const spend = p.retirementSpend * priceInfl;
+    const res = withdrawForSpend({ taxable, traditional, roth }, spend, year);
+    traditional = res.buckets.traditional;
+    roth = res.buckets.roth;
+    taxable = res.buckets.taxable;
+    ordinaryIncome = res.ordinaryIncome;
+    tax = res.tax;
+  }
+
+  traditional = Math.max(0, traditional);
+  roth = Math.max(0, roth);
+  taxable = Math.max(0, taxable);
+  return {
+    traditional, roth, taxable,
+    ordinaryIncome, tax, retired: isRetired, age, year,
+    netWorth: traditional + roth + taxable,
+  };
+}
+
+/**
+ * Monte Carlo net-worth paths. Uses the shared stepYear so the stochastic
+ * sim and the deterministic projection stay in lockstep.
  * Returns: { years: number[], paths: number[][] }  paths[sim][yearIndex]
- *
- * Balances are held in three account buckets; contributions split by the
- * allocation, retirement withdrawals sequenced + taxed by bucket type.
  */
 function runMonteCarlo(params) {
-  const {
-    startingBalance,
-    currentAge,
-    retireAge,
-    endAge,
-    annualIncome,
-    savingsRate,
-    retirementSpend,
-    expectedReturn,
-    returnStdDev,
-    inflation,
-    allocation = { traditional: 1, roth: 0, taxable: 0 },
-    numSims = 2000,
-    startYear = new Date().getFullYear(),
-  } = params;
-
-  const alloc = normalizeAllocation(allocation);
-  const totalYears = Math.max(1, endAge - currentAge);
-  const years = Array.from({ length: totalYears + 1 }, (_, i) => startYear + i);
+  const p = normalizePlan(params);
+  const matchBase = employerMatchBase(p);
+  const totalYears = Math.max(1, p.endAge - p.currentAge);
+  const years = Array.from({ length: totalYears + 1 }, (_, i) => p.startYear + i);
   const paths = [];
 
-  for (let s = 0; s < numSims; s++) {
-    let traditional = startingBalance * alloc.traditional;
-    let roth = startingBalance * alloc.roth;
-    let taxable = startingBalance * alloc.taxable;
-    const path = [startingBalance];
-    let income = annualIncome;
-
+  for (let s = 0; s < p.numSims; s++) {
+    let b = {
+      traditional: p.startingBalance * p.alloc.traditional,
+      roth: p.startingBalance * p.alloc.roth,
+      taxable: p.startingBalance * p.alloc.taxable,
+    };
+    const path = [p.startingBalance];
     for (let i = 1; i <= totalYears; i++) {
-      const age = currentAge + i;
-      const isRetired = age >= retireAge;
-      const yearReturn = randomNormal(expectedReturn, returnStdDev);
-
-      // every bucket earns the same market return this year
-      traditional *= (1 + yearReturn);
-      roth *= (1 + yearReturn);
-      taxable *= (1 + yearReturn);
-
-      if (!isRetired) {
-        const contribution = income * savingsRate;
-        traditional += contribution * alloc.traditional;
-        roth += contribution * alloc.roth;
-        taxable += contribution * alloc.taxable;
-        income = income * (1 + inflation * 0.6); // wage growth assumption, damped
-      } else {
-        const spend = retirementSpend * Math.pow(1 + inflation, i);
-        const res = withdrawForSpend({ taxable, traditional, roth }, spend, years[i]);
-        traditional = res.buckets.traditional;
-        roth = res.buckets.roth;
-        taxable = res.buckets.taxable;
-      }
-
-      traditional = Math.max(0, traditional);
-      roth = Math.max(0, roth);
-      taxable = Math.max(0, taxable);
-      path.push(traditional + roth + taxable); // total net worth
+      const r = randomNormal(p.expectedReturn, p.returnStdDev);
+      const step = stepYear(b, i, r, p, matchBase);
+      b = { traditional: step.traditional, roth: step.roth, taxable: step.taxable };
+      path.push(step.netWorth);
     }
     paths.push(path);
   }
-
   return { years, paths };
 }
 
 /**
- * Deterministic (expected-return, no volatility) projection of ordinary
- * taxable income per year. Pre-retirement it's the growing wage; in
- * retirement it's the ACTUAL ordinary income the account-type withdrawal
- * model produces (traditional withdrawals), so the bracket monitor and
- * IRMAA logic see real taxable income rather than the spend proxy.
- * Returns: [{ year, income, retired }]
+ * Deterministic (expected-return) projection — the "expected path". Returns a
+ * rich per-year row so the chart-inspect snapshot and the tax panel can read
+ * net worth, the account split, and ordinary income/tax at any age.
+ * Returns: [{ year, age, retired, income, tax, netWorth, traditional, roth, taxable }]
  */
-function projectTaxableIncome(params) {
-  const {
-    startingBalance,
-    currentAge,
-    retireAge,
-    endAge,
-    annualIncome,
-    savingsRate,
-    retirementSpend,
-    expectedReturn,
-    inflation,
-    allocation = { traditional: 1, roth: 0, taxable: 0 },
-    startYear = new Date().getFullYear(),
-  } = params;
-
-  const alloc = normalizeAllocation(allocation);
-  const totalYears = Math.max(1, endAge - currentAge);
-  let traditional = startingBalance * alloc.traditional;
-  let roth = startingBalance * alloc.roth;
-  let taxable = startingBalance * alloc.taxable;
-  let wage = annualIncome;
-
-  const path = [];
-  const retiredNow = currentAge >= retireAge;
-  path.push({ year: startYear, income: retiredNow ? 0 : wage, retired: retiredNow });
-
+function projectPlan(params) {
+  const p = normalizePlan(params);
+  const matchBase = employerMatchBase(p);
+  const totalYears = Math.max(1, p.endAge - p.currentAge);
+  let b = {
+    traditional: p.startingBalance * p.alloc.traditional,
+    roth: p.startingBalance * p.alloc.roth,
+    taxable: p.startingBalance * p.alloc.taxable,
+  };
+  const rows = [];
+  const retiredNow = p.currentAge >= p.retireAge;
+  const preTax0 = p.contributions.trad401k + p.contributions.tradIRA;
+  rows.push({
+    year: p.startYear, age: p.currentAge, retired: retiredNow,
+    income: retiredNow ? 0 : Math.max(0, p.householdIncome - preTax0),
+    tax: 0, netWorth: p.startingBalance,
+    traditional: b.traditional, roth: b.roth, taxable: b.taxable,
+  });
   for (let i = 1; i <= totalYears; i++) {
-    const age = currentAge + i;
-    const isRetired = age >= retireAge;
-
-    traditional *= (1 + expectedReturn);
-    roth *= (1 + expectedReturn);
-    taxable *= (1 + expectedReturn);
-
-    let ordinaryIncome;
-    if (!isRetired) {
-      const contribution = wage * savingsRate;
-      traditional += contribution * alloc.traditional;
-      roth += contribution * alloc.roth;
-      taxable += contribution * alloc.taxable;
-      ordinaryIncome = wage;
-      wage = wage * (1 + inflation * 0.6);
-    } else {
-      const spend = retirementSpend * Math.pow(1 + inflation, i);
-      const res = withdrawForSpend({ taxable, traditional, roth }, spend, startYear + i);
-      traditional = Math.max(0, res.buckets.traditional);
-      roth = Math.max(0, res.buckets.roth);
-      taxable = Math.max(0, res.buckets.taxable);
-      ordinaryIncome = res.ordinaryIncome;
-    }
-    path.push({ year: startYear + i, income: ordinaryIncome, retired: isRetired });
+    const s = stepYear(b, i, p.expectedReturn, p, matchBase);
+    b = { traditional: s.traditional, roth: s.roth, taxable: s.taxable };
+    rows.push({
+      year: s.year, age: s.age, retired: s.retired, income: s.ordinaryIncome,
+      tax: s.tax, netWorth: s.netWorth,
+      traditional: b.traditional, roth: b.roth, taxable: b.taxable,
+    });
   }
-  return path;
+  return rows;
+}
+
+// Adapter kept for the bracket-creep / IRMAA detectors, which want {year, income}.
+function projectTaxableIncome(params) {
+  return projectPlan(params).map((r) => ({ year: r.year, income: r.income, retired: r.retired }));
 }
 
 // Compute percentile bands from simulated paths at each year index.
@@ -514,7 +563,13 @@ if (typeof module !== 'undefined') {
     normalizeAllocation,
     grossUpTraditional,
     withdrawForSpend,
+    contributionLimits,
+    CONTRIB_LIMITS,
+    normalizePlan,
+    employerMatchBase,
+    stepYear,
     runMonteCarlo,
+    projectPlan,
     projectTaxableIncome,
     computePercentileBands,
     confidenceToPercentiles,

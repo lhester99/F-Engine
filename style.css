@@ -276,6 +276,82 @@ body::after {
 .swatch-band { background: rgba(77,255,158,0.35); }
 .swatch-tail { background: rgba(77,255,158,0.1); }
 
+/* ===================== SECTIONS ===================== */
+.ctrl-section {
+  padding: 4px 0 14px;
+  border-bottom: 1px solid rgba(28,58,46,0.5);
+  margin-bottom: 14px;
+}
+.ctrl-section:last-child { border-bottom: none; }
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(255,176,0,0.35);
+  margin: 4px 0 14px;
+}
+.section-head .control-val { color: var(--text-dim); letter-spacing: 1px; }
+
+.guidance {
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-top: -6px;
+}
+.guidance .over { color: var(--red); }
+
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.toggle-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--green-glow);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.toggle-btn[aria-pressed="true"] {
+  border-color: var(--amber);
+  color: var(--amber);
+  box-shadow: 0 0 8px rgba(255,176,0,0.3);
+}
+
+/* ===================== CHART INSPECT TOOLTIP ===================== */
+#chart-panel { position: relative; }
+#chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 20;
+  min-width: 150px;
+  background: rgba(6,16,12,0.95);
+  border: 1px solid var(--green-dim);
+  box-shadow: 0 0 18px rgba(0,0,0,0.7);
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+#chart-tooltip .tt-age { color: var(--amber); letter-spacing: 2px; font-size: 11px; margin-bottom: 4px; }
+#chart-tooltip .tt-nw { color: var(--green-glow); font-size: 13px; margin-bottom: 6px; }
+#chart-tooltip .tt-row { display: flex; justify-content: space-between; gap: 14px; }
+#chart-tooltip .tt-row b { font-weight: normal; color: var(--green); }
+#chart-tooltip .tt-sep { border-top: 1px solid rgba(28,58,46,0.6); margin: 5px 0; }
+.legend-hint { margin-left: auto; color: var(--amber-dim); letter-spacing: 1px; }
+
 /* ===================== CONTROLS ===================== */
 .control {
   margin-bottom: 20px;

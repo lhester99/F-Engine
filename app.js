@@ -5,33 +5,48 @@
 
 // -------------------- STATE --------------------
 const state = {
+  // PROFILE
   currentAge: 32,
   retireAge: 65,
   endAge: 92,
+  // INCOME & EXPENSES
+  householdIncome: 120000,
+  monthlyExpenses: 5500,       // annualExpenses = *12
+  retirementReplacement: 85,   // % of working expenses spent in retirement
+  // CONTRIBUTIONS ($/yr)
+  contribTrad401k: 12000,
+  contribRoth401k: 6000,
+  contribTradIRA: 0,
+  contribRothIRA: 0,
+  contribTaxable: 3000,
+  matchRate: 50,               // % of employee 401k contributions matched
+  matchCapPct: 6,              // up to this % of pay
+  // MARKETS
   startingBalance: 250000,
-  annualIncome: 120000,
-  savingsRate: 0.24,
-  retirementSpend: 58000,
+  allocTrad: 55,               // raw weights, normalized by the engine
+  allocRoth: 15,
+  allocTaxable: 30,
   expectedReturn: 0.07,
   returnStdDev: 0.12,
   inflation: 0.025,
-  // account-type mix (raw weights, normalized by the engine)
-  allocTrad: 55,
-  allocRoth: 15,
-  allocTaxable: 30,
+  // DISPLAY
   confidence: 90,
+  todaysDollars: false,
   numSims: 600,
 };
 
 let lastResult = null;
 let lastBands = null;
 let lastSummary = null;
+let lastProjection = null;   // deterministic per-year rows (projectPlan)
+let chartGeom = null;        // { padL, padT, chartW, chartH, n } for hit-testing
+let hoverIndex = null;       // year index under the chart cursor
 let hazardShownForThisRun = false;
 
 // -------------------- SCENARIO ARCHIVE --------------------
-// v2: account-type model changed what a saved result means (tax-aware), so
-// a new key avoids mixing pre-tax snapshots into comparisons.
-const SCENARIO_STORE_KEY = 'enginef.scenarios.v2';
+// v3: income-driven cash-flow model changed the input schema and what a saved
+// result means, so a new key avoids loading incompatible older snapshots.
+const SCENARIO_STORE_KEY = 'enginef.scenarios.v3';
 // Distinct phosphor hues for overlaid comparison lines (live median is green).
 const OVERLAY_COLORS = ['#ffb000', '#4de1ff', '#ff6ad5', '#c8ff4d'];
 let comparisonOverlays = []; // [{ id, name, years, medianPath, color }]
@@ -154,71 +169,142 @@ function initBoot() {
 }
 
 // -------------------- CONTROLS --------------------
+const dollarFmt = (v) => `$${(+v).toLocaleString()}`;
+
+// Slider definitions: id -> { state field, label formatter, value<->slider map }
+const SLIDERS = [
+  ['currentAge', 'val-currentAge', (v) => { state.currentAge = +v; return `${v}`; }],
+  ['retireAge', 'val-retireAge', (v) => { state.retireAge = +v; return `${v}`; }],
+  ['endAge', 'val-endAge', (v) => { state.endAge = +v; return `${v}`; }],
+  ['householdIncome', 'val-householdIncome', (v) => { state.householdIncome = +v; return dollarFmt(v); }],
+  ['monthlyExpenses', 'val-monthlyExpenses', (v) => { state.monthlyExpenses = +v; return `${dollarFmt(v)} ($${(v*12/1000).toFixed(0)}K/yr)`; }],
+  ['retirementReplacement', 'val-retirementReplacement', (v) => {
+    state.retirementReplacement = +v;
+    const annual = state.monthlyExpenses * 12 * (v / 100);
+    return `${v}% · ${dollarFmt(Math.round(annual))}/yr`;
+  }],
+  ['contribTrad401k', 'val-contribTrad401k', (v) => { state.contribTrad401k = +v; onContribChange(); return dollarFmt(v); }],
+  ['contribRoth401k', 'val-contribRoth401k', (v) => { state.contribRoth401k = +v; onContribChange(); return dollarFmt(v); }],
+  ['contribTradIRA', 'val-contribTradIRA', (v) => { state.contribTradIRA = +v; onContribChange(); return dollarFmt(v); }],
+  ['contribRothIRA', 'val-contribRothIRA', (v) => { state.contribRothIRA = +v; onContribChange(); return dollarFmt(v); }],
+  ['contribTaxable', 'val-contribTaxable', (v) => { state.contribTaxable = +v; return dollarFmt(v); }],
+  ['matchRate', 'val-matchRate', (v) => { state.matchRate = +v; return `${v}% MATCH`; }],
+  ['matchCapPct', 'val-matchCapPct', (v) => { state.matchCapPct = +v; return `${(+v).toFixed(1)}%`; }],
+  ['startBalance', 'val-startBalance', (v) => { state.startingBalance = +v; updateAllocationLabels(); return dollarFmt(v); }],
+  ['expectedReturn', 'val-expectedReturn', (v) => { state.expectedReturn = v / 100; return `${(+v).toFixed(1)}%`; }],
+  ['returnStdDev', 'val-returnStdDev', (v) => { state.returnStdDev = v / 100; return `${(+v).toFixed(1)}%`; }],
+  ['inflation', 'val-inflation', (v) => { state.inflation = v / 100; return `${(+v).toFixed(1)}%`; }],
+  ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
+];
+
+// Initial slider positions read back from state.
+const SLIDER_INIT = {
+  currentAge: () => state.currentAge,
+  retireAge: () => state.retireAge,
+  endAge: () => state.endAge,
+  householdIncome: () => state.householdIncome,
+  monthlyExpenses: () => state.monthlyExpenses,
+  retirementReplacement: () => state.retirementReplacement,
+  contribTrad401k: () => state.contribTrad401k,
+  contribRoth401k: () => state.contribRoth401k,
+  contribTradIRA: () => state.contribTradIRA,
+  contribRothIRA: () => state.contribRothIRA,
+  contribTaxable: () => state.contribTaxable,
+  matchRate: () => state.matchRate,
+  matchCapPct: () => state.matchCapPct,
+  startBalance: () => state.startingBalance,
+  expectedReturn: () => (state.expectedReturn * 100).toFixed(1),
+  returnStdDev: () => (state.returnStdDev * 100).toFixed(1),
+  inflation: () => (state.inflation * 100).toFixed(1),
+  confidence: () => state.confidence,
+};
+
+// State fields persisted in a saved scenario.
+const PERSISTED_KEYS = [
+  'currentAge', 'retireAge', 'endAge',
+  'householdIncome', 'monthlyExpenses', 'retirementReplacement',
+  'contribTrad401k', 'contribRoth401k', 'contribTradIRA', 'contribRothIRA', 'contribTaxable',
+  'matchRate', 'matchCapPct',
+  'startingBalance', 'allocTrad', 'allocRoth', 'allocTaxable',
+  'expectedReturn', 'returnStdDev', 'inflation',
+  'confidence', 'todaysDollars',
+];
+
+// Push current state into every control (values + labels). Used at boot and
+// when loading a saved scenario.
+function syncControlsFromState() {
+  Object.keys(SLIDER_INIT).forEach((id) => {
+    const el = document.getElementById('slider-' + id);
+    if (el) { el.value = SLIDER_INIT[id](); el.dispatchEvent(new Event('input')); }
+  });
+  ['allocTrad', 'allocRoth', 'allocTaxable'].forEach((f) => {
+    const el = document.getElementById('slider-' + f);
+    el.value = state[f];
+    el.dispatchEvent(new Event('input'));
+  });
+  updateAllocationLabels();
+  updateContribGuidance();
+  const btn = document.getElementById('toggle-dollars');
+  btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
+  btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
+}
+
 function initControls() {
-  bindSlider('slider-retireAge', 'val-retireAge', (v) => {
-    state.retireAge = +v;
-    return `${v}`;
-  });
-  bindSlider('slider-savingsRate', 'val-savingsRate', (v) => {
-    state.savingsRate = v / 100;
-    return `${v}%`;
-  });
-  bindSlider('slider-retirementSpend', 'val-retirementSpend', (v) => {
-    state.retirementSpend = +v;
-    return `$${(+v).toLocaleString()}`;
-  });
-  bindSlider('slider-expectedReturn', 'val-expectedReturn', (v) => {
-    state.expectedReturn = v / 100;
-    return `${(+v).toFixed(1)}%`;
-  });
-  bindSlider('slider-returnStdDev', 'val-returnStdDev', (v) => {
-    state.returnStdDev = v / 100;
-    return `${(+v).toFixed(1)}%`;
-  });
-  bindSlider('slider-startBalance', 'val-startBalance', (v) => {
-    state.startingBalance = +v;
-    updateAllocationLabels(); // per-bucket dollar amounts depend on the total
-    return `$${(+v).toLocaleString()}`;
-  });
-  bindSlider('slider-confidence', 'val-confidence', (v) => {
-    state.confidence = +v;
-    return `${v}%`;
-  });
+  SLIDERS.forEach(([id, labelId, fn]) => bindSlider('slider-' + id, labelId, fn));
 
   // allocation sliders share one label updater (labels show normalized % + $)
   bindAllocSlider('slider-allocTrad', 'allocTrad');
   bindAllocSlider('slider-allocRoth', 'allocRoth');
   bindAllocSlider('slider-allocTaxable', 'allocTaxable');
 
-  // set defaults into the inputs
-  document.getElementById('slider-retireAge').value = state.retireAge;
-  document.getElementById('slider-savingsRate').value = state.savingsRate * 100;
-  document.getElementById('slider-retirementSpend').value = state.retirementSpend;
-  document.getElementById('slider-expectedReturn').value = (state.expectedReturn * 100).toFixed(1);
-  document.getElementById('slider-returnStdDev').value = (state.returnStdDev * 100).toFixed(1);
-  document.getElementById('slider-startBalance').value = state.startingBalance;
-  document.getElementById('slider-allocTrad').value = state.allocTrad;
-  document.getElementById('slider-allocRoth').value = state.allocRoth;
-  document.getElementById('slider-allocTaxable').value = state.allocTaxable;
-  document.getElementById('slider-confidence').value = state.confidence;
-
-  // trigger initial label paint
-  ['retireAge','savingsRate','retirementSpend','expectedReturn','returnStdDev','startBalance','confidence']
-    .forEach((id) => {
-      const el = document.getElementById('slider-' + id);
-      el.dispatchEvent(new Event('input'));
-    });
-  updateAllocationLabels();
+  syncControlsFromState();
 
   document.getElementById('hazard-ack').addEventListener('click', () => {
     document.getElementById('hazard-modal').classList.add('hidden');
   });
+
+  // today's-dollars toggle
+  document.getElementById('toggle-dollars').addEventListener('click', toggleDollars);
 
   // scenario archive controls
   document.getElementById('save-scenario').addEventListener('click', saveScenario);
   document.getElementById('scenario-name').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') saveScenario();
   });
+
+  initChartInspect();
+}
+
+// Contributions changed: refresh the IRS-limit guidance (no recompute needed
+// beyond the throttled one bindSlider already scheduled).
+function onContribChange() {
+  updateContribGuidance();
+}
+
+function toggleDollars() {
+  state.todaysDollars = !state.todaysDollars;
+  const btn = document.getElementById('toggle-dollars');
+  btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
+  btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
+  redrawChart();
+  if (lastResult) updateStatusReadouts(lastResult, ...Object.values(confidenceToPercentiles(state.confidence)));
+}
+
+// Flag contributions that exceed the (age-aware) IRS limits — guidance only,
+// never clamped.
+function updateContribGuidance() {
+  const el = document.getElementById('contrib-guidance');
+  if (!el) return;
+  const limits = contributionLimits(new Date().getFullYear(), state.currentAge);
+  const k401 = state.contribTrad401k + state.contribRoth401k;
+  const ira = state.contribTradIRA + state.contribRothIRA;
+  const parts = [
+    `401(K) ${dollarFmt(k401)} / ${dollarFmt(limits.elective401k)}` +
+      (k401 > limits.elective401k ? ' <span class="over">OVER</span>' : ''),
+    `IRA ${dollarFmt(ira)} / ${dollarFmt(limits.ira)}` +
+      (ira > limits.ira ? ' <span class="over">OVER</span>' : ''),
+  ];
+  el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
 }
 
 let recomputeTimer = null;
@@ -259,15 +345,30 @@ function updateAllocationLabels() {
 }
 
 // -------------------- SIMULATION + RENDER --------------------
+function annualExpenses() {
+  return state.monthlyExpenses * 12;
+}
+function retirementSpend() {
+  return annualExpenses() * (state.retirementReplacement / 100);
+}
+
 function scenarioParams(startYear) {
   return {
     startingBalance: state.startingBalance,
     currentAge: state.currentAge,
     retireAge: state.retireAge,
     endAge: state.endAge,
-    annualIncome: state.annualIncome,
-    savingsRate: state.savingsRate,
-    retirementSpend: state.retirementSpend,
+    householdIncome: state.householdIncome,
+    annualExpenses: annualExpenses(),
+    retirementSpend: retirementSpend(),
+    contributions: {
+      trad401k: state.contribTrad401k,
+      roth401k: state.contribRoth401k,
+      tradIRA: state.contribTradIRA,
+      rothIRA: state.contribRothIRA,
+      taxable: state.contribTaxable,
+    },
+    employerMatch: { rate: state.matchRate, capPct: state.matchCapPct },
     expectedReturn: state.expectedReturn,
     returnStdDev: state.returnStdDev,
     inflation: state.inflation,
@@ -283,7 +384,9 @@ function scenarioParams(startYear) {
 
 function recompute() {
   const startYear = new Date().getFullYear();
-  lastResult = runMonteCarlo(scenarioParams(startYear));
+  const params = scenarioParams(startYear);
+  lastResult = runMonteCarlo(params);
+  lastProjection = projectPlan(params); // deterministic "expected path" for inspect + tax
 
   const { lower, upper } = confidenceToPercentiles(state.confidence);
   const percentilesNeeded = Array.from(new Set([5, 25, 50, 75, 95, lower, upper])).sort((a,b)=>a-b);
@@ -297,7 +400,7 @@ function recompute() {
     peakMedian: Math.max(...median),
     medianPath: median.slice(),
     years: lastResult.years.slice(),
-    combinedMarginalRate: combinedMarginalRate(state.annualIncome, lastResult.years[0]),
+    combinedMarginalRate: combinedMarginalRate(lastProjection[0].income, lastResult.years[0]),
     creepCount: 0, // filled in by updateTaxPanel below
   };
 
@@ -340,12 +443,28 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', resizeCanvas);
 
-function drawChart(years, bands, lowerP, upperP) {
+// Convert a nominal dollar value at year-index i to the displayed value,
+// deflating to today's purchasing power when the today's-dollars view is on.
+function deflate(v, i) {
+  return state.todaysDollars ? v / Math.pow(1 + state.inflation, i) : v;
+}
+
+function drawChart(years, bandsIn, lowerP, upperP) {
   const w = canvas.width, h = canvas.height;
   ctx2d.clearRect(0, 0, w, h);
 
+  // deflated copies for display (nominal data is preserved in lastBands)
+  const bands = {};
+  Object.keys(bandsIn).forEach((k) => {
+    bands[k] = (bandsIn[k] || []).map((v, i) => deflate(v, i));
+  });
+  const overlays = comparisonOverlays.map((o) => ({
+    ...o,
+    medianPath: o.medianPath.map((v, i) => deflate(v, i)),
+  }));
+
   const allVals = [].concat(bands[5] || [], bands[95] || []);
-  const overlayVals = comparisonOverlays.reduce((acc, o) => acc.concat(o.medianPath), []);
+  const overlayVals = overlays.reduce((acc, o) => acc.concat(o.medianPath), []);
   const maxVal = Math.max(...allVals, ...overlayVals, 1);
   const padding = { top: 20 * devicePixelRatio, bottom: 30 * devicePixelRatio, left: 70 * devicePixelRatio, right: 20 * devicePixelRatio };
   const chartW = w - padding.left - padding.right;
@@ -409,7 +528,7 @@ function drawChart(years, bands, lowerP, upperP) {
   ctx2d.shadowBlur = 0;
 
   // comparison overlays — saved scenarios' median lines, dashed + labeled
-  comparisonOverlays.forEach((o) => {
+  overlays.forEach((o) => {
     const n = o.medianPath.length;
     if (n < 2) return;
     ctx2d.strokeStyle = o.color;
@@ -446,12 +565,91 @@ function drawChart(years, bands, lowerP, upperP) {
     ctx2d.font = `${10 * devicePixelRatio}px Consolas, monospace`;
     ctx2d.fillText('RETIRE', x(retireIdx) + 4, padding.top + 12 * devicePixelRatio);
   }
+
+  // remember geometry for pointer hit-testing (values in canvas px)
+  chartGeom = { padL: padding.left, padT: padding.top, chartW, chartH, bottom: h - padding.bottom, n: years.length };
+
+  // hover cursor + marker on the median
+  if (hoverIndex != null && hoverIndex >= 0 && hoverIndex < years.length && bands[50]) {
+    const hx = x(hoverIndex);
+    ctx2d.strokeStyle = 'rgba(230,255,240,0.35)';
+    ctx2d.lineWidth = 1 * devicePixelRatio;
+    ctx2d.beginPath();
+    ctx2d.moveTo(hx, padding.top);
+    ctx2d.lineTo(hx, h - padding.bottom);
+    ctx2d.stroke();
+    const my = y(bands[50][hoverIndex]);
+    ctx2d.fillStyle = '#e6fff0';
+    ctx2d.beginPath();
+    ctx2d.arc(hx, my, 3.5 * devicePixelRatio, 0, Math.PI * 2);
+    ctx2d.fill();
+  }
 }
 
 function formatCompact(v) {
-  if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
-  if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
-  return v.toFixed(0);
+  const neg = v < 0 ? '-' : '';
+  const a = Math.abs(v);
+  if (a >= 1e6) return neg + (a / 1e6).toFixed(1) + 'M';
+  if (a >= 1e3) return neg + (a / 1e3).toFixed(0) + 'K';
+  return neg + a.toFixed(0);
+}
+
+// -------------------- CHART INSPECT --------------------
+function initChartInspect() {
+  const tip = document.getElementById('chart-tooltip');
+  function handle(clientX) {
+    if (!chartGeom || !lastProjection) return;
+    const rect = canvas.getBoundingClientRect();
+    const xCanvas = (clientX - rect.left) * devicePixelRatio;
+    const frac = (xCanvas - chartGeom.padL) / chartGeom.chartW;
+    let idx = Math.round(frac * (chartGeom.n - 1));
+    idx = Math.max(0, Math.min(chartGeom.n - 1, idx));
+    hoverIndex = idx;
+    redrawChart();
+    showTooltip(idx, clientX);
+  }
+  const clear = () => { hoverIndex = null; tip.classList.add('hidden'); redrawChart(); };
+  canvas.addEventListener('mousemove', (e) => handle(e.clientX));
+  canvas.addEventListener('mouseleave', clear);
+  canvas.addEventListener('touchstart', (e) => { if (e.touches[0]) handle(e.touches[0].clientX); }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => { if (e.touches[0]) handle(e.touches[0].clientX); }, { passive: true });
+  canvas.addEventListener('touchend', clear);
+}
+
+function showTooltip(idx, clientX) {
+  const tip = document.getElementById('chart-tooltip');
+  const row = lastProjection[idx];
+  if (!row || !lastBands[50]) return;
+  // Net worth = the MC median the user sees (deflated). Split it by the
+  // deterministic bucket ratios so the parts sum to the visible median line.
+  const nw = deflate(lastBands[50][idx], idx);
+  const detNW = row.netWorth || 1;
+  const trad = nw * (row.traditional / detNW);
+  const roth = nw * (row.roth / detNW);
+  const tax = nw * (row.taxable / detNW);
+  const pct = (part) => (nw > 0 ? Math.round((part / nw) * 100) : 0);
+  const income = deflate(row.income, idx);
+  const taxPaid = deflate(row.tax, idx);
+  const unit = state.todaysDollars ? " (today's $)" : '';
+
+  tip.innerHTML =
+    `<div class="tt-age">AGE ${row.age} · ${row.year}${row.retired ? ' · RETIRED' : ''}</div>` +
+    `<div class="tt-nw">$${formatCompact(nw)}${unit}</div>` +
+    `<div class="tt-row"><span>TRADITIONAL</span><b>$${formatCompact(trad)} · ${pct(trad)}%</b></div>` +
+    `<div class="tt-row"><span>ROTH</span><b>$${formatCompact(roth)} · ${pct(roth)}%</b></div>` +
+    `<div class="tt-row"><span>TAXABLE</span><b>$${formatCompact(tax)} · ${pct(tax)}%</b></div>` +
+    `<div class="tt-sep"></div>` +
+    `<div class="tt-row"><span>${row.retired ? 'ORDINARY INCOME' : 'TAXABLE INCOME'}</span><b>$${formatCompact(income)}</b></div>` +
+    `<div class="tt-row"><span>EST. TAX</span><b>$${formatCompact(taxPaid)}</b></div>`;
+  tip.classList.remove('hidden');
+
+  const panel = document.getElementById('chart-panel');
+  const panelRect = panel.getBoundingClientRect();
+  const tipW = tip.offsetWidth || 160;
+  let left = clientX - panelRect.left + 14;
+  if (left + tipW > panelRect.width - 6) left = clientX - panelRect.left - tipW - 14;
+  tip.style.left = Math.max(6, left) + 'px';
+  tip.style.top = '46px';
 }
 
 // -------------------- STATUS READOUTS --------------------
@@ -490,13 +688,15 @@ function updateStatusReadouts(result, lowerP, upperP) {
 
 // -------------------- TAX PANEL --------------------
 function updateTaxPanel(result) {
-  const currentRate = combinedMarginalRate(state.annualIncome, result.years[0]);
+  // Current marginal rate on THIS year's taxable income (income minus pre-tax
+  // contributions), from the deterministic projection's first row.
+  const taxableNow = lastProjection ? lastProjection[0].income : state.householdIncome;
+  const currentRate = combinedMarginalRate(taxableNow, result.years[0]);
   document.getElementById('tax-current-rate').textContent = (currentRate * 100).toFixed(1) + '%';
 
-  // Deterministic (mean-return) projection of ACTUAL ordinary taxable income:
-  // pre-retirement wages, post-retirement the real traditional-withdrawal
-  // income the account-type model produces (no longer a spend proxy).
-  const incomePath = projectTaxableIncome(scenarioParams(result.years[0]));
+  // Ordinary taxable income per year from the deterministic projection —
+  // real wages minus pre-tax contributions, then real withdrawal income.
+  const incomePath = lastProjection.map((r) => ({ year: r.year, income: r.income, retired: r.retired }));
 
   const creepEvents = detectBracketCreep(incomePath);
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
@@ -548,23 +748,7 @@ function saveScenario() {
     id: newScenarioId(),
     name,
     createdAt: Date.now(),
-    inputs: {
-      currentAge: state.currentAge,
-      retireAge: state.retireAge,
-      endAge: state.endAge,
-      startingBalance: state.startingBalance,
-      annualIncome: state.annualIncome,
-      savingsRate: state.savingsRate,
-      retirementSpend: state.retirementSpend,
-      expectedReturn: state.expectedReturn,
-      returnStdDev: state.returnStdDev,
-      inflation: state.inflation,
-      allocTrad: state.allocTrad,
-      allocRoth: state.allocRoth,
-      allocTaxable: state.allocTaxable,
-      confidence: state.confidence,
-      numSims: state.numSims,
-    },
+    inputs: PERSISTED_KEYS.reduce((o, k) => { o[k] = state[k]; return o; }, {}),
     summary: { ...lastSummary },
   };
 
@@ -607,33 +791,10 @@ function toggleOverlay(id) {
 function loadScenario(id) {
   const s = getScenarios().find((x) => x.id === id);
   if (!s) return;
-  const inp = s.inputs;
-  // restore fields with no dedicated slider directly
-  state.currentAge = inp.currentAge;
-  state.endAge = inp.endAge;
-  state.annualIncome = inp.annualIncome;
-  state.inflation = inp.inflation;
-  state.numSims = inp.numSims;
-  // restore slider-backed fields (dispatch 'input' to refresh state + labels).
-  // Older scenarios predate the account model — fall back to current defaults.
-  setSliderValue('slider-retireAge', inp.retireAge);
-  setSliderValue('slider-savingsRate', inp.savingsRate * 100);
-  setSliderValue('slider-retirementSpend', inp.retirementSpend);
-  setSliderValue('slider-expectedReturn', (inp.expectedReturn * 100).toFixed(1));
-  setSliderValue('slider-returnStdDev', (inp.returnStdDev * 100).toFixed(1));
-  setSliderValue('slider-startBalance', inp.startingBalance ?? state.startingBalance);
-  setSliderValue('slider-allocTrad', inp.allocTrad ?? state.allocTrad);
-  setSliderValue('slider-allocRoth', inp.allocRoth ?? state.allocRoth);
-  setSliderValue('slider-allocTaxable', inp.allocTaxable ?? state.allocTaxable);
-  setSliderValue('slider-confidence', inp.confidence);
+  const inp = s.inputs || {};
+  PERSISTED_KEYS.forEach((k) => { if (inp[k] != null) state[k] = inp[k]; });
+  syncControlsFromState();
   recompute(false);
-}
-
-function setSliderValue(id, value) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.value = value;
-  el.dispatchEvent(new Event('input'));
 }
 
 function renderScenarioList() {
