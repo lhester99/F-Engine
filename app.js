@@ -37,6 +37,8 @@ const state = {
   ssClaimAge: 67,
   spouseSsBenefit: 20000,
   spouseSsClaimAge: 67,
+  // GOALS & DEBT — timeline events: { id, type, amount, age, endAge }
+  events: [],
   // DISPLAY
   confidence: 90,
   todaysDollars: false,
@@ -248,6 +250,7 @@ const PERSISTED_KEYS = [
   'startingBalance', 'allocTrad', 'allocRoth', 'allocTaxable',
   'expectedReturn', 'returnStdDev', 'inflation',
   'ssBenefit', 'ssClaimAge', 'spouseSsBenefit', 'spouseSsClaimAge',
+  'events',
   'confidence', 'todaysDollars',
 ];
 
@@ -266,6 +269,9 @@ function syncControlsFromState() {
   updateAllocationLabels();
   updateContribGuidance();
   syncFilingUI();
+  // ensure loaded events have ids, then render
+  state.events.forEach((e) => { if (!e.id) e.id = 'ev' + (eventIdSeq++); });
+  renderEvents();
   const btn = document.getElementById('toggle-dollars');
   btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
   btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
@@ -293,6 +299,9 @@ function initControls() {
     btn.addEventListener('click', () => setFilingStatus(btn.dataset.fs));
   });
 
+  // goals & debt
+  document.getElementById('add-event').addEventListener('click', addEvent);
+
   // scenario archive controls
   document.getElementById('save-scenario').addEventListener('click', saveScenario);
   document.getElementById('scenario-name').addEventListener('keydown', (e) => {
@@ -306,6 +315,96 @@ function initControls() {
 // beyond the throttled one bindSlider already scheduled).
 function onContribChange() {
   updateContribGuidance();
+}
+
+// -------------------- GOALS & DEBT EVENTS --------------------
+let eventIdSeq = 1;
+const EVENT_TYPES = [
+  { value: 'expense', label: 'ONE-TIME SPEND' },
+  { value: 'income', label: 'WINDFALL' },
+  { value: 'debt', label: 'RECURRING DEBT / YR' },
+];
+
+function addEvent() {
+  state.events.push({
+    id: 'ev' + (eventIdSeq++),
+    type: 'expense',
+    amount: 50000,
+    age: Math.min(state.retireAge, state.currentAge + 5),
+    endAge: state.retireAge,
+  });
+  renderEvents();
+  scheduleRecompute();
+}
+
+function deleteEvent(id) {
+  state.events = state.events.filter((e) => e.id !== id);
+  renderEvents();
+  scheduleRecompute();
+}
+
+function updateEventField(id, field, value) {
+  const ev = state.events.find((e) => e.id === id);
+  if (!ev) return;
+  ev[field] = field === 'type' ? value : +value;
+  if (field === 'type') renderEvents(); // show/hide the "to age" field
+  scheduleRecompute();
+}
+
+function scheduleRecompute() {
+  clearTimeout(recomputeTimer);
+  recomputeTimer = setTimeout(() => recompute(false), 40);
+}
+
+function renderEvents() {
+  const list = document.getElementById('events-list');
+  if (!list) return;
+  list.innerHTML = '';
+  state.events.forEach((ev) => {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+
+    const top = document.createElement('div');
+    top.className = 'event-top';
+    const sel = document.createElement('select');
+    sel.className = 'ev-type';
+    EVENT_TYPES.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = t.value; opt.textContent = t.label;
+      if (t.value === ev.type) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => updateEventField(ev.id, 'type', sel.value));
+    const del = document.createElement('button');
+    del.className = 'ev-del'; del.textContent = '×'; del.title = 'Remove';
+    del.addEventListener('click', () => deleteEvent(ev.id));
+    top.append(sel, del);
+
+    const fields = document.createElement('div');
+    fields.className = 'event-fields';
+    fields.appendChild(numField('$', ev.amount, 0, 5000000, 1000, (v) => updateEventField(ev.id, 'amount', v)));
+    fields.appendChild(numField(ev.type === 'debt' ? 'FROM AGE' : 'AGE', ev.age, 0, 110, 1, (v) => updateEventField(ev.id, 'age', v), 'ev-age'));
+    const toWrap = numField('TO AGE', ev.endAge, 0, 110, 1, (v) => updateEventField(ev.id, 'endAge', v), 'ev-age');
+    toWrap.classList.add('ev-end-wrap');
+    if (ev.type !== 'debt') toWrap.classList.add('hidden-field');
+    fields.appendChild(toWrap);
+
+    row.append(top, fields);
+    list.appendChild(row);
+  });
+}
+
+function numField(labelText, value, min, max, step, onChange, inputClass) {
+  const label = document.createElement('label');
+  label.textContent = labelText + ' ';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = min; input.max = max; input.step = step;
+  input.value = value;
+  if (inputClass) input.className = inputClass;
+  input.addEventListener('input', () => onChange(input.value));
+  label.appendChild(input);
+  return label;
 }
 
 // Filing status: single vs married-filing-jointly. Shows/hides spouse + spouse
@@ -422,6 +521,9 @@ function scenarioParams(startYear) {
       spouseBenefit: state.spouseSsBenefit,
       spouseClaimAge: state.spouseSsClaimAge,
     },
+    events: state.events.map((e) => ({
+      type: e.type, amount: e.amount, startAge: e.age, endAge: e.endAge,
+    })),
     expectedReturn: state.expectedReturn,
     returnStdDev: state.returnStdDev,
     inflation: state.inflation,

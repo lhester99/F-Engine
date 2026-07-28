@@ -422,10 +422,32 @@ function normalizePlan(params) {
     returnStdDev: p.returnStdDev || 0,
     inflation: p.inflation || 0,
     alloc: normalizeAllocation(p.allocation || { traditional: 1, roth: 0, taxable: 0 }),
+    events: Array.isArray(p.events) ? p.events : [],
     rmdStartAge: rmdStartAge(startYear - currentAge),
     numSims: p.numSims || 2000,
     startYear,
   };
+}
+
+// Cash flow from timeline events at a given age:
+//   expense : one-time outflow at startAge (entered in today's $, inflated).
+//   income  : one-time inflow at startAge (windfall/inheritance; treated as
+//             after-tax cash, NOT ordinary income — a documented simplification).
+//   debt    : recurring FIXED-nominal payment from startAge until endAge
+//             (e.g. a mortgage), which then drops off.
+function eventsFlow(events, age, priceInfl) {
+  let outflow = 0;
+  let inflow = 0;
+  for (const ev of events) {
+    if (ev.type === 'debt') {
+      if (age >= ev.startAge && age < ev.endAge) outflow += ev.amount; // fixed nominal
+    } else if (ev.type === 'income') {
+      if (age === ev.startAge) inflow += ev.amount * priceInfl;
+    } else { // expense
+      if (age === ev.startAge) outflow += ev.amount * priceInfl;
+    }
+  }
+  return { outflow, inflow };
 }
 
 // Nominal Social Security cash for year-index i: benefits are entered in
@@ -483,6 +505,8 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
   let ordinaryIncome = 0;
   let tax = 0;
 
+  const ef = eventsFlow(p.events, age, priceInfl); // goals & debt this year
+
   if (!isRetired) {
     const c = p.contributions;
     const income = (p.householdIncome + p.spouseIncome) * g;
@@ -498,9 +522,10 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
 
     traditional += preTax + match;
     roth += rothC;
-    taxable += taxableC + surplus; // surplus < 0 draws the brokerage down
+    // surplus + windfalls − goal/debt outflows flow to the brokerage
+    taxable += taxableC + surplus - ef.outflow + ef.inflow;
   } else {
-    const spend = p.retirementSpend * priceInfl;
+    const spend = p.retirementSpend * priceInfl + ef.outflow - ef.inflow;
     const ss = ssIncomeForYear(p, i);
 
     // RMD: forced Traditional withdrawal once past the RMD age.
