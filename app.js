@@ -9,8 +9,11 @@ const state = {
   currentAge: 32,
   retireAge: 65,
   endAge: 92,
+  filingStatus: 'single',      // 'single' | 'mfj'
+  spouseAge: 32,
   // INCOME & EXPENSES
   householdIncome: 120000,
+  spouseIncome: 60000,         // used only when filingStatus === 'mfj'
   monthlyExpenses: 5500,       // annualExpenses = *12
   retirementReplacement: 85,   // % of working expenses spent in retirement
   // CONTRIBUTIONS ($/yr)
@@ -29,6 +32,11 @@ const state = {
   expectedReturn: 0.07,
   returnStdDev: 0.12,
   inflation: 0.025,
+  // SOCIAL SECURITY (benefits in today's dollars)
+  ssBenefit: 30000,
+  ssClaimAge: 67,
+  spouseSsBenefit: 20000,
+  spouseSsClaimAge: 67,
   // DISPLAY
   confidence: 90,
   todaysDollars: false,
@@ -176,7 +184,9 @@ const SLIDERS = [
   ['currentAge', 'val-currentAge', (v) => { state.currentAge = +v; return `${v}`; }],
   ['retireAge', 'val-retireAge', (v) => { state.retireAge = +v; return `${v}`; }],
   ['endAge', 'val-endAge', (v) => { state.endAge = +v; return `${v}`; }],
+  ['spouseAge', 'val-spouseAge', (v) => { state.spouseAge = +v; return `${v}`; }],
   ['householdIncome', 'val-householdIncome', (v) => { state.householdIncome = +v; return dollarFmt(v); }],
+  ['spouseIncome', 'val-spouseIncome', (v) => { state.spouseIncome = +v; return dollarFmt(v); }],
   ['monthlyExpenses', 'val-monthlyExpenses', (v) => { state.monthlyExpenses = +v; return `${dollarFmt(v)} ($${(v*12/1000).toFixed(0)}K/yr)`; }],
   ['retirementReplacement', 'val-retirementReplacement', (v) => {
     state.retirementReplacement = +v;
@@ -194,6 +204,10 @@ const SLIDERS = [
   ['expectedReturn', 'val-expectedReturn', (v) => { state.expectedReturn = v / 100; return `${(+v).toFixed(1)}%`; }],
   ['returnStdDev', 'val-returnStdDev', (v) => { state.returnStdDev = v / 100; return `${(+v).toFixed(1)}%`; }],
   ['inflation', 'val-inflation', (v) => { state.inflation = v / 100; return `${(+v).toFixed(1)}%`; }],
+  ['ssBenefit', 'val-ssBenefit', (v) => { state.ssBenefit = +v; return dollarFmt(v); }],
+  ['ssClaimAge', 'val-ssClaimAge', (v) => { state.ssClaimAge = +v; return `${v}`; }],
+  ['spouseSsBenefit', 'val-spouseSsBenefit', (v) => { state.spouseSsBenefit = +v; return dollarFmt(v); }],
+  ['spouseSsClaimAge', 'val-spouseSsClaimAge', (v) => { state.spouseSsClaimAge = +v; return `${v}`; }],
   ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
 ];
 
@@ -202,7 +216,9 @@ const SLIDER_INIT = {
   currentAge: () => state.currentAge,
   retireAge: () => state.retireAge,
   endAge: () => state.endAge,
+  spouseAge: () => state.spouseAge,
   householdIncome: () => state.householdIncome,
+  spouseIncome: () => state.spouseIncome,
   monthlyExpenses: () => state.monthlyExpenses,
   retirementReplacement: () => state.retirementReplacement,
   contribTrad401k: () => state.contribTrad401k,
@@ -216,17 +232,22 @@ const SLIDER_INIT = {
   expectedReturn: () => (state.expectedReturn * 100).toFixed(1),
   returnStdDev: () => (state.returnStdDev * 100).toFixed(1),
   inflation: () => (state.inflation * 100).toFixed(1),
+  ssBenefit: () => state.ssBenefit,
+  ssClaimAge: () => state.ssClaimAge,
+  spouseSsBenefit: () => state.spouseSsBenefit,
+  spouseSsClaimAge: () => state.spouseSsClaimAge,
   confidence: () => state.confidence,
 };
 
 // State fields persisted in a saved scenario.
 const PERSISTED_KEYS = [
-  'currentAge', 'retireAge', 'endAge',
-  'householdIncome', 'monthlyExpenses', 'retirementReplacement',
+  'currentAge', 'retireAge', 'endAge', 'filingStatus', 'spouseAge',
+  'householdIncome', 'spouseIncome', 'monthlyExpenses', 'retirementReplacement',
   'contribTrad401k', 'contribRoth401k', 'contribTradIRA', 'contribRothIRA', 'contribTaxable',
   'matchRate', 'matchCapPct',
   'startingBalance', 'allocTrad', 'allocRoth', 'allocTaxable',
   'expectedReturn', 'returnStdDev', 'inflation',
+  'ssBenefit', 'ssClaimAge', 'spouseSsBenefit', 'spouseSsClaimAge',
   'confidence', 'todaysDollars',
 ];
 
@@ -244,6 +265,7 @@ function syncControlsFromState() {
   });
   updateAllocationLabels();
   updateContribGuidance();
+  syncFilingUI();
   const btn = document.getElementById('toggle-dollars');
   btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
   btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
@@ -266,6 +288,11 @@ function initControls() {
   // today's-dollars toggle
   document.getElementById('toggle-dollars').addEventListener('click', toggleDollars);
 
+  // filing-status segmented toggle
+  document.querySelectorAll('#filing-toggle button').forEach((btn) => {
+    btn.addEventListener('click', () => setFilingStatus(btn.dataset.fs));
+  });
+
   // scenario archive controls
   document.getElementById('save-scenario').addEventListener('click', saveScenario);
   document.getElementById('scenario-name').addEventListener('keydown', (e) => {
@@ -279,6 +306,23 @@ function initControls() {
 // beyond the throttled one bindSlider already scheduled).
 function onContribChange() {
   updateContribGuidance();
+}
+
+// Filing status: single vs married-filing-jointly. Shows/hides spouse + spouse
+// Social Security controls and re-runs the sim (MFJ changes brackets, IRMAA,
+// and adds spouse income/SS).
+function setFilingStatus(fs) {
+  state.filingStatus = fs === 'mfj' ? 'mfj' : 'single';
+  syncFilingUI();
+  recompute(false);
+}
+
+function syncFilingUI() {
+  const panel = document.getElementById('controls-panel');
+  panel.classList.toggle('show-mfj', state.filingStatus === 'mfj');
+  document.querySelectorAll('#filing-toggle button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.fs === state.filingStatus);
+  });
 }
 
 function toggleDollars() {
@@ -358,7 +402,10 @@ function scenarioParams(startYear) {
     currentAge: state.currentAge,
     retireAge: state.retireAge,
     endAge: state.endAge,
+    filingStatus: state.filingStatus,
+    spouseAge: state.spouseAge,
     householdIncome: state.householdIncome,
+    spouseIncome: state.spouseIncome,
     annualExpenses: annualExpenses(),
     retirementSpend: retirementSpend(),
     contributions: {
@@ -369,6 +416,12 @@ function scenarioParams(startYear) {
       taxable: state.contribTaxable,
     },
     employerMatch: { rate: state.matchRate, capPct: state.matchCapPct },
+    socialSecurity: {
+      benefit: state.ssBenefit,
+      claimAge: state.ssClaimAge,
+      spouseBenefit: state.spouseSsBenefit,
+      spouseClaimAge: state.spouseSsClaimAge,
+    },
     expectedReturn: state.expectedReturn,
     returnStdDev: state.returnStdDev,
     inflation: state.inflation,
@@ -400,7 +453,7 @@ function recompute() {
     peakMedian: Math.max(...median),
     medianPath: median.slice(),
     years: lastResult.years.slice(),
-    combinedMarginalRate: combinedMarginalRate(lastProjection[0].income, lastResult.years[0]),
+    combinedMarginalRate: combinedMarginalRate(lastProjection[0].income, lastResult.years[0], state.filingStatus),
     creepCount: 0, // filled in by updateTaxPanel below
   };
 
@@ -691,14 +744,14 @@ function updateTaxPanel(result) {
   // Current marginal rate on THIS year's taxable income (income minus pre-tax
   // contributions), from the deterministic projection's first row.
   const taxableNow = lastProjection ? lastProjection[0].income : state.householdIncome;
-  const currentRate = combinedMarginalRate(taxableNow, result.years[0]);
+  const currentRate = combinedMarginalRate(taxableNow, result.years[0], state.filingStatus);
   document.getElementById('tax-current-rate').textContent = (currentRate * 100).toFixed(1) + '%';
 
   // Ordinary taxable income per year from the deterministic projection —
   // real wages minus pre-tax contributions, then real withdrawal income.
   const incomePath = lastProjection.map((r) => ({ year: r.year, income: r.income, retired: r.retired }));
 
-  const creepEvents = detectBracketCreep(incomePath);
+  const creepEvents = detectBracketCreep(incomePath, state.filingStatus);
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
   if (lastSummary) lastSummary.creepCount = creepEvents.length;
 
@@ -708,6 +761,7 @@ function updateTaxPanel(result) {
     currentAge: state.currentAge,
     startYear: result.years[0],
     inflation: state.inflation,
+    filingStatus: state.filingStatus,
   });
   document.getElementById('tax-irmaa-count').textContent = irmaaEvents.length;
   const peakSurcharge = irmaaEvents.reduce((m, e) => Math.max(m, e.surchargeAnnual || 0), 0);

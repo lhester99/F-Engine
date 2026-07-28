@@ -3,11 +3,13 @@
 // Tax logic + Monte Carlo. No UI concerns in this file.
 // ============================================================
 
-// --- Tax bracket data (single filer, versioned by year) -----
-// NOTE: single-filer figures, versioned by year. Update yearly; keep prior
-// years in place so past scenarios can be re-derived.
-// getYearData picks the newest entry at or below the requested year.
-const FEDERAL_BRACKETS = {
+// --- Tax bracket data, versioned by year, per filing status -----
+// Single-filer figures are authoritative (update yearly; keep prior years so
+// past scenarios re-derive). Married-filing-jointly is derived as 2x single:
+// exact for the standard deduction and every bracket EXCEPT the top (37%)
+// threshold, which is slightly lower than 2x in reality — a documented
+// approximation. getYearData picks the newest entry at or below the year.
+const FEDERAL_SINGLE = {
   2025: {
     standardDeduction: 15000,
     brackets: [
@@ -34,17 +36,34 @@ const FEDERAL_BRACKETS = {
   },
 };
 
-// NC has moved toward a flat rate structure in recent years.
-const NC_TAX = {
-  2025: {
-    standardDeduction: 12750,
-    flatRate: 0.0425,
-  },
-  2026: {
-    standardDeduction: 12750,
-    flatRate: 0.0409,
-  },
+// Double single thresholds to approximate the married-filing-jointly schedule.
+function doubleBrackets(s) {
+  return {
+    standardDeduction: s.standardDeduction * 2,
+    brackets: s.brackets.map((b) => ({
+      rate: b.rate,
+      upTo: b.upTo === Infinity ? Infinity : b.upTo * 2,
+    })),
+  };
+}
+
+const FEDERAL_BRACKETS = {};
+Object.keys(FEDERAL_SINGLE).forEach((y) => {
+  FEDERAL_BRACKETS[y] = { single: FEDERAL_SINGLE[y], mfj: doubleBrackets(FEDERAL_SINGLE[y]) };
+});
+
+// NC flat tax. MFJ standard deduction is 2x single; the flat rate is the same.
+const NC_SINGLE = {
+  2025: { standardDeduction: 12750, flatRate: 0.0425 },
+  2026: { standardDeduction: 12750, flatRate: 0.0409 },
 };
+const NC_TAX = {};
+Object.keys(NC_SINGLE).forEach((y) => {
+  NC_TAX[y] = {
+    single: NC_SINGLE[y],
+    mfj: { standardDeduction: NC_SINGLE[y].standardDeduction * 2, flatRate: NC_SINGLE[y].flatRate },
+  };
+});
 
 // --- Contribution limits (single filer), versioned. Guidance only — the
 // engine never clamps to these; the UI flags amounts that exceed them.
@@ -72,8 +91,8 @@ function getYearData(table, year) {
 }
 
 // Progressive federal tax on taxable income (after standard deduction)
-function computeFederalTax(grossIncome, year = 2026) {
-  const data = getYearData(FEDERAL_BRACKETS, year);
+function computeFederalTax(grossIncome, year = 2026, filingStatus = 'single') {
+  const data = getYearData(FEDERAL_BRACKETS, year)[filingStatus];
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   let tax = 0;
   let lastCap = 0;
@@ -88,8 +107,8 @@ function computeFederalTax(grossIncome, year = 2026) {
 }
 
 // Marginal federal rate at a given income level
-function marginalFederalRate(grossIncome, year = 2026) {
-  const data = getYearData(FEDERAL_BRACKETS, year);
+function marginalFederalRate(grossIncome, year = 2026, filingStatus = 'single') {
+  const data = getYearData(FEDERAL_BRACKETS, year)[filingStatus];
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   for (const b of data.brackets) {
     if (taxable <= b.upTo) return b.rate;
@@ -97,32 +116,32 @@ function marginalFederalRate(grossIncome, year = 2026) {
   return data.brackets[data.brackets.length - 1].rate;
 }
 
-function computeNCTax(grossIncome, year = 2026) {
-  const data = getYearData(NC_TAX, year);
+function computeNCTax(grossIncome, year = 2026, filingStatus = 'single') {
+  const data = getYearData(NC_TAX, year)[filingStatus];
   const taxable = Math.max(0, grossIncome - data.standardDeduction);
   return taxable * data.flatRate;
 }
 
-function marginalNCRate(_grossIncome, year = 2026) {
-  return getYearData(NC_TAX, year).flatRate; // flat, so constant
+function marginalNCRate(_grossIncome, year = 2026, filingStatus = 'single') {
+  return getYearData(NC_TAX, year)[filingStatus].flatRate; // flat, so constant
 }
 
-function combinedMarginalRate(grossIncome, year = 2026) {
-  return marginalFederalRate(grossIncome, year) + marginalNCRate(grossIncome, year);
+function combinedMarginalRate(grossIncome, year = 2026, filingStatus = 'single') {
+  return marginalFederalRate(grossIncome, year, filingStatus) + marginalNCRate(grossIncome, year, filingStatus);
 }
 
-function totalTax(grossIncome, year = 2026) {
-  return computeFederalTax(grossIncome, year) + computeNCTax(grossIncome, year);
+function totalTax(grossIncome, year = 2026, filingStatus = 'single') {
+  return computeFederalTax(grossIncome, year, filingStatus) + computeNCTax(grossIncome, year, filingStatus);
 }
 
 // --- Bracket-creep detection across a projected income path ---
 // Given an array of {year, income}, find the years where the marginal
 // federal bracket changes from the previous year (a "creep" event).
-function detectBracketCreep(incomePath) {
+function detectBracketCreep(incomePath, filingStatus = 'single') {
   const events = [];
   let prevRate = null;
   for (const point of incomePath) {
-    const rate = marginalFederalRate(point.income, point.year);
+    const rate = marginalFederalRate(point.income, point.year, filingStatus);
     if (prevRate !== null && rate !== prevRate) {
       events.push({
         year: point.year,
@@ -190,9 +209,10 @@ function irmaaTierIndex(magi, tiers) {
 // Returns [{ year, magiYear, magi, fromTier, toTier, direction,
 //            surchargeAnnual, standardMonthly }].
 function detectIrmaaCliffs(incomePath, opts) {
-  const { currentAge, startYear, inflation = 0 } = opts || {};
+  const { currentAge, startYear, inflation = 0, filingStatus = 'single' } = opts || {};
   const key = matchedTableYear(IRMAA_PARTB, startYear);
   const data = IRMAA_PARTB[key];
+  const statusMult = filingStatus === 'mfj' ? 2 : 1; // MFJ tiers are exactly 2x
   const magiByYear = {};
   incomePath.forEach((p) => { magiByYear[p.year] = p.income; });
 
@@ -205,7 +225,7 @@ function detectIrmaaCliffs(incomePath, opts) {
 
     const factor = Math.pow(1 + inflation, p.year - key);
     const tiers = data.tiers.map((t) => ({
-      upTo: t.upTo === Infinity ? Infinity : t.upTo * factor,
+      upTo: t.upTo === Infinity ? Infinity : t.upTo * factor * statusMult,
     }));
     const magiYear = p.year - data.lookbackYears;
     const magi = magiByYear[magiYear] != null ? magiByYear[magiYear] : p.income;
@@ -262,52 +282,56 @@ function normalizeAllocation(a) {
   return { traditional: t / sum, roth: r / sum, taxable: x / sum };
 }
 
-// Gross up a traditional (fully taxable) withdrawal so the after-tax
-// proceeds equal netNeed: solve f(G) = G - tax(G) - netNeed = 0.
-// Newton-Raphson with f'(G) = 1 - marginalRate(G) converges in a few
-// steps; a fixed-point fallback (G = netNeed + tax(G), a contraction
-// since rates < 1) guards the piecewise kinks at bracket boundaries.
-// Assumes traditional is the only ordinary income for the year.
-function grossUpTraditional(netNeed, year) {
+// Gross up a traditional (fully taxable) withdrawal so its AFTER-TAX proceeds
+// equal netNeed, given the year already has `base` ordinary income (from
+// Social Security's taxable portion and RMDs). Solve
+//   f(G) = G - (tax(base+G) - tax(base)) - netNeed = 0
+// by Newton-Raphson (slope 1 - marginalRate(base+G)); a fixed-point fallback
+// guards the piecewise kinks at bracket boundaries.
+function grossUpTraditional(netNeed, year, base = 0, fs = 'single') {
   if (netNeed <= 0) return 0;
+  const taxBase = totalTax(base, year, fs);
   let g = netNeed;
   for (let k = 0; k < 40; k++) {
-    const f = g - totalTax(g, year) - netNeed;
+    const f = g - (totalTax(base + g, year, fs) - taxBase) - netNeed;
     if (Math.abs(f) < 1e-7) break;
-    const slope = 1 - combinedMarginalRate(g, year); // df/dG
-    const next = slope > 1e-9 ? g - f / slope : netNeed + totalTax(g, year);
-    g = next > 0 ? next : netNeed + totalTax(g, year);
+    const slope = 1 - combinedMarginalRate(base + g, year, fs); // df/dG
+    const fp = netNeed + (totalTax(base + g, year, fs) - taxBase);
+    const next = slope > 1e-9 ? g - f / slope : fp;
+    g = next > 0 ? next : fp;
   }
   return g;
 }
 
-// Draw `netSpend` after-tax dollars from the buckets in tax-aware order.
-// Pure: returns new bucket balances plus the ordinary income / tax it
-// generated and any shortfall (unfunded spend => the plan has broken).
-function withdrawForSpend(buckets, netSpend, year) {
+// Draw `netSpend` after-tax dollars from the buckets in tax-aware order
+// (taxable -> traditional -> roth), with the traditional gross-up sitting on
+// top of `baseOrdinary` (SS taxable portion + RMD already recognized).
+// Returns new balances, the ADDITIONAL ordinary income the withdrawals
+// created, and any shortfall (unfunded spend => the plan has broken).
+function withdrawForSpend(buckets, netSpend, year, baseOrdinary = 0, fs = 'single') {
   let taxable = buckets.taxable;
   let traditional = buckets.traditional;
   let roth = buckets.roth;
   let remaining = netSpend;
-  let ordinaryIncome = 0;
+  let ordinaryAdded = 0;
 
   // 1) taxable brokerage — no ordinary income in this model
   const fromTaxable = Math.min(taxable, remaining);
   taxable -= fromTaxable;
   remaining -= fromTaxable;
 
-  // 2) traditional — grossed up so after-tax proceeds cover the need
+  // 2) traditional — grossed up (on top of baseOrdinary) to cover the need
   if (remaining > 0 && traditional > 0) {
-    const grossNeeded = grossUpTraditional(remaining, year);
+    const grossNeeded = grossUpTraditional(remaining, year, baseOrdinary, fs);
     if (grossNeeded <= traditional) {
       traditional -= grossNeeded;
-      ordinaryIncome += grossNeeded;
+      ordinaryAdded += grossNeeded;
       remaining = 0;
     } else {
       // bucket can't cover the full gross-up: drain it entirely
-      ordinaryIncome += traditional;
-      const netFromTrad = traditional - totalTax(traditional, year);
-      remaining -= Math.max(0, netFromTrad);
+      const incrementalTax = totalTax(baseOrdinary + traditional, year, fs) - totalTax(baseOrdinary, year, fs);
+      remaining -= Math.max(0, traditional - incrementalTax);
+      ordinaryAdded += traditional;
       traditional = 0;
     }
   }
@@ -321,10 +345,31 @@ function withdrawForSpend(buckets, netSpend, year) {
 
   return {
     buckets: { taxable, traditional, roth },
-    ordinaryIncome,
-    tax: totalTax(ordinaryIncome, year),
+    ordinaryIncomeAdded: ordinaryAdded,
     shortfall: remaining, // > 0 => spend could not be funded this year
   };
+}
+
+// --- RMDs (Required Minimum Distributions) --------------------------------
+// SECURE 2.0: first RMD at age 73 (born 1951-1959) or 75 (born 1960+). The
+// year's RMD = Traditional balance / the IRS Uniform Lifetime factor.
+function rmdStartAge(birthYear) {
+  return birthYear >= 1960 ? 75 : 73;
+}
+// IRS Uniform Lifetime Table (2022+), age -> distribution period.
+const RMD_FACTORS = {
+  73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
+  80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2,
+  87: 14.4, 88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8, 93: 10.1,
+  94: 9.5, 95: 8.9, 96: 8.4, 97: 7.8, 98: 7.3, 99: 6.8, 100: 6.4,
+  101: 6.0, 102: 5.6, 103: 5.2, 104: 4.9, 105: 4.6, 106: 4.3, 107: 4.1,
+  108: 3.9, 109: 3.7, 110: 3.5, 111: 3.4, 112: 3.3, 113: 3.1, 114: 3.0,
+  115: 2.9, 116: 2.8, 117: 2.7, 118: 2.5, 119: 2.3, 120: 2.0,
+};
+function rmdFactor(age) {
+  if (age < 73) return Infinity;      // no RMD -> zero forced withdrawal
+  if (age > 120) return RMD_FACTORS[120];
+  return RMD_FACTORS[age] || RMD_FACTORS[120];
 }
 
 // ============================================================
@@ -352,23 +397,49 @@ function normalizePlan(params) {
     p.contributions || {}
   );
   const employerMatch = Object.assign({ rate: 0, capPct: 0 }, p.employerMatch || {});
+  const socialSecurity = Object.assign(
+    { benefit: 0, claimAge: 67, spouseBenefit: 0, spouseClaimAge: 67 },
+    p.socialSecurity || {}
+  );
+  const startYear = p.startYear || new Date().getFullYear();
+  const currentAge = p.currentAge != null ? p.currentAge : 30;
+  const filingStatus = p.filingStatus === 'mfj' ? 'mfj' : 'single';
   return {
     startingBalance: p.startingBalance || 0,
-    currentAge: p.currentAge != null ? p.currentAge : 30,
+    currentAge,
     retireAge: p.retireAge != null ? p.retireAge : 65,
     endAge: p.endAge != null ? p.endAge : 92,
+    filingStatus,
+    spouseAge: p.spouseAge != null ? p.spouseAge : currentAge,
     householdIncome: p.householdIncome != null ? p.householdIncome : (p.annualIncome || 0),
+    spouseIncome: filingStatus === 'mfj' ? (p.spouseIncome || 0) : 0,
     annualExpenses: p.annualExpenses || 0,
     retirementSpend: p.retirementSpend || 0,
     contributions,
     employerMatch,
+    socialSecurity,
     expectedReturn: p.expectedReturn || 0,
     returnStdDev: p.returnStdDev || 0,
     inflation: p.inflation || 0,
     alloc: normalizeAllocation(p.allocation || { traditional: 1, roth: 0, taxable: 0 }),
+    rmdStartAge: rmdStartAge(startYear - currentAge),
     numSims: p.numSims || 2000,
-    startYear: p.startYear || new Date().getFullYear(),
+    startYear,
   };
+}
+
+// Nominal Social Security cash for year-index i: benefits are entered in
+// today's dollars and grow with the inflation (COLA) assumption; each person's
+// benefit turns on once they reach their claiming age. Only the primary earner
+// counts unless filing MFJ.
+function ssIncomeForYear(p, i) {
+  const cola = Math.pow(1 + p.inflation, i);
+  let ss = 0;
+  if (p.currentAge + i >= p.socialSecurity.claimAge) ss += p.socialSecurity.benefit * cola;
+  if (p.filingStatus === 'mfj' && p.spouseAge + i >= p.socialSecurity.spouseClaimAge) {
+    ss += p.socialSecurity.spouseBenefit * cola;
+  }
+  return ss;
 }
 
 // Employer match (year-0 dollars): matchRate of employee 401k contributions,
@@ -379,21 +450,29 @@ function employerMatchBase(p) {
   return (p.employerMatch.rate / 100) * Math.min(emp401k, cap);
 }
 
+// Fraction of Social Security benefits counted as ordinary taxable income.
+// Real rule uses provisional-income thresholds (0/50/85%); we use a flat 85%
+// (the common high-income case) for both federal and NC — a documented
+// simplification (NC actually exempts SS).
+const SS_TAXABLE_FRACTION = 0.85;
+
 /**
  * Advance the household one year. Grows each bucket by the market return,
  * then applies the year's cash flow:
- *   working  -> income − pre-tax contributions = ordinary taxable income;
- *               tax computed; surplus (income − tax − expenses − all
- *               contributions) flows to the taxable brokerage (may be
- *               negative = drawing down savings).
- *   retired  -> withdraw the inflation-grown spend, sequenced + taxed by
- *               bucket (withdrawForSpend).
+ *   working  -> (household + spouse) income − pre-tax contributions = ordinary
+ *               taxable income; tax computed; surplus (income − tax − expenses
+ *               − all contributions) flows to the taxable brokerage.
+ *   retired  -> Social Security cash (85% taxable) + any RMD (forced from
+ *               Traditional, taxable) cover the inflation-grown spend first;
+ *               the remainder is withdrawn taxable -> traditional -> roth, with
+ *               the traditional gross-up on top of the SS+RMD ordinary base.
+ *               An RMD beyond the spend need is reinvested in taxable.
  * Traditional 401k/IRA contributions reduce taxable income now; Roth do not.
- * Returns the new buckets plus the year's income/tax facts.
  */
 function stepYear(buckets, i, yearReturn, p, matchBase) {
   const year = p.startYear + i;
   const age = p.currentAge + i;
+  const fs = p.filingStatus;
   const isRetired = age >= p.retireAge;
   const g = Math.pow(1 + p.inflation * WAGE_GROWTH_DAMP, i); // wage/contrib growth
   const priceInfl = Math.pow(1 + p.inflation, i);            // price growth
@@ -406,7 +485,7 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
 
   if (!isRetired) {
     const c = p.contributions;
-    const income = p.householdIncome * g;
+    const income = (p.householdIncome + p.spouseIncome) * g;
     const expenses = p.annualExpenses * priceInfl;
     const preTax = (c.trad401k + c.tradIRA) * g;   // reduces taxable income
     const rothC = (c.roth401k + c.rothIRA) * g;    // after-tax
@@ -414,7 +493,7 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
     const match = matchBase * g;
 
     ordinaryIncome = Math.max(0, income - preTax);
-    tax = totalTax(ordinaryIncome, year);
+    tax = totalTax(ordinaryIncome, year, fs);
     const surplus = income - tax - expenses - preTax - rothC - taxableC;
 
     traditional += preTax + match;
@@ -422,12 +501,32 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
     taxable += taxableC + surplus; // surplus < 0 draws the brokerage down
   } else {
     const spend = p.retirementSpend * priceInfl;
-    const res = withdrawForSpend({ taxable, traditional, roth }, spend, year);
-    traditional = res.buckets.traditional;
-    roth = res.buckets.roth;
-    taxable = res.buckets.taxable;
-    ordinaryIncome = res.ordinaryIncome;
-    tax = res.tax;
+    const ss = ssIncomeForYear(p, i);
+
+    // RMD: forced Traditional withdrawal once past the RMD age.
+    let rmd = 0;
+    if (age >= p.rmdStartAge && traditional > 0) {
+      rmd = Math.min(traditional, traditional / rmdFactor(age));
+      traditional -= rmd;
+    }
+
+    // Ordinary income already recognized: taxable SS portion + the full RMD.
+    const baseOrdinary = SS_TAXABLE_FRACTION * ss + rmd;
+    // Net cash SS + RMD provide after paying the tax they incur.
+    const netFromBase = (ss + rmd) - totalTax(baseOrdinary, year, fs);
+    let remaining = spend - netFromBase;
+
+    if (remaining <= 0) {
+      taxable += -remaining;      // RMD/SS exceed the spend -> reinvest surplus
+      ordinaryIncome = baseOrdinary;
+    } else {
+      const res = withdrawForSpend({ taxable, traditional, roth }, remaining, year, baseOrdinary, fs);
+      taxable = res.buckets.taxable;
+      traditional = res.buckets.traditional;
+      roth = res.buckets.roth;
+      ordinaryIncome = baseOrdinary + res.ordinaryIncomeAdded;
+    }
+    tax = totalTax(ordinaryIncome, year, fs);
   }
 
   traditional = Math.max(0, traditional);
@@ -490,7 +589,7 @@ function projectPlan(params) {
   const preTax0 = p.contributions.trad401k + p.contributions.tradIRA;
   rows.push({
     year: p.startYear, age: p.currentAge, retired: retiredNow,
-    income: retiredNow ? 0 : Math.max(0, p.householdIncome - preTax0),
+    income: retiredNow ? 0 : Math.max(0, (p.householdIncome + p.spouseIncome) - preTax0),
     tax: 0, netWorth: p.startingBalance,
     traditional: b.traditional, roth: b.roth, taxable: b.taxable,
   });
@@ -565,6 +664,9 @@ if (typeof module !== 'undefined') {
     withdrawForSpend,
     contributionLimits,
     CONTRIB_LIMITS,
+    rmdStartAge,
+    rmdFactor,
+    ssIncomeForYear,
     normalizePlan,
     employerMatchBase,
     stepYear,

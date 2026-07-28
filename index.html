@@ -90,13 +90,28 @@
             <label>PLAN THROUGH AGE <span class="control-val" id="val-endAge"></span></label>
             <input type="range" id="slider-endAge" min="70" max="105" step="1">
           </div>
+          <div class="control">
+            <label>FILING STATUS</label>
+            <div class="seg-toggle" id="filing-toggle">
+              <button type="button" data-fs="single" class="active">SINGLE</button>
+              <button type="button" data-fs="mfj">MARRIED · MFJ</button>
+            </div>
+          </div>
+          <div class="control mfj-only">
+            <label>SPOUSE AGE <span class="control-val" id="val-spouseAge"></span></label>
+            <input type="range" id="slider-spouseAge" min="18" max="70" step="1">
+          </div>
         </div>
 
         <div class="ctrl-section">
           <div class="section-head">◤ INCOME &amp; EXPENSES</div>
           <div class="control">
-            <label>HOUSEHOLD INCOME / YR <span class="control-val" id="val-householdIncome"></span></label>
+            <label>YOUR INCOME / YR <span class="control-val" id="val-householdIncome"></span></label>
             <input type="range" id="slider-householdIncome" min="0" max="500000" step="1000">
+          </div>
+          <div class="control mfj-only">
+            <label>SPOUSE INCOME / YR <span class="control-val" id="val-spouseIncome"></span></label>
+            <input type="range" id="slider-spouseIncome" min="0" max="500000" step="1000">
           </div>
           <div class="control">
             <label>LIVING EXPENSES / MO <span class="control-val" id="val-monthlyExpenses"></span></label>
@@ -139,6 +154,27 @@
             <input type="range" id="slider-matchCapPct" min="0" max="15" step="0.5">
           </div>
           <div id="contrib-guidance" class="guidance"></div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="section-head">◤ SOCIAL SECURITY</div>
+          <div class="control">
+            <label>YOUR BENEFIT / YR <span class="control-val" id="val-ssBenefit"></span></label>
+            <input type="range" id="slider-ssBenefit" min="0" max="60000" step="500">
+          </div>
+          <div class="control">
+            <label>CLAIM AGE <span class="control-val" id="val-ssClaimAge"></span></label>
+            <input type="range" id="slider-ssClaimAge" min="62" max="70" step="1">
+          </div>
+          <div class="control mfj-only">
+            <label>SPOUSE BENEFIT / YR <span class="control-val" id="val-spouseSsBenefit"></span></label>
+            <input type="range" id="slider-spouseSsBenefit" min="0" max="60000" step="500">
+          </div>
+          <div class="control mfj-only">
+            <label>SPOUSE CLAIM AGE <span class="control-val" id="val-spouseSsClaimAge"></span></label>
+            <input type="range" id="slider-spouseSsClaimAge" min="62" max="70" step="1">
+          </div>
+          <div class="guidance">BENEFITS IN TODAY'S $ · GROW WITH INFLATION (COLA) · 85% TAXABLE</div>
         </div>
 
         <div class="ctrl-section">
