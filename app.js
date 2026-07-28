@@ -318,14 +318,27 @@ const canvas = document.getElementById('hero-chart');
 const ctx2d = canvas.getContext('2d');
 
 function resizeCanvas() {
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width * devicePixelRatio;
-  canvas.height = (rect.height - 40) * devicePixelRatio;
-  canvas.style.width = rect.width + 'px';
-  canvas.style.height = (rect.height - 40) + 'px';
+  // Size the canvas to the panel's actual content box — minus padding, the
+  // header, and the legend — so it never bleeds past the panel (which broke
+  // the layout on narrow/mobile screens where every pixel counts).
+  const panel = canvas.parentElement;
+  const cs = getComputedStyle(panel);
+  const rect = panel.getBoundingClientRect();
+  const header = panel.querySelector('.panel-header');
+  const legend = document.getElementById('chart-legend');
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const chromeH = (header ? header.offsetHeight : 0) + (legend ? legend.offsetHeight : 0);
+  const cw = Math.max(80, rect.width - padX);
+  const ch = Math.max(100, rect.height - padY - chromeH - 6);
+  canvas.width = cw * devicePixelRatio;
+  canvas.height = ch * devicePixelRatio;
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
   if (lastResult) drawChart(lastResult.years, lastBands, ...Object.values(confidenceToPercentiles(state.confidence)));
 }
 window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', resizeCanvas);
 
 function drawChart(years, bands, lowerP, upperP) {
   const w = canvas.width, h = canvas.height;
