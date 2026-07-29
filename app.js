@@ -277,6 +277,8 @@ function renderLedger() {
   if (!body || !lastProjection) return;
   body.innerHTML = lastProjection.map((r, i) => {
     const c = (v) => '$' + formatCompact(deflate(v, i));
+    const fc = deflate(r.freeCash || 0, i);
+    const fcStr = (fc < 0 ? '-$' : '$') + formatCompact(Math.abs(fc));
     return `<tr class="${r.retired ? 'retired-row' : ''}">` +
       `<td>${r.year}</td><td>${r.age}</td>` +
       `<td class="num">${c(r.netWorth)}</td>` +
@@ -284,7 +286,8 @@ function renderLedger() {
       `<td class="num">${c(r.roth)}</td>` +
       `<td class="num">${c(r.taxable)}</td>` +
       `<td class="num">${c(r.income)}</td>` +
-      `<td class="num">${c(r.tax)}</td></tr>`;
+      `<td class="num">${c(r.tax)}</td>` +
+      `<td class="num fc-col ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</td></tr>`;
   }).join('');
 }
 
@@ -527,7 +530,7 @@ function recompute() {
     peakMedian: Math.max(...median),
     medianPath: median.slice(),
     years: lastResult.years.slice(),
-    combinedMarginalRate: combinedMarginalRate(lastProjection[0].income, lastResult.years[0], state.filingStatus),
+    combinedMarginalRate: combinedMarginalRate(lastProjection[0].income, lastResult.years[0], state.filingStatus, state.inflation),
     creepCount: 0, // filled in by updateTaxPanel below
   };
 
@@ -763,6 +766,9 @@ function showTooltip(idx, clientX) {
   const pct = (part) => (nw > 0 ? Math.round((part / nw) * 100) : 0);
   const income = deflate(row.income, idx);
   const taxPaid = deflate(row.tax, idx);
+  const fc = deflate(row.freeCash || 0, idx);
+  const fcStr = (fc < 0 ? '-$' : '$') + formatCompact(Math.abs(fc));
+  const fcLabel = row.retired ? 'Spendable / yr' : 'Free to enjoy / yr';
   const unit = state.todaysDollars ? " (today's $)" : '';
 
   tip.innerHTML =
@@ -773,7 +779,8 @@ function showTooltip(idx, clientX) {
     `<div class="tt-row"><span>Taxable</span><b>$${formatCompact(tax)} · ${pct(tax)}%</b></div>` +
     `<div class="tt-sep"></div>` +
     `<div class="tt-row"><span>${row.retired ? 'Ordinary income' : 'Taxable income'}</span><b>$${formatCompact(income)}</b></div>` +
-    `<div class="tt-row"><span>Est. tax</span><b>$${formatCompact(taxPaid)}</b></div>`;
+    `<div class="tt-row"><span>Est. tax</span><b>$${formatCompact(taxPaid)}</b></div>` +
+    `<div class="tt-row"><span>${fcLabel}</span><b class="tt-fc ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</b></div>`;
   tip.classList.remove('hidden');
 
   const panel = document.getElementById('chart-panel');
@@ -824,14 +831,14 @@ function updateTaxPanel(result) {
   // Current marginal rate on THIS year's taxable income (income minus pre-tax
   // contributions), from the deterministic projection's first row.
   const taxableNow = lastProjection ? lastProjection[0].income : state.householdIncome;
-  const currentRate = combinedMarginalRate(taxableNow, result.years[0], state.filingStatus);
+  const currentRate = combinedMarginalRate(taxableNow, result.years[0], state.filingStatus, state.inflation);
   document.getElementById('tax-current-rate').textContent = (currentRate * 100).toFixed(1) + '%';
 
   // Ordinary taxable income per year from the deterministic projection —
   // real wages minus pre-tax contributions, then real withdrawal income.
   const incomePath = lastProjection.map((r) => ({ year: r.year, income: r.income, retired: r.retired }));
 
-  const creepEvents = detectBracketCreep(incomePath, state.filingStatus);
+  const creepEvents = detectBracketCreep(incomePath, state.filingStatus, state.inflation);
   document.getElementById('tax-creep-count').textContent = creepEvents.length;
   if (lastSummary) lastSummary.creepCount = creepEvents.length;
 

@@ -63,8 +63,15 @@ deterministic `projectPlan`, so they never drift. Working years: (household +
 spouse) income − tax − expenses − per-account contributions = surplus → taxable
 brokerage. Retirement: Social Security (85% taxable) + RMDs cover spend first,
 then withdrawals sequence taxable → Traditional (grossed up on top of the SS/RMD
-base) → Roth. `projectPlan` returns rich per-year rows (buckets, income, tax)
-that power the chart-inspect snapshot and the tax panel.
+base) → Roth. `projectPlan` returns rich per-year rows (buckets, income, tax,
+`freeCash`) that power the chart-inspect snapshot, the year-by-year table, and
+the tax panel. Federal/NC brackets are **inflation-indexed forward** from the
+base table year (the exact `defl · tax(income/defl)` identity), matching the
+IRMAA treatment — so nominal growth no longer trips phantom bracket creep.
+Wages track inflation by default (`WAGE_GROWTH_DAMP = 1.0`). Each row's
+`freeCash` = disposable "money to enjoy": working years = income − tax −
+expenses − all contributions − debt; retirement = the funded lifestyle spend.
+Surfaced as a Free-cash column in the table and a line in the inspect tooltip.
 
 ## Known simplifications — pick up from here
 
