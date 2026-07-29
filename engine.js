@@ -151,6 +151,35 @@ function totalTax(grossIncome, year = 2026, filingStatus = 'single', inflation =
   return computeFederalTax(grossIncome, year, filingStatus) + computeNCTax(grossIncome, year, filingStatus);
 }
 
+// Gross income at the TOP of the bracket with the given marginal rate,
+// inflation-indexed to `year` (standard deduction + bracket ceiling). Used by
+// "fill-to-bracket" Roth conversions. Returns Infinity for the top bracket.
+function bracketCeilingGross(rate, year = 2026, filingStatus = 'single', inflation = 0) {
+  const base = matchedTableYear(FEDERAL_BRACKETS, year);
+  const data = FEDERAL_BRACKETS[base][filingStatus];
+  const b = data.brackets.find((x) => Math.abs(x.rate - rate) < 1e-9);
+  if (!b || b.upTo === Infinity) return Infinity;
+  const defl = inflation > 0 ? Math.pow(1 + inflation, year - base) : 1;
+  return (data.standardDeduction + b.upTo) * defl;
+}
+
+// Roth conversion amount for the year (Traditional -> Roth). 'fixed' converts a
+// set amount (today's dollars, inflated); 'bracket' converts up to the top of
+// the target bracket given the year's other ordinary income (so it naturally
+// converts nothing while wages are high and fills low brackets in early
+// retirement). Capped at the available Traditional balance.
+function rothConversionFor(rc, inWindow, traditional, otherOrdinary, priceInfl, year, fs, inflation) {
+  if (!inWindow || traditional <= 0 || rc.mode === 'off') return 0;
+  let c;
+  if (rc.mode === 'fixed') {
+    c = rc.amount * priceInfl;
+  } else { // 'bracket'
+    const ceiling = bracketCeilingGross(rc.bracket, year, fs, inflation);
+    c = ceiling === Infinity ? 0 : Math.max(0, ceiling - otherOrdinary);
+  }
+  return Math.min(c, traditional);
+}
+
 // --- Bracket-creep detection across a projected income path ---
 // Given an array of {year, income}, find the years where the marginal
 // federal bracket changes from the previous year (a "creep" event).
@@ -419,6 +448,10 @@ function normalizePlan(params) {
     { benefit: 0, claimAge: 67, spouseBenefit: 0, spouseClaimAge: 67 },
     p.socialSecurity || {}
   );
+  const rothConversion = Object.assign(
+    { mode: 'off', amount: 0, bracket: 0.12, startAge: 60, endAge: 72 },
+    p.rothConversion || {}
+  );
   const startYear = p.startYear || new Date().getFullYear();
   const currentAge = p.currentAge != null ? p.currentAge : 30;
   const filingStatus = p.filingStatus === 'mfj' ? 'mfj' : 'single';
@@ -436,6 +469,7 @@ function normalizePlan(params) {
     contributions,
     employerMatch,
     socialSecurity,
+    rothConversion,
     expectedReturn: p.expectedReturn || 0,
     returnStdDev: p.returnStdDev || 0,
     inflation: p.inflation || 0,
@@ -529,6 +563,8 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
   let freeCash = 0;
 
   const ef = eventsFlow(p.events, age, priceInfl); // goals & debt this year
+  const rc = p.rothConversion;
+  const inConvWindow = rc.mode !== 'off' && age >= rc.startAge && age <= rc.endAge;
 
   if (!isRetired) {
     const c = p.contributions;
@@ -540,6 +576,11 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
     const match = matchBase * g;
 
     ordinaryIncome = Math.max(0, income - preTax);
+    // Roth conversion: move Traditional -> Roth, adding to ordinary income
+    // (its tax comes out of this year's cash flow, i.e. free cash).
+    const conversion = rothConversionFor(rc, inConvWindow, traditional, ordinaryIncome, priceInfl, year, fs, p.inflation);
+    if (conversion > 0) { traditional -= conversion; roth += conversion; ordinaryIncome += conversion; }
+
     tax = totalTax(ordinaryIncome, year, fs, p.inflation);
     const surplus = income - tax - expenses - preTax - rothC - taxableC;
     freeCash = surplus - ef.outflow + ef.inflow;
@@ -561,8 +602,13 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
       traditional -= rmd;
     }
 
-    // Ordinary income already recognized: taxable SS portion + the full RMD.
-    const baseOrdinary = SS_TAXABLE_FRACTION * ss + rmd;
+    // Roth conversion on top of SS + RMD (its tax is funded by extra
+    // tax-efficient withdrawals below; moves Traditional -> Roth).
+    const conversion = rothConversionFor(rc, inConvWindow, traditional, SS_TAXABLE_FRACTION * ss + rmd, priceInfl, year, fs, p.inflation);
+    if (conversion > 0) { traditional -= conversion; roth += conversion; }
+
+    // Ordinary income already recognized: taxable SS portion + RMD + conversion.
+    const baseOrdinary = SS_TAXABLE_FRACTION * ss + rmd + conversion;
     // Net cash SS + RMD provide after paying the tax they incur.
     const netFromBase = (ss + rmd) - totalTax(baseOrdinary, year, fs, p.inflation);
     let remaining = spend - netFromBase;
@@ -724,6 +770,8 @@ if (typeof module !== 'undefined') {
     rmdStartAge,
     rmdFactor,
     ssIncomeForYear,
+    bracketCeilingGross,
+    rothConversionFor,
     normalizePlan,
     employerMatchBase,
     stepYear,

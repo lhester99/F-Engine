@@ -37,6 +37,12 @@ const state = {
   ssClaimAge: 67,
   spouseSsBenefit: 20000,
   spouseSsClaimAge: 67,
+  // ROTH CONVERSIONS
+  convMode: 'off',            // 'off' | 'fixed' | 'bracket'
+  convAmount: 30000,          // fixed $/yr (today's dollars)
+  convBracket: 12,            // fill-to-bracket target rate (%)
+  convStartAge: 65,
+  convEndAge: 74,
   // GOALS & DEBT — timeline events: { id, type, amount, age, endAge }
   events: [],
   // DISPLAY
@@ -124,6 +130,8 @@ const SLIDERS = [
   ['inflation', 'val-inflation', (v) => { state.inflation = v / 100; return `${(+v).toFixed(1)}%`; }],
   ['ssClaimAge', 'val-ssClaimAge', (v) => { state.ssClaimAge = +v; return `${v}`; }],
   ['spouseSsClaimAge', 'val-spouseSsClaimAge', (v) => { state.spouseSsClaimAge = +v; return `${v}`; }],
+  ['convStartAge', 'val-convStartAge', (v) => { state.convStartAge = +v; return `${v}`; }],
+  ['convEndAge', 'val-convEndAge', (v) => { state.convEndAge = +v; return `${v}`; }],
   ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
 ];
 
@@ -140,6 +148,7 @@ const NUMBERS = [
   ['num-contribTaxable', 'contribTaxable'],
   ['num-ssBenefit', 'ssBenefit'],
   ['num-spouseSsBenefit', 'spouseSsBenefit'],
+  ['num-convAmount', 'convAmount'],
 ];
 
 // Initial slider positions read back from state.
@@ -156,6 +165,8 @@ const SLIDER_INIT = {
   inflation: () => (state.inflation * 100).toFixed(1),
   ssClaimAge: () => state.ssClaimAge,
   spouseSsClaimAge: () => state.spouseSsClaimAge,
+  convStartAge: () => state.convStartAge,
+  convEndAge: () => state.convEndAge,
   confidence: () => state.confidence,
 };
 
@@ -174,6 +185,7 @@ const PERSISTED_KEYS = [
   'startingBalance', 'allocTrad', 'allocRoth', 'allocTaxable',
   'expectedReturn', 'returnStdDev', 'inflation',
   'ssBenefit', 'ssClaimAge', 'spouseSsBenefit', 'spouseSsClaimAge',
+  'convMode', 'convAmount', 'convBracket', 'convStartAge', 'convEndAge',
   'events',
   'confidence', 'todaysDollars',
 ];
@@ -197,6 +209,7 @@ function syncControlsFromState() {
   updateAllocationLabels();
   updateContribGuidance();
   syncFilingUI();
+  syncConvUI();
   // ensure loaded events have ids, then render
   state.events.forEach((e) => { if (!e.id) e.id = 'ev' + (eventIdSeq++); });
   renderEvents();
@@ -241,6 +254,15 @@ function initControls() {
 
   // goals & debt
   document.getElementById('add-event').addEventListener('click', addEvent);
+
+  // roth conversions
+  document.querySelectorAll('#conv-toggle button').forEach((btn) => {
+    btn.addEventListener('click', () => setConvMode(btn.dataset.mode));
+  });
+  document.getElementById('conv-bracket-select').addEventListener('change', (e) => {
+    state.convBracket = +e.target.value;
+    scheduleRecompute();
+  });
 
   // scenario archive controls
   document.getElementById('save-scenario').addEventListener('click', saveScenario);
@@ -398,6 +420,26 @@ function syncFilingUI() {
   });
 }
 
+// Roth conversion mode: off / fixed dollars / fill-to-bracket. Reveals the
+// relevant fields and re-runs the sim.
+function setConvMode(mode) {
+  state.convMode = mode;
+  syncConvUI();
+  recompute(false);
+}
+
+function syncConvUI() {
+  const panel = document.getElementById('controls-panel');
+  panel.classList.remove('conv-fixed', 'conv-bracket');
+  if (state.convMode === 'fixed') panel.classList.add('conv-fixed');
+  else if (state.convMode === 'bracket') panel.classList.add('conv-bracket');
+  document.querySelectorAll('#conv-toggle button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === state.convMode);
+  });
+  const sel = document.getElementById('conv-bracket-select');
+  if (sel) sel.value = String(state.convBracket);
+}
+
 function toggleDollars() {
   state.todaysDollars = !state.todaysDollars;
   const btn = document.getElementById('toggle-dollars');
@@ -495,6 +537,13 @@ function scenarioParams(startYear) {
       claimAge: state.ssClaimAge,
       spouseBenefit: state.spouseSsBenefit,
       spouseClaimAge: state.spouseSsClaimAge,
+    },
+    rothConversion: {
+      mode: state.convMode,
+      amount: state.convAmount,
+      bracket: state.convBracket / 100,
+      startAge: state.convStartAge,
+      endAge: state.convEndAge,
     },
     events: state.events.map((e) => ({
       type: e.type, amount: e.amount, startAge: e.age, endAge: e.endAge,

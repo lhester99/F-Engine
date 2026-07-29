@@ -72,6 +72,9 @@ Wages track inflation by default (`WAGE_GROWTH_DAMP = 1.0`). Each row's
 `freeCash` = disposable "money to enjoy": working years = income − tax −
 expenses − all contributions − debt; retirement = the funded lifestyle spend.
 Surfaced as a Free-cash column in the table and a line in the inspect tooltip.
+Roth conversions (`rothConversion`: `fixed` $/yr or `fill-to-bracket` over an
+age window) move Traditional → Roth, add to that year's ordinary income, and
+cut future RMDs/IRMAA; bracket-fill naturally converts $0 while wages are high.
 
 ## Known simplifications — pick up from here
 

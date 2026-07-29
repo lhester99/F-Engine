@@ -211,6 +211,39 @@
         </div>
 
         <div class="ctrl-section">
+          <div class="section-head">Roth Conversions</div>
+          <div class="control">
+            <div class="seg-toggle seg3" id="conv-toggle">
+              <button type="button" data-mode="off" class="active">Off</button>
+              <button type="button" data-mode="fixed">Fixed $</button>
+              <button type="button" data-mode="bracket">Fill bracket</button>
+            </div>
+          </div>
+          <div class="control conv-field conv-fixed-only">
+            <label>Convert / yr</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-convAmount" min="0" step="5000" inputmode="numeric"></div>
+          </div>
+          <div class="control conv-field conv-bracket-only">
+            <label>Fill up to bracket</label>
+            <select id="conv-bracket-select" class="plain-select">
+              <option value="10">10% bracket</option>
+              <option value="12" selected>12% bracket</option>
+              <option value="22">22% bracket</option>
+              <option value="24">24% bracket</option>
+            </select>
+          </div>
+          <div class="control conv-field conv-window">
+            <label>From age <span class="control-val" id="val-convStartAge"></span></label>
+            <input type="range" id="slider-convStartAge" min="40" max="80" step="1">
+          </div>
+          <div class="control conv-field conv-window">
+            <label>Through age <span class="control-val" id="val-convEndAge"></span></label>
+            <input type="range" id="slider-convEndAge" min="40" max="85" step="1">
+          </div>
+          <div class="guidance">Move Traditional → Roth in low-income years (e.g. early retirement) to cut future RMDs and IRMAA. Conversion tax is paid from cash / taxable.</div>
+        </div>
+
+        <div class="ctrl-section">
           <div class="section-head">Accounts &amp; Markets</div>
           <div class="control">
             <label>Starting balance</label>
