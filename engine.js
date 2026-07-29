@@ -452,9 +452,16 @@ function normalizePlan(params) {
     { mode: 'off', amount: 0, bracket: 0.12, startAge: 60, endAge: 72 },
     p.rothConversion || {}
   );
+  const home = Object.assign(
+    { value: 0, appreciation: 0.03, mortgageBalance: 0, mortgageRate: 0.065, mortgagePayment: 0 },
+    p.home || {}
+  );
   const startYear = p.startYear || new Date().getFullYear();
   const currentAge = p.currentAge != null ? p.currentAge : 30;
   const filingStatus = p.filingStatus === 'mfj' ? 'mfj' : 'single';
+  const totalYears = Math.max(1, (p.endAge != null ? p.endAge : 92) - currentAge);
+  // Deterministic mortgage amortization schedule (same across all sims).
+  home.schedule = buildMortgageSchedule(home.mortgageBalance, home.mortgageRate, home.mortgagePayment, totalYears);
   return {
     startingBalance: p.startingBalance || 0,
     currentAge,
@@ -475,10 +482,32 @@ function normalizePlan(params) {
     inflation: p.inflation || 0,
     alloc: normalizeAllocation(p.allocation || { traditional: 1, roth: 0, taxable: 0 }),
     events: Array.isArray(p.events) ? p.events : [],
+    home,
     rmdStartAge: rmdStartAge(startYear - currentAge),
     numSims: p.numSims || 2000,
     startYear,
   };
+}
+
+// Amortize a mortgage month-by-month into an annual schedule. Returns, for
+// each year 1..maxYears, the actual cash paid that year (P&I, less once the
+// loan pays off) and the balance remaining at year end. Fixed nominal payment.
+function buildMortgageSchedule(balance0, annualRate, monthlyPayment, maxYears) {
+  const sched = [];
+  let bal = balance0;
+  const mr = annualRate / 12;
+  for (let y = 1; y <= maxYears; y++) {
+    let paid = 0;
+    for (let mo = 0; mo < 12; mo++) {
+      if (bal <= 0) break;
+      const interest = bal * mr;
+      const pay = Math.min(monthlyPayment, bal + interest); // final partial payment
+      bal = bal + interest - pay;
+      paid += pay;
+    }
+    sched.push({ payment: paid, endBalance: Math.max(0, bal) });
+  }
+  return sched;
 }
 
 // Cash flow from timeline events at a given age:
@@ -566,6 +595,14 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
   const rc = p.rothConversion;
   const inConvWindow = rc.mode !== 'off' && age >= rc.startAge && age <= rc.endAge;
 
+  // Home & mortgage (deterministic). Home value appreciates; the mortgage
+  // amortizes on its fixed schedule. Equity is tracked SEPARATELY from the
+  // investable buckets, but the payment is a real cash outflow.
+  const mtg = p.home.schedule[i - 1] || { payment: 0, endBalance: 0 };
+  const mortgagePayment = mtg.payment;
+  const homeValue = p.home.value * Math.pow(1 + p.home.appreciation, i);
+  const homeEquity = homeValue - mtg.endBalance;
+
   if (!isRetired) {
     const c = p.contributions;
     const income = (p.householdIncome + p.spouseIncome) * g;
@@ -583,15 +620,15 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
 
     tax = totalTax(ordinaryIncome, year, fs, p.inflation);
     const surplus = income - tax - expenses - preTax - rothC - taxableC;
-    freeCash = surplus - ef.outflow + ef.inflow;
+    freeCash = surplus - ef.outflow + ef.inflow - mortgagePayment;
 
     traditional += preTax + match;
     roth += rothC;
-    // surplus + windfalls − goal/debt outflows flow to the brokerage
+    // surplus + windfalls − goal/debt/mortgage outflows flow to the brokerage
     taxable += taxableC + freeCash;
   } else {
     const retLifestyle = p.retirementSpend * priceInfl; // funded enjoyment budget
-    const spend = retLifestyle + ef.outflow - ef.inflow;
+    const spend = retLifestyle + ef.outflow - ef.inflow + mortgagePayment;
     freeCash = retLifestyle;
     const ss = ssIncomeForYear(p, i);
 
@@ -633,6 +670,7 @@ function stepYear(buckets, i, yearReturn, p, matchBase) {
     traditional, roth, taxable,
     ordinaryIncome, tax, freeCash, retired: isRetired, age, year,
     netWorth: traditional + roth + taxable,
+    homeValue, mortgageBalance: mtg.endBalance, homeEquity,
   };
 }
 
@@ -689,12 +727,15 @@ function projectPlan(params) {
   const grossNow = p.householdIncome + p.spouseIncome;
   const taxableNow = Math.max(0, grossNow - preTax0);
   const taxNow = retiredNow ? 0 : totalTax(taxableNow, p.startYear, p.filingStatus, p.inflation);
+  const mtgAnnualNow = p.home.mortgageBalance > 0 ? p.home.mortgagePayment * 12 : 0;
   rows.push({
     year: p.startYear, age: p.currentAge, retired: retiredNow,
     income: retiredNow ? 0 : taxableNow,
     tax: taxNow, netWorth: p.startingBalance,
-    freeCash: retiredNow ? p.retirementSpend : (grossNow - taxNow - p.annualExpenses - allContribs0),
+    freeCash: retiredNow ? p.retirementSpend : (grossNow - taxNow - p.annualExpenses - allContribs0 - mtgAnnualNow),
     traditional: b.traditional, roth: b.roth, taxable: b.taxable,
+    homeValue: p.home.value, mortgageBalance: p.home.mortgageBalance,
+    homeEquity: p.home.value - p.home.mortgageBalance,
   });
   for (let i = 1; i <= totalYears; i++) {
     const s = stepYear(b, i, p.expectedReturn, p, matchBase);
@@ -703,6 +744,7 @@ function projectPlan(params) {
       year: s.year, age: s.age, retired: s.retired, income: s.ordinaryIncome,
       tax: s.tax, netWorth: s.netWorth, freeCash: s.freeCash,
       traditional: b.traditional, roth: b.roth, taxable: b.taxable,
+      homeValue: s.homeValue, mortgageBalance: s.mortgageBalance, homeEquity: s.homeEquity,
     });
   }
   return rows;
@@ -772,6 +814,7 @@ if (typeof module !== 'undefined') {
     ssIncomeForYear,
     bracketCeilingGross,
     rothConversionFor,
+    buildMortgageSchedule,
     normalizePlan,
     employerMatchBase,
     stepYear,

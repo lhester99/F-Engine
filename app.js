@@ -43,6 +43,12 @@ const state = {
   convBracket: 12,            // fill-to-bracket target rate (%)
   convStartAge: 65,
   convEndAge: 74,
+  // HOME & MORTGAGE (tracked separately from investable net worth)
+  homeValue: 0,               // 0 = no home (opt-in)
+  homeAppreciation: 3,        // %/yr
+  mortgageBalance: 0,
+  mortgageRate: 6.5,          // %
+  mortgagePayment: 0,         // monthly P&I
   // GOALS & DEBT — timeline events: { id, type, amount, age, endAge }
   events: [],
   // DISPLAY
@@ -132,6 +138,8 @@ const SLIDERS = [
   ['spouseSsClaimAge', 'val-spouseSsClaimAge', (v) => { state.spouseSsClaimAge = +v; return `${v}`; }],
   ['convStartAge', 'val-convStartAge', (v) => { state.convStartAge = +v; return `${v}`; }],
   ['convEndAge', 'val-convEndAge', (v) => { state.convEndAge = +v; return `${v}`; }],
+  ['homeAppreciation', 'val-homeAppreciation', (v) => { state.homeAppreciation = +v; return `${(+v).toFixed(1)}%`; }],
+  ['mortgageRate', 'val-mortgageRate', (v) => { state.mortgageRate = +v; return `${(+v).toFixed(2)}%`; }],
   ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
 ];
 
@@ -149,7 +157,19 @@ const NUMBERS = [
   ['num-ssBenefit', 'ssBenefit'],
   ['num-spouseSsBenefit', 'spouseSsBenefit'],
   ['num-convAmount', 'convAmount'],
+  ['num-homeValue', 'homeValue', () => updateHomeReadout()],
+  ['num-mortgageBalance', 'mortgageBalance', () => updateHomeReadout()],
+  ['num-mortgagePayment', 'mortgagePayment'],
 ];
+
+// Current home equity readout in the topbar (shown only when a home is set).
+function updateHomeReadout() {
+  const el = document.getElementById('readout-homeequity');
+  if (!el) return;
+  const has = state.homeValue > 0;
+  el.style.display = has ? '' : 'none';
+  if (has) el.querySelector('.readout-value').textContent = '$' + formatCompact(state.homeValue - state.mortgageBalance);
+}
 
 // Initial slider positions read back from state.
 const SLIDER_INIT = {
@@ -167,6 +187,8 @@ const SLIDER_INIT = {
   spouseSsClaimAge: () => state.spouseSsClaimAge,
   convStartAge: () => state.convStartAge,
   convEndAge: () => state.convEndAge,
+  homeAppreciation: () => state.homeAppreciation,
+  mortgageRate: () => state.mortgageRate,
   confidence: () => state.confidence,
 };
 
@@ -186,6 +208,7 @@ const PERSISTED_KEYS = [
   'expectedReturn', 'returnStdDev', 'inflation',
   'ssBenefit', 'ssClaimAge', 'spouseSsBenefit', 'spouseSsClaimAge',
   'convMode', 'convAmount', 'convBracket', 'convStartAge', 'convEndAge',
+  'homeValue', 'homeAppreciation', 'mortgageBalance', 'mortgageRate', 'mortgagePayment',
   'events',
   'confidence', 'todaysDollars',
 ];
@@ -210,6 +233,7 @@ function syncControlsFromState() {
   updateContribGuidance();
   syncFilingUI();
   syncConvUI();
+  updateHomeReadout();
   // ensure loaded events have ids, then render
   state.events.forEach((e) => { if (!e.id) e.id = 'ev' + (eventIdSeq++); });
   renderEvents();
@@ -297,6 +321,8 @@ function switchView(view) {
 function renderLedger() {
   const body = document.getElementById('ledger-body');
   if (!body || !lastProjection) return;
+  const ledger = document.getElementById('ledger');
+  ledger.classList.toggle('has-home', state.homeValue > 0);
   body.innerHTML = lastProjection.map((r, i) => {
     const c = (v) => '$' + formatCompact(deflate(v, i));
     const fc = deflate(r.freeCash || 0, i);
@@ -309,7 +335,8 @@ function renderLedger() {
       `<td class="num">${c(r.taxable)}</td>` +
       `<td class="num">${c(r.income)}</td>` +
       `<td class="num">${c(r.tax)}</td>` +
-      `<td class="num fc-col ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</td></tr>`;
+      `<td class="num fc-col ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</td>` +
+      `<td class="num home-col">${c(r.homeEquity || 0)}</td></tr>`;
   }).join('');
 }
 
@@ -544,6 +571,13 @@ function scenarioParams(startYear) {
       bracket: state.convBracket / 100,
       startAge: state.convStartAge,
       endAge: state.convEndAge,
+    },
+    home: {
+      value: state.homeValue,
+      appreciation: state.homeAppreciation / 100,
+      mortgageBalance: state.mortgageBalance,
+      mortgageRate: state.mortgageRate / 100,
+      mortgagePayment: state.mortgagePayment,
     },
     events: state.events.map((e) => ({
       type: e.type, amount: e.amount, startAge: e.age, endAge: e.endAge,
@@ -829,7 +863,10 @@ function showTooltip(idx, clientX) {
     `<div class="tt-sep"></div>` +
     `<div class="tt-row"><span>${row.retired ? 'Ordinary income' : 'Taxable income'}</span><b>$${formatCompact(income)}</b></div>` +
     `<div class="tt-row"><span>Est. tax</span><b>$${formatCompact(taxPaid)}</b></div>` +
-    `<div class="tt-row"><span>${fcLabel}</span><b class="tt-fc ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</b></div>`;
+    `<div class="tt-row"><span>${fcLabel}</span><b class="tt-fc ${fc < 0 ? 'neg' : 'pos'}">${fcStr}</b></div>` +
+    (state.homeValue > 0
+      ? `<div class="tt-sep"></div><div class="tt-row"><span>Home equity</span><b>$${formatCompact(deflate(row.homeEquity || 0, idx))}</b></div>`
+      : '');
   tip.classList.remove('hidden');
 
   const panel = document.getElementById('chart-panel');

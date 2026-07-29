@@ -37,6 +37,10 @@
           <span class="readout-label">Confidence</span>
           <span class="readout-value">—</span>
         </div>
+        <div class="readout" id="readout-homeequity" style="display:none">
+          <span class="readout-label">Home equity</span>
+          <span class="readout-value">—</span>
+        </div>
       </div>
     </header>
 
@@ -94,6 +98,7 @@
                     <th class="num">Traditional</th><th class="num">Roth</th><th class="num">Taxable</th>
                     <th class="num">Taxable income</th><th class="num">Est. tax</th>
                     <th class="num fc-col">Free cash</th>
+                    <th class="num home-col">Home equity</th>
                   </tr>
                 </thead>
                 <tbody id="ledger-body"></tbody>
@@ -273,6 +278,31 @@
             <label>Inflation <span class="control-val" id="val-inflation"></span></label>
             <input type="range" id="slider-inflation" min="0" max="8" step="0.1">
           </div>
+        </div>
+
+        <div class="ctrl-section">
+          <div class="section-head">Home &amp; Mortgage</div>
+          <div class="control">
+            <label>Home value</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-homeValue" min="0" step="10000" inputmode="numeric"></div>
+          </div>
+          <div class="control">
+            <label>Appreciation / yr <span class="control-val" id="val-homeAppreciation"></span></label>
+            <input type="range" id="slider-homeAppreciation" min="0" max="8" step="0.1">
+          </div>
+          <div class="control">
+            <label>Mortgage balance</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-mortgageBalance" min="0" step="5000" inputmode="numeric"></div>
+          </div>
+          <div class="control">
+            <label>Mortgage rate <span class="control-val" id="val-mortgageRate"></span></label>
+            <input type="range" id="slider-mortgageRate" min="0" max="12" step="0.05">
+          </div>
+          <div class="control">
+            <label>Payment / mo (P&amp;I)</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-mortgagePayment" min="0" step="50" inputmode="numeric"></div>
+          </div>
+          <div class="guidance">Home equity is tracked separately from the investable-assets chart. If you model the mortgage here, exclude its principal + interest from Living expenses above.</div>
         </div>
 
         <div class="ctrl-section">

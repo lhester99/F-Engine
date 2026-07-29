@@ -375,6 +375,8 @@ button, .add-btn {
 #ledger tbody tr.retired-row { background: rgba(52,164,87,0.10); }
 #ledger tbody tr.retired-row:nth-child(even) { background: rgba(52,164,87,0.16); }
 #ledger tbody tr:hover { background: rgba(43,127,212,0.12); }
+#ledger:not(.has-home) .home-col { display: none; }
+#ledger .home-col { color: var(--blue-deep); }
 #ledger .fc-col { font-weight: 600; border-left: 1px solid var(--line); }
 #ledger td.fc-col.pos { color: var(--green-deep); }
 #ledger td.fc-col.neg { color: var(--red); }

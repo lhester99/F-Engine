@@ -75,6 +75,10 @@ Surfaced as a Free-cash column in the table and a line in the inspect tooltip.
 Roth conversions (`rothConversion`: `fixed` $/yr or `fill-to-bracket` over an
 age window) move Traditional → Roth, add to that year's ordinary income, and
 cut future RMDs/IRMAA; bracket-fill naturally converts $0 while wages are high.
+Home & mortgage (`home`): the home appreciates and the mortgage amortizes on a
+precomputed schedule (`buildMortgageSchedule`); the P&I payment reduces
+investable savings, but home equity is tracked SEPARATELY from the net-worth
+chart (its own topbar readout, table column, and tooltip line).
 
 ## Known simplifications — pick up from here
 
