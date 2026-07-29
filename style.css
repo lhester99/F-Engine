@@ -413,10 +413,15 @@ button, .add-btn {
   #topbar { flex-wrap: wrap; gap: 10px 18px; }
   #status-readouts { gap: 16px; }
   #main { flex-direction: column; }
+  /* The page scrolls on mobile, so nothing has a definite height for
+     flex-grow to fill — drop flex growth and give panels explicit heights,
+     otherwise flex:1 (basis 0%) collapses the chart canvas to nothing. */
+  #view-col, .view, #chart-view, #table-view { flex: none; min-height: 0; }
   #controls-panel { width: 100%; overflow-y: visible; }
-  #chart-panel { height: 340px; }
-  #tax-panel { max-height: none; }
-  #ledger-scroll { max-height: 60vh; }
+  #chart-panel { flex: none; height: 340px; }
+  #tax-panel { flex: none; max-height: none; }
+  #table-panel { flex: none; }
+  #ledger-scroll { max-height: 70vh; }
   .panel-header { flex-wrap: wrap; gap: 2px 8px; }
 }
 
