@@ -57,8 +57,8 @@ let hazardShownForThisRun = false;
 // v3: income-driven cash-flow model changed the input schema and what a saved
 // result means, so a new key avoids loading incompatible older snapshots.
 const SCENARIO_STORE_KEY = 'enginef.scenarios.v3';
-// Distinct phosphor hues for overlaid comparison lines (live median is green).
-const OVERLAY_COLORS = ['#ffb000', '#4de1ff', '#ff6ad5', '#c8ff4d'];
+// Distinct hues for overlaid comparison lines (live median is green).
+const OVERLAY_COLORS = ['#e08a1e', '#1e6fc4', '#8e44ad', '#159e8a'];
 let comparisonOverlays = []; // [{ id, name, years, medianPath, color }]
 
 function getScenarios() {
@@ -80,85 +80,13 @@ function newScenarioId() {
   return 's' + Date.now() + Math.random().toString(36).slice(2);
 }
 
-// -------------------- BOOT SEQUENCE --------------------
-const bootLogLines = [
-  'ENGINE F — TRAJECTORY SYSTEM',
-  'INITIALIZING CORE...........OK',
-  'LOADING TAX SUBSYSTEM (FED/NC)...OK',
-  'LOADING SIM.CORE (MONTE CARLO)...OK',
-  'CALIBRATING PERCENTILE BANDS...OK',
-  'ESTABLISHING CONSOLE LINK...OK',
-  '',
-  'STANDING BY.',
-];
-
-function playBootStinger() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    // simple ascending synth arpeggio + pad, retro console power-on
-    const notes = [220, 277.18, 329.63, 440, 554.37, 659.25];
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = freq;
-      const start = now + i * 0.09;
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.08, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + 0.4);
-    });
-    // low pad underneath
-    const pad = ctx.createOscillator();
-    const padGain = ctx.createGain();
-    pad.type = 'sawtooth';
-    pad.frequency.value = 110;
-    padGain.gain.setValueAtTime(0, now);
-    padGain.gain.linearRampToValueAtTime(0.05, now + 0.3);
-    padGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
-    pad.connect(padGain).connect(ctx.destination);
-    pad.start(now);
-    pad.stop(now + 2.3);
-  } catch (e) {
-    // audio not available/blocked — fail silently, boot still proceeds visually
-  }
-}
-
-function startAmbientDrone() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 55;
-    gain.gain.value = 0.015;
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    // very subtle, near-subliminal — most users will feel rather than hear it
-  } catch (e) {}
-}
-
-function runBootLogTyping() {
-  const el = document.getElementById('boot-log-text');
-  let text = '';
-  let lineIdx = 0;
-  function nextLine() {
-    if (lineIdx >= bootLogLines.length) return;
-    text += bootLogLines[lineIdx] + '\n';
-    el.textContent = text;
-    lineIdx++;
-    setTimeout(nextLine, 220);
-  }
-  nextLine();
-}
-
+// -------------------- SPLASH --------------------
+let bootDone = false;
 function finishBoot() {
+  if (bootDone) return;
+  bootDone = true;
   document.getElementById('boot-screen').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
-  startAmbientDrone();
   initControls();
   // Size the canvas now that the dashboard is visible — at window-load time
   // the dashboard was display:none, so its parent measured 0 wide.
@@ -168,10 +96,7 @@ function finishBoot() {
 }
 
 function initBoot() {
-  playBootStinger();
-  runBootLogTyping();
-  const bootScreen = document.getElementById('boot-screen');
-  const timer = setTimeout(finishBoot, 4000);
+  const timer = setTimeout(finishBoot, 1400); // brief glossy splash, then in
   document.getElementById('skip-boot').addEventListener('click', () => {
     clearTimeout(timer);
     finishBoot();
@@ -181,36 +106,40 @@ function initBoot() {
 // -------------------- CONTROLS --------------------
 const dollarFmt = (v) => `$${(+v).toLocaleString()}`;
 
-// Slider definitions: id -> { state field, label formatter, value<->slider map }
+// Range-slider controls (ages, percentages, rates). [id, labelId, fn].
 const SLIDERS = [
   ['currentAge', 'val-currentAge', (v) => { state.currentAge = +v; return `${v}`; }],
   ['retireAge', 'val-retireAge', (v) => { state.retireAge = +v; return `${v}`; }],
   ['endAge', 'val-endAge', (v) => { state.endAge = +v; return `${v}`; }],
   ['spouseAge', 'val-spouseAge', (v) => { state.spouseAge = +v; return `${v}`; }],
-  ['householdIncome', 'val-householdIncome', (v) => { state.householdIncome = +v; return dollarFmt(v); }],
-  ['spouseIncome', 'val-spouseIncome', (v) => { state.spouseIncome = +v; return dollarFmt(v); }],
-  ['monthlyExpenses', 'val-monthlyExpenses', (v) => { state.monthlyExpenses = +v; return `${dollarFmt(v)} ($${(v*12/1000).toFixed(0)}K/yr)`; }],
   ['retirementReplacement', 'val-retirementReplacement', (v) => {
     state.retirementReplacement = +v;
     const annual = state.monthlyExpenses * 12 * (v / 100);
     return `${v}% · ${dollarFmt(Math.round(annual))}/yr`;
   }],
-  ['contribTrad401k', 'val-contribTrad401k', (v) => { state.contribTrad401k = +v; onContribChange(); return dollarFmt(v); }],
-  ['contribRoth401k', 'val-contribRoth401k', (v) => { state.contribRoth401k = +v; onContribChange(); return dollarFmt(v); }],
-  ['contribTradIRA', 'val-contribTradIRA', (v) => { state.contribTradIRA = +v; onContribChange(); return dollarFmt(v); }],
-  ['contribRothIRA', 'val-contribRothIRA', (v) => { state.contribRothIRA = +v; onContribChange(); return dollarFmt(v); }],
-  ['contribTaxable', 'val-contribTaxable', (v) => { state.contribTaxable = +v; return dollarFmt(v); }],
-  ['matchRate', 'val-matchRate', (v) => { state.matchRate = +v; return `${v}% MATCH`; }],
+  ['matchRate', 'val-matchRate', (v) => { state.matchRate = +v; return `${v}% match`; }],
   ['matchCapPct', 'val-matchCapPct', (v) => { state.matchCapPct = +v; return `${(+v).toFixed(1)}%`; }],
-  ['startBalance', 'val-startBalance', (v) => { state.startingBalance = +v; updateAllocationLabels(); return dollarFmt(v); }],
   ['expectedReturn', 'val-expectedReturn', (v) => { state.expectedReturn = v / 100; return `${(+v).toFixed(1)}%`; }],
   ['returnStdDev', 'val-returnStdDev', (v) => { state.returnStdDev = v / 100; return `${(+v).toFixed(1)}%`; }],
   ['inflation', 'val-inflation', (v) => { state.inflation = v / 100; return `${(+v).toFixed(1)}%`; }],
-  ['ssBenefit', 'val-ssBenefit', (v) => { state.ssBenefit = +v; return dollarFmt(v); }],
   ['ssClaimAge', 'val-ssClaimAge', (v) => { state.ssClaimAge = +v; return `${v}`; }],
-  ['spouseSsBenefit', 'val-spouseSsBenefit', (v) => { state.spouseSsBenefit = +v; return dollarFmt(v); }],
   ['spouseSsClaimAge', 'val-spouseSsClaimAge', (v) => { state.spouseSsClaimAge = +v; return `${v}`; }],
   ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
+];
+
+// Number-box controls (money). [inputId, stateField, onChange?].
+const NUMBERS = [
+  ['num-householdIncome', 'householdIncome'],
+  ['num-spouseIncome', 'spouseIncome'],
+  ['num-monthlyExpenses', 'monthlyExpenses', () => refreshDerivedLabels()],
+  ['num-startBalance', 'startingBalance', () => updateAllocationLabels()],
+  ['num-contribTrad401k', 'contribTrad401k', () => updateContribGuidance()],
+  ['num-contribRoth401k', 'contribRoth401k', () => updateContribGuidance()],
+  ['num-contribTradIRA', 'contribTradIRA', () => updateContribGuidance()],
+  ['num-contribRothIRA', 'contribRothIRA', () => updateContribGuidance()],
+  ['num-contribTaxable', 'contribTaxable'],
+  ['num-ssBenefit', 'ssBenefit'],
+  ['num-spouseSsBenefit', 'spouseSsBenefit'],
 ];
 
 // Initial slider positions read back from state.
@@ -219,27 +148,22 @@ const SLIDER_INIT = {
   retireAge: () => state.retireAge,
   endAge: () => state.endAge,
   spouseAge: () => state.spouseAge,
-  householdIncome: () => state.householdIncome,
-  spouseIncome: () => state.spouseIncome,
-  monthlyExpenses: () => state.monthlyExpenses,
   retirementReplacement: () => state.retirementReplacement,
-  contribTrad401k: () => state.contribTrad401k,
-  contribRoth401k: () => state.contribRoth401k,
-  contribTradIRA: () => state.contribTradIRA,
-  contribRothIRA: () => state.contribRothIRA,
-  contribTaxable: () => state.contribTaxable,
   matchRate: () => state.matchRate,
   matchCapPct: () => state.matchCapPct,
-  startBalance: () => state.startingBalance,
   expectedReturn: () => (state.expectedReturn * 100).toFixed(1),
   returnStdDev: () => (state.returnStdDev * 100).toFixed(1),
   inflation: () => (state.inflation * 100).toFixed(1),
-  ssBenefit: () => state.ssBenefit,
   ssClaimAge: () => state.ssClaimAge,
-  spouseSsBenefit: () => state.spouseSsBenefit,
   spouseSsClaimAge: () => state.spouseSsClaimAge,
   confidence: () => state.confidence,
 };
+
+// Re-run the retirement-spend label (it depends on monthly expenses).
+function refreshDerivedLabels() {
+  const el = document.getElementById('slider-retirementReplacement');
+  if (el) el.dispatchEvent(new Event('input'));
+}
 
 // State fields persisted in a saved scenario.
 const PERSISTED_KEYS = [
@@ -257,6 +181,10 @@ const PERSISTED_KEYS = [
 // Push current state into every control (values + labels). Used at boot and
 // when loading a saved scenario.
 function syncControlsFromState() {
+  NUMBERS.forEach(([id, field]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = state[field];
+  });
   Object.keys(SLIDER_INIT).forEach((id) => {
     const el = document.getElementById('slider-' + id);
     if (el) { el.value = SLIDER_INIT[id](); el.dispatchEvent(new Event('input')); }
@@ -274,11 +202,23 @@ function syncControlsFromState() {
   renderEvents();
   const btn = document.getElementById('toggle-dollars');
   btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
-  btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
+  btn.textContent = state.todaysDollars ? "Today's $" : 'Nominal $';
+}
+
+function bindNumber(id, field, onChange) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    state[field] = el.value === '' ? 0 : +el.value;
+    if (onChange) onChange();
+    scheduleRecompute();
+  });
 }
 
 function initControls() {
   SLIDERS.forEach(([id, labelId, fn]) => bindSlider('slider-' + id, labelId, fn));
+  NUMBERS.forEach(([id, field, onChange]) => bindNumber(id, field, onChange));
+  initTabs();
 
   // allocation sliders share one label updater (labels show normalized % + $)
   bindAllocSlider('slider-allocTrad', 'allocTrad');
@@ -317,12 +257,43 @@ function onContribChange() {
   updateContribGuidance();
 }
 
+// -------------------- TABS + TABLE VIEW --------------------
+function initTabs() {
+  document.querySelectorAll('#tabbar .tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+}
+
+function switchView(view) {
+  document.querySelectorAll('#tabbar .tab').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('chart-view').classList.toggle('hidden', view !== 'chart');
+  document.getElementById('table-view').classList.toggle('hidden', view !== 'table');
+  if (view === 'chart') resizeCanvas();
+  else renderLedger();
+}
+
+function renderLedger() {
+  const body = document.getElementById('ledger-body');
+  if (!body || !lastProjection) return;
+  body.innerHTML = lastProjection.map((r, i) => {
+    const c = (v) => '$' + formatCompact(deflate(v, i));
+    return `<tr class="${r.retired ? 'retired-row' : ''}">` +
+      `<td>${r.year}</td><td>${r.age}</td>` +
+      `<td class="num">${c(r.netWorth)}</td>` +
+      `<td class="num">${c(r.traditional)}</td>` +
+      `<td class="num">${c(r.roth)}</td>` +
+      `<td class="num">${c(r.taxable)}</td>` +
+      `<td class="num">${c(r.income)}</td>` +
+      `<td class="num">${c(r.tax)}</td></tr>`;
+  }).join('');
+}
+
 // -------------------- GOALS & DEBT EVENTS --------------------
 let eventIdSeq = 1;
 const EVENT_TYPES = [
-  { value: 'expense', label: 'ONE-TIME SPEND' },
-  { value: 'income', label: 'WINDFALL' },
-  { value: 'debt', label: 'RECURRING DEBT / YR' },
+  { value: 'expense', label: 'One-time spend' },
+  { value: 'income', label: 'Windfall' },
+  { value: 'debt', label: 'Recurring debt / yr' },
 ];
 
 function addEvent() {
@@ -428,8 +399,9 @@ function toggleDollars() {
   state.todaysDollars = !state.todaysDollars;
   const btn = document.getElementById('toggle-dollars');
   btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
-  btn.textContent = state.todaysDollars ? "TODAY'S $" : 'NOMINAL $';
+  btn.textContent = state.todaysDollars ? "Today's $" : 'Nominal $';
   redrawChart();
+  renderLedger();
   if (lastResult) updateStatusReadouts(lastResult, ...Object.values(confidenceToPercentiles(state.confidence)));
 }
 
@@ -562,6 +534,7 @@ function recompute() {
   drawChart(lastResult.years, lastBands, lower, upper);
   updateStatusReadouts(lastResult, lower, upper);
   updateTaxPanel(lastResult);
+  renderLedger();
   checkHazard(lastResult);
 }
 
@@ -628,8 +601,10 @@ function drawChart(years, bandsIn, lowerP, upperP) {
   const x = (i) => padding.left + (i / (years.length - 1)) * chartW;
   const y = (v) => padding.top + chartH - (v / maxVal) * chartH;
 
+  const uiFont = (px) => `${px * devicePixelRatio}px "Segoe UI", system-ui, sans-serif`;
+
   // gridlines
-  ctx2d.strokeStyle = 'rgba(77,255,158,0.08)';
+  ctx2d.strokeStyle = 'rgba(31,58,77,0.10)';
   ctx2d.lineWidth = 1;
   for (let g = 0; g <= 4; g++) {
     const gy = padding.top + (chartH / 4) * g;
@@ -638,8 +613,8 @@ function drawChart(years, bandsIn, lowerP, upperP) {
     ctx2d.lineTo(w - padding.right, gy);
     ctx2d.stroke();
     const val = maxVal * (1 - g / 4);
-    ctx2d.fillStyle = 'rgba(111,143,128,0.8)';
-    ctx2d.font = `${11 * devicePixelRatio}px Consolas, monospace`;
+    ctx2d.fillStyle = '#5b7488';
+    ctx2d.font = uiFont(11);
     ctx2d.fillText('$' + formatCompact(val), 4, gy + 4 * devicePixelRatio);
   }
 
@@ -666,18 +641,18 @@ function drawChart(years, bandsIn, lowerP, upperP) {
 
   // outer tail band (confidence-driven)
   if (bands[lowerP] && bands[upperP]) {
-    fillBetween(bands[lowerP], bands[upperP], 'rgba(77,255,158,0.08)');
+    fillBetween(bands[lowerP], bands[upperP], 'rgba(43,127,212,0.14)');
   }
   // core 25-75 band, always shown as the "likely" range
   if (bands[25] && bands[75]) {
-    fillBetween(bands[25], bands[75], 'rgba(77,255,158,0.28)');
+    fillBetween(bands[25], bands[75], 'rgba(52,164,87,0.30)');
   }
 
   // median line
-  ctx2d.strokeStyle = '#26e07f';
+  ctx2d.strokeStyle = '#2b8a45';
   ctx2d.lineWidth = 2.5 * devicePixelRatio;
-  ctx2d.shadowColor = '#26e07f';
-  ctx2d.shadowBlur = 8;
+  ctx2d.shadowColor = 'rgba(52,164,87,0.4)';
+  ctx2d.shadowBlur = 4;
   pathFor(bands[50]);
   ctx2d.stroke();
   ctx2d.shadowBlur = 0;
@@ -699,7 +674,7 @@ function drawChart(years, bandsIn, lowerP, upperP) {
     ctx2d.setLineDash([]);
     // label near the line's end
     ctx2d.fillStyle = o.color;
-    ctx2d.font = `${10 * devicePixelRatio}px Consolas, monospace`;
+    ctx2d.font = uiFont(10);
     const endY = y(o.medianPath[n - 1]);
     const label = o.name.length > 12 ? o.name.slice(0, 12) : o.name;
     const textW = label.length * 6.2 * devicePixelRatio;
@@ -709,16 +684,16 @@ function drawChart(years, bandsIn, lowerP, upperP) {
   // retirement age marker
   const retireIdx = state.retireAge - state.currentAge;
   if (retireIdx >= 0 && retireIdx < years.length) {
-    ctx2d.strokeStyle = 'rgba(255,176,0,0.5)';
+    ctx2d.strokeStyle = 'rgba(224,138,30,0.7)';
     ctx2d.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
     ctx2d.beginPath();
     ctx2d.moveTo(x(retireIdx), padding.top);
     ctx2d.lineTo(x(retireIdx), h - padding.bottom);
     ctx2d.stroke();
     ctx2d.setLineDash([]);
-    ctx2d.fillStyle = 'rgba(255,176,0,0.8)';
-    ctx2d.font = `${10 * devicePixelRatio}px Consolas, monospace`;
-    ctx2d.fillText('RETIRE', x(retireIdx) + 4, padding.top + 12 * devicePixelRatio);
+    ctx2d.fillStyle = '#c9781a';
+    ctx2d.font = uiFont(10);
+    ctx2d.fillText('Retire', x(retireIdx) + 4, padding.top + 12 * devicePixelRatio);
   }
 
   // remember geometry for pointer hit-testing (values in canvas px)
@@ -727,17 +702,20 @@ function drawChart(years, bandsIn, lowerP, upperP) {
   // hover cursor + marker on the median
   if (hoverIndex != null && hoverIndex >= 0 && hoverIndex < years.length && bands[50]) {
     const hx = x(hoverIndex);
-    ctx2d.strokeStyle = 'rgba(230,255,240,0.35)';
+    ctx2d.strokeStyle = 'rgba(31,58,77,0.32)';
     ctx2d.lineWidth = 1 * devicePixelRatio;
     ctx2d.beginPath();
     ctx2d.moveTo(hx, padding.top);
     ctx2d.lineTo(hx, h - padding.bottom);
     ctx2d.stroke();
     const my = y(bands[50][hoverIndex]);
-    ctx2d.fillStyle = '#e6fff0';
+    ctx2d.fillStyle = '#2b8a45';
     ctx2d.beginPath();
-    ctx2d.arc(hx, my, 3.5 * devicePixelRatio, 0, Math.PI * 2);
+    ctx2d.arc(hx, my, 4 * devicePixelRatio, 0, Math.PI * 2);
     ctx2d.fill();
+    ctx2d.strokeStyle = '#fff';
+    ctx2d.lineWidth = 1.5 * devicePixelRatio;
+    ctx2d.stroke();
   }
 }
 
@@ -788,14 +766,14 @@ function showTooltip(idx, clientX) {
   const unit = state.todaysDollars ? " (today's $)" : '';
 
   tip.innerHTML =
-    `<div class="tt-age">AGE ${row.age} · ${row.year}${row.retired ? ' · RETIRED' : ''}</div>` +
+    `<div class="tt-age">Age ${row.age} · ${row.year}${row.retired ? ' · Retired' : ''}</div>` +
     `<div class="tt-nw">$${formatCompact(nw)}${unit}</div>` +
-    `<div class="tt-row"><span>TRADITIONAL</span><b>$${formatCompact(trad)} · ${pct(trad)}%</b></div>` +
-    `<div class="tt-row"><span>ROTH</span><b>$${formatCompact(roth)} · ${pct(roth)}%</b></div>` +
-    `<div class="tt-row"><span>TAXABLE</span><b>$${formatCompact(tax)} · ${pct(tax)}%</b></div>` +
+    `<div class="tt-row"><span>Traditional</span><b>$${formatCompact(trad)} · ${pct(trad)}%</b></div>` +
+    `<div class="tt-row"><span>Roth</span><b>$${formatCompact(roth)} · ${pct(roth)}%</b></div>` +
+    `<div class="tt-row"><span>Taxable</span><b>$${formatCompact(tax)} · ${pct(tax)}%</b></div>` +
     `<div class="tt-sep"></div>` +
-    `<div class="tt-row"><span>${row.retired ? 'ORDINARY INCOME' : 'TAXABLE INCOME'}</span><b>$${formatCompact(income)}</b></div>` +
-    `<div class="tt-row"><span>EST. TAX</span><b>$${formatCompact(taxPaid)}</b></div>`;
+    `<div class="tt-row"><span>${row.retired ? 'Ordinary income' : 'Taxable income'}</span><b>$${formatCompact(income)}</b></div>` +
+    `<div class="tt-row"><span>Est. tax</span><b>$${formatCompact(taxPaid)}</b></div>`;
   tip.classList.remove('hidden');
 
   const panel = document.getElementById('chart-panel');
@@ -958,7 +936,7 @@ function renderScenarioList() {
   const list = document.getElementById('scenario-list');
   const countEl = document.getElementById('scenario-count');
   const hintEl = document.getElementById('scenario-hint');
-  if (countEl) countEl.textContent = scenarios.length ? `${scenarios.length} STORED` : '';
+  if (countEl) countEl.textContent = scenarios.length ? `${scenarios.length} saved` : '';
   if (hintEl) hintEl.style.display = scenarios.length ? 'none' : '';
 
   list.innerHTML = '';
@@ -990,7 +968,7 @@ function renderScenarioList() {
 
     const loadBtn = document.createElement('button');
     loadBtn.className = 'load-btn';
-    loadBtn.textContent = 'LOAD';
+    loadBtn.textContent = 'Load';
     loadBtn.title = 'Load into sliders';
     loadBtn.addEventListener('click', () => loadScenario(s.id));
 
@@ -1006,9 +984,9 @@ function renderScenarioList() {
     const stats = document.createElement('div');
     stats.className = 'scenario-stats';
     stats.innerHTML =
-      `<span class="stat-solv${solvClass}">SOLV <b>${prob}%</b></span>` +
-      `<span>END <b>$${formatCompact(s.summary.finalMedian || 0)}</b></span>` +
-      `<span>CREEP <b>${s.summary.creepCount ?? '—'}</b></span>`;
+      `<span class="stat-solv${solvClass}">Success <b>${prob}%</b></span>` +
+      `<span>End <b>$${formatCompact(s.summary.finalMedian || 0)}</b></span>` +
+      `<span>Crossings <b>${s.summary.creepCount ?? '—'}</b></span>`;
 
     row.append(head, stats);
     list.appendChild(row);

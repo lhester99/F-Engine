@@ -3,267 +3,283 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ENGINE F</title>
+<title>Engine F — Personal Financial Planner</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- ============ BOOT SEQUENCE ============ -->
+  <!-- ============ SPLASH ============ -->
   <div id="boot-screen">
-    <div class="boot-stage" id="boot-logo-stage">
-      <div class="logo-scene">
-        <div class="logo-cube">
-          <div class="face front">F</div>
-          <div class="face back">F</div>
-          <div class="face right"></div>
-          <div class="face left"></div>
-          <div class="face top"></div>
-          <div class="face bottom"></div>
-        </div>
-      </div>
-      <div class="boot-title">ENGINE&nbsp;F</div>
-      <div class="boot-sub">PERSONAL TRAJECTORY SYSTEM</div>
+    <div class="splash-card">
+      <div class="splash-logo">F</div>
+      <div class="splash-title">Engine&nbsp;F</div>
+      <div class="splash-sub">Personal Financial Planner</div>
+      <div class="splash-bar"><span></span></div>
     </div>
-    <div class="boot-stage boot-log" id="boot-log-stage">
-      <pre id="boot-log-text"></pre>
-    </div>
-    <button id="skip-boot">SKIP ▸</button>
+    <button id="skip-boot">Skip</button>
   </div>
 
   <!-- ============ MAIN DASHBOARD ============ -->
   <div id="dashboard" class="hidden">
 
     <header id="topbar">
-      <div class="brand">ENGINE&nbsp;F<span class="brand-sub">// TRAJECTORY CONSOLE</span></div>
+      <div class="brand"><span class="brand-mark">F</span> Engine&nbsp;F <span class="brand-sub">Financial Planner</span></div>
       <div id="status-readouts">
         <div class="readout" id="readout-solvency">
-          <span class="readout-label">SOLVENCY</span>
+          <span class="readout-label">Solvency</span>
           <span class="readout-value">—</span>
         </div>
         <div class="readout" id="readout-trajectory">
-          <span class="readout-label">TRAJECTORY</span>
+          <span class="readout-label">Trajectory</span>
           <span class="readout-value">—</span>
         </div>
         <div class="readout" id="readout-confidence">
-          <span class="readout-label">CONF. BAND</span>
+          <span class="readout-label">Confidence</span>
           <span class="readout-value">—</span>
         </div>
       </div>
     </header>
 
-    <main id="main-grid">
+    <main id="main">
+      <div id="view-col">
+        <div id="tabbar">
+          <button class="tab active" data-view="chart">Chart</button>
+          <button class="tab" data-view="table">Table</button>
+        </div>
 
-      <!-- HERO CHART -->
-      <section id="chart-panel" class="panel">
-        <div class="panel-header">
-          <span>NET WORTH TRAJECTORY</span>
-          <span class="panel-tag">SIM.CORE // MONTE CARLO</span>
+        <!-- CHART VIEW -->
+        <div id="chart-view" class="view">
+          <section id="chart-panel" class="panel">
+            <div class="panel-header">
+              <span>Net Worth Over Time</span>
+              <span class="panel-tag">Monte Carlo · investable assets</span>
+            </div>
+            <canvas id="hero-chart"></canvas>
+            <div id="chart-tooltip" class="hidden"></div>
+            <div id="chart-legend">
+              <span><i class="swatch swatch-median"></i>Median</span>
+              <span><i class="swatch swatch-band"></i>Likely range</span>
+              <span><i class="swatch swatch-tail"></i>Tail range</span>
+              <span class="legend-hint">Tap the chart to inspect any year</span>
+            </div>
+          </section>
+
+          <section id="tax-panel" class="panel">
+            <div class="panel-header">
+              <span>Tax &amp; Medicare Monitor</span>
+              <span class="panel-tag">Federal + NC</span>
+            </div>
+            <div id="tax-readout">
+              <div class="tax-row"><span>Current marginal rate</span><span id="tax-current-rate">—</span></div>
+              <div class="tax-row"><span>Bracket crossings detected</span><span id="tax-creep-count">—</span></div>
+              <div class="tax-row"><span>IRMAA cliffs (Medicare 65+)</span><span id="tax-irmaa-count">—</span></div>
+              <div class="tax-row"><span>Peak IRMAA surcharge</span><span id="tax-irmaa-peak">—</span></div>
+            </div>
+            <div id="creep-log"></div>
+          </section>
         </div>
-        <canvas id="hero-chart"></canvas>
-        <div id="chart-tooltip" class="hidden"></div>
-        <div id="chart-legend">
-          <span><i class="swatch swatch-median"></i>MEDIAN</span>
-          <span><i class="swatch swatch-band"></i>LIKELY RANGE</span>
-          <span><i class="swatch swatch-tail"></i>TAIL RANGE</span>
-          <span class="legend-hint">◂ TAP CHART TO INSPECT ▸</span>
+
+        <!-- TABLE VIEW -->
+        <div id="table-view" class="view hidden">
+          <section id="table-panel" class="panel">
+            <div class="panel-header">
+              <span>Year-by-Year Plan</span>
+              <span class="panel-tag">Expected path</span>
+            </div>
+            <div id="ledger-scroll">
+              <table id="ledger">
+                <thead>
+                  <tr>
+                    <th>Year</th><th>Age</th><th class="num">Net worth</th>
+                    <th class="num">Traditional</th><th class="num">Roth</th><th class="num">Taxable</th>
+                    <th class="num">Taxable income</th><th class="num">Est. tax</th>
+                  </tr>
+                </thead>
+                <tbody id="ledger-body"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
       <!-- SIDE PANEL: SECTIONED CONTROLS -->
       <section id="controls-panel" class="panel">
         <div class="panel-header">
-          <span>PLAN CONTROLS</span>
-          <span class="panel-tag">INPUT.ARRAY</span>
+          <span>Plan Inputs</span>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ PROFILE</div>
+          <div class="section-head">Profile</div>
           <div class="control">
-            <label>CURRENT AGE <span class="control-val" id="val-currentAge"></span></label>
+            <label>Current age <span class="control-val" id="val-currentAge"></span></label>
             <input type="range" id="slider-currentAge" min="18" max="70" step="1">
           </div>
           <div class="control">
-            <label>RETIREMENT AGE <span class="control-val" id="val-retireAge"></span></label>
+            <label>Retirement age <span class="control-val" id="val-retireAge"></span></label>
             <input type="range" id="slider-retireAge" min="35" max="80" step="1">
           </div>
           <div class="control">
-            <label>PLAN THROUGH AGE <span class="control-val" id="val-endAge"></span></label>
+            <label>Plan through age <span class="control-val" id="val-endAge"></span></label>
             <input type="range" id="slider-endAge" min="70" max="105" step="1">
           </div>
           <div class="control">
-            <label>FILING STATUS</label>
+            <label>Filing status</label>
             <div class="seg-toggle" id="filing-toggle">
-              <button type="button" data-fs="single" class="active">SINGLE</button>
-              <button type="button" data-fs="mfj">MARRIED · MFJ</button>
+              <button type="button" data-fs="single" class="active">Single</button>
+              <button type="button" data-fs="mfj">Married · MFJ</button>
             </div>
           </div>
           <div class="control mfj-only">
-            <label>SPOUSE AGE <span class="control-val" id="val-spouseAge"></span></label>
+            <label>Spouse age <span class="control-val" id="val-spouseAge"></span></label>
             <input type="range" id="slider-spouseAge" min="18" max="70" step="1">
           </div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ INCOME &amp; EXPENSES</div>
+          <div class="section-head">Income &amp; Expenses</div>
           <div class="control">
-            <label>YOUR INCOME / YR <span class="control-val" id="val-householdIncome"></span></label>
-            <input type="range" id="slider-householdIncome" min="0" max="500000" step="1000">
+            <label>Your income / yr</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-householdIncome" min="0" step="1000" inputmode="numeric"></div>
           </div>
           <div class="control mfj-only">
-            <label>SPOUSE INCOME / YR <span class="control-val" id="val-spouseIncome"></span></label>
-            <input type="range" id="slider-spouseIncome" min="0" max="500000" step="1000">
+            <label>Spouse income / yr</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-spouseIncome" min="0" step="1000" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>LIVING EXPENSES / MO <span class="control-val" id="val-monthlyExpenses"></span></label>
-            <input type="range" id="slider-monthlyExpenses" min="0" max="20000" step="100">
+            <label>Living expenses / mo</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-monthlyExpenses" min="0" step="100" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>RETIREMENT SPEND <span class="control-val" id="val-retirementReplacement"></span></label>
+            <label>Retirement spend <span class="control-val" id="val-retirementReplacement"></span></label>
             <input type="range" id="slider-retirementReplacement" min="40" max="120" step="1">
           </div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ CONTRIBUTIONS / YR</div>
+          <div class="section-head">Contributions / yr</div>
           <div class="control">
-            <label>TRADITIONAL 401(K) <span class="control-val" id="val-contribTrad401k"></span></label>
-            <input type="range" id="slider-contribTrad401k" min="0" max="31000" step="500">
+            <label>Traditional 401(k)</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-contribTrad401k" min="0" step="500" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>ROTH 401(K) <span class="control-val" id="val-contribRoth401k"></span></label>
-            <input type="range" id="slider-contribRoth401k" min="0" max="31000" step="500">
+            <label>Roth 401(k)</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-contribRoth401k" min="0" step="500" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>TRADITIONAL IRA <span class="control-val" id="val-contribTradIRA"></span></label>
-            <input type="range" id="slider-contribTradIRA" min="0" max="8600" step="100">
+            <label>Traditional IRA</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-contribTradIRA" min="0" step="100" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>ROTH IRA <span class="control-val" id="val-contribRothIRA"></span></label>
-            <input type="range" id="slider-contribRothIRA" min="0" max="8600" step="100">
+            <label>Roth IRA</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-contribRothIRA" min="0" step="100" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>TAXABLE BROKERAGE <span class="control-val" id="val-contribTaxable"></span></label>
-            <input type="range" id="slider-contribTaxable" min="0" max="100000" step="1000">
+            <label>Taxable brokerage</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-contribTaxable" min="0" step="1000" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>EMPLOYER MATCH <span class="control-val" id="val-matchRate"></span></label>
+            <label>Employer match <span class="control-val" id="val-matchRate"></span></label>
             <input type="range" id="slider-matchRate" min="0" max="100" step="5">
           </div>
           <div class="control">
-            <label>MATCH CAP (% OF PAY) <span class="control-val" id="val-matchCapPct"></span></label>
+            <label>Match cap (% of pay) <span class="control-val" id="val-matchCapPct"></span></label>
             <input type="range" id="slider-matchCapPct" min="0" max="15" step="0.5">
           </div>
           <div id="contrib-guidance" class="guidance"></div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ SOCIAL SECURITY</div>
+          <div class="section-head">Social Security</div>
           <div class="control">
-            <label>YOUR BENEFIT / YR <span class="control-val" id="val-ssBenefit"></span></label>
-            <input type="range" id="slider-ssBenefit" min="0" max="60000" step="500">
+            <label>Your benefit / yr</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-ssBenefit" min="0" step="500" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>CLAIM AGE <span class="control-val" id="val-ssClaimAge"></span></label>
+            <label>Claim age <span class="control-val" id="val-ssClaimAge"></span></label>
             <input type="range" id="slider-ssClaimAge" min="62" max="70" step="1">
           </div>
           <div class="control mfj-only">
-            <label>SPOUSE BENEFIT / YR <span class="control-val" id="val-spouseSsBenefit"></span></label>
-            <input type="range" id="slider-spouseSsBenefit" min="0" max="60000" step="500">
+            <label>Spouse benefit / yr</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-spouseSsBenefit" min="0" step="500" inputmode="numeric"></div>
           </div>
           <div class="control mfj-only">
-            <label>SPOUSE CLAIM AGE <span class="control-val" id="val-spouseSsClaimAge"></span></label>
+            <label>Spouse claim age <span class="control-val" id="val-spouseSsClaimAge"></span></label>
             <input type="range" id="slider-spouseSsClaimAge" min="62" max="70" step="1">
           </div>
-          <div class="guidance">BENEFITS IN TODAY'S $ · GROW WITH INFLATION (COLA) · 85% TAXABLE</div>
+          <div class="guidance">Benefits in today's dollars · grow with inflation (COLA) · 85% taxable</div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ MARKETS</div>
+          <div class="section-head">Accounts &amp; Markets</div>
           <div class="control">
-            <label>STARTING BALANCE <span class="control-val" id="val-startBalance"></span></label>
-            <input type="range" id="slider-startBalance" min="0" max="5000000" step="10000">
+            <label>Starting balance</label>
+            <div class="num-box"><span class="unit">$</span><input type="number" id="num-startBalance" min="0" step="10000" inputmode="numeric"></div>
           </div>
           <div class="control alloc-control">
-            <label>· TRADITIONAL <span class="control-val" id="val-allocTrad"></span></label>
+            <label>Traditional <span class="control-val" id="val-allocTrad"></span></label>
             <input type="range" id="slider-allocTrad" min="0" max="100" step="1">
           </div>
           <div class="control alloc-control">
-            <label>· ROTH <span class="control-val" id="val-allocRoth"></span></label>
+            <label>Roth <span class="control-val" id="val-allocRoth"></span></label>
             <input type="range" id="slider-allocRoth" min="0" max="100" step="1">
           </div>
           <div class="control alloc-control">
-            <label>· TAXABLE <span class="control-val" id="val-allocTaxable"></span></label>
+            <label>Taxable <span class="control-val" id="val-allocTaxable"></span></label>
             <input type="range" id="slider-allocTaxable" min="0" max="100" step="1">
           </div>
           <div class="control">
-            <label>EXPECTED RETURN <span class="control-val" id="val-expectedReturn"></span></label>
+            <label>Expected return <span class="control-val" id="val-expectedReturn"></span></label>
             <input type="range" id="slider-expectedReturn" min="0" max="14" step="0.1">
           </div>
           <div class="control">
-            <label>VOLATILITY (σ) <span class="control-val" id="val-returnStdDev"></span></label>
+            <label>Volatility <span class="control-val" id="val-returnStdDev"></span></label>
             <input type="range" id="slider-returnStdDev" min="1" max="30" step="0.5">
           </div>
           <div class="control">
-            <label>INFLATION <span class="control-val" id="val-inflation"></span></label>
+            <label>Inflation <span class="control-val" id="val-inflation"></span></label>
             <input type="range" id="slider-inflation" min="0" max="8" step="0.1">
           </div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ GOALS &amp; DEBT</div>
+          <div class="section-head">Goals &amp; Debt</div>
           <div id="events-list"></div>
-          <button id="add-event" class="add-btn">+ ADD GOAL / DEBT</button>
-          <div class="guidance">ONE-TIME SPEND / WINDFALL AT AN AGE, OR A RECURRING DEBT THAT PAYS OFF. AMOUNTS IN TODAY'S $.</div>
+          <button id="add-event" class="add-btn">+ Add goal / debt</button>
+          <div class="guidance">One-time spend / windfall at an age, or a recurring debt that pays off. Amounts in today's dollars.</div>
         </div>
 
         <div class="ctrl-section">
-          <div class="section-head">◤ DISPLAY</div>
+          <div class="section-head">Display</div>
           <div class="control confidence-control">
-            <label>CONFIDENCE BAND <span class="control-val" id="val-confidence"></span></label>
+            <label>Confidence band <span class="control-val" id="val-confidence"></span></label>
             <input type="range" id="slider-confidence" min="50" max="99" step="1">
           </div>
           <div class="toggle-row">
-            <span>VALUES SHOWN IN</span>
-            <button id="toggle-dollars" class="toggle-btn" aria-pressed="false">NOMINAL $</button>
+            <span>Values shown in</span>
+            <button id="toggle-dollars" class="toggle-btn" aria-pressed="false">Nominal $</button>
           </div>
         </div>
 
         <div class="ctrl-section scenario-archive">
-          <div class="section-head">◤ SCENARIO ARCHIVE <span class="control-val" id="scenario-count"></span></div>
+          <div class="section-head">Saved Plans <span class="control-val" id="scenario-count"></span></div>
           <div class="save-row">
-            <input type="text" id="scenario-name" maxlength="24" placeholder="DESIGNATION…" autocomplete="off" spellcheck="false">
-            <button id="save-scenario">SAVE</button>
+            <input type="text" id="scenario-name" maxlength="24" placeholder="Name this plan…" autocomplete="off" spellcheck="false">
+            <button id="save-scenario">Save</button>
           </div>
           <div id="scenario-list"></div>
-          <div class="scenario-hint" id="scenario-hint">SAVE THE CURRENT CONFIG, THEN TOGGLE ▤ TO OVERLAY IT ON THE TRAJECTORY.</div>
+          <div class="scenario-hint" id="scenario-hint">Save the current plan, then toggle the overlay button to compare it on the chart.</div>
         </div>
       </section>
-
-      <!-- SUBSYSTEM PANEL: TAX -->
-      <section id="tax-panel" class="panel">
-        <div class="panel-header">
-          <span>MARGINAL RATE MONITOR</span>
-          <span class="panel-tag">TAX.SYS // FED+NC</span>
-        </div>
-        <div id="tax-readout">
-          <div class="tax-row"><span>CURRENT MARGINAL RATE</span><span id="tax-current-rate">—</span></div>
-          <div class="tax-row"><span>BRACKET CROSSINGS DETECTED</span><span id="tax-creep-count">—</span></div>
-          <div class="tax-row"><span>IRMAA CLIFFS (MEDICARE 65+)</span><span id="tax-irmaa-count">—</span></div>
-          <div class="tax-row"><span>PEAK IRMAA SURCHARGE</span><span id="tax-irmaa-peak">—</span></div>
-        </div>
-        <div id="creep-log"></div>
-      </section>
-
     </main>
   </div>
 
   <!-- ============ HAZARD / RUIN WARNING ============ -->
   <div id="hazard-modal" class="hidden">
     <div class="hazard-box">
-      <div class="hazard-icon">⚠</div>
-      <div class="hazard-title">WARNING</div>
-      <div class="hazard-body">SIMULATED TRAJECTORY DEPLETES BEFORE END OF PLAN.<br>SOLVENCY FAILURE DETECTED IN A MATERIAL SHARE OF OUTCOMES.</div>
-      <button id="hazard-ack">ACKNOWLEDGE</button>
+      <div class="hazard-icon">!</div>
+      <div class="hazard-title">Heads up</div>
+      <div class="hazard-body">This plan runs out of money before the end in a material share of simulated outcomes. Try trimming spend, saving more, or working a little longer.</div>
+      <button id="hazard-ack">Got it</button>
     </div>
   </div>
 
