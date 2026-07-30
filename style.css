@@ -277,6 +277,14 @@ button, .add-btn {
 }
 .plain-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,127,212,0.15); }
 
+/* Market-crash fields (hidden until enabled) */
+.crash-field { display: none; margin-top: 12px; }
+#controls-panel.crash-on .crash-field { display: block; }
+.toggle-btn[aria-pressed="true"]#toggle-crash {
+  color: #fff; border-color: var(--red);
+  background: linear-gradient(180deg, #ee8a8a, var(--red));
+}
+
 /* ===================== GOALS & DEBT ===================== */
 #events-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .event-row {

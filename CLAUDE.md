@@ -79,6 +79,11 @@ Home & mortgage (`home`): the home appreciates and the mortgage amortizes on a
 precomputed schedule (`buildMortgageSchedule`); the P&I payment reduces
 investable savings, but home equity is tracked SEPARATELY from the net-worth
 chart (its own topbar readout, table column, and tooltip line).
+Market-crash stress test (`crash`): a `buildReturnSchedule` overrides the crash
+year with a defined −pct shock and the following `crashRecoveryYears` (scaled to
+crash depth, historically anchored) with the elevated return that restores the
+pre-crash trend — so a crash barely dents an accumulator but hits a retiree via
+sequence-of-returns risk, matching history rather than a permanent loss.
 
 ## Known simplifications — pick up from here
 

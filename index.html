@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Engine F — Personal Financial Planner</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -313,6 +313,23 @@
         </div>
 
         <div class="ctrl-section">
+          <div class="section-head">Market Crash · Stress Test</div>
+          <div class="toggle-row">
+            <span>Simulate a crash</span>
+            <button id="toggle-crash" class="toggle-btn" aria-pressed="false">Off</button>
+          </div>
+          <div class="control crash-field">
+            <label>Crash size <span class="control-val" id="val-crashPct"></span></label>
+            <input type="range" id="slider-crashPct" min="5" max="70" step="1">
+          </div>
+          <div class="control crash-field">
+            <label>Crash year <span class="control-val" id="val-crashYear"></span></label>
+            <input type="range" id="slider-crashYear" min="2026" max="2090" step="1">
+          </div>
+          <div class="guidance crash-field" id="crash-note"></div>
+        </div>
+
+        <div class="ctrl-section">
           <div class="section-head">Display</div>
           <div class="control confidence-control">
             <label>Confidence band <span class="control-val" id="val-confidence"></span></label>
@@ -347,7 +364,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=9"></script>
-  <script src="app.js?v=9"></script>
+  <script src="engine.js?v=10"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

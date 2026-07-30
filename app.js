@@ -51,6 +51,10 @@ const state = {
   mortgagePayment: 0,         // monthly P&I
   // GOALS & DEBT — timeline events: { id, type, amount, age, endAge }
   events: [],
+  // MARKET CRASH stress test (recovery calibrated to history)
+  crashEnabled: false,
+  crashPct: 35,               // % drop
+  crashYear: 2035,
   // DISPLAY
   confidence: 90,
   todaysDollars: false,
@@ -140,6 +144,8 @@ const SLIDERS = [
   ['convEndAge', 'val-convEndAge', (v) => { state.convEndAge = +v; return `${v}`; }],
   ['homeAppreciation', 'val-homeAppreciation', (v) => { state.homeAppreciation = +v; return `${(+v).toFixed(1)}%`; }],
   ['mortgageRate', 'val-mortgageRate', (v) => { state.mortgageRate = +v; return `${(+v).toFixed(2)}%`; }],
+  ['crashPct', 'val-crashPct', (v) => { state.crashPct = +v; updateCrashNote(); return `−${v}%`; }],
+  ['crashYear', 'val-crashYear', (v) => { state.crashYear = +v; return `${v}`; }],
   ['confidence', 'val-confidence', (v) => { state.confidence = +v; return `${v}%`; }],
 ];
 
@@ -189,6 +195,8 @@ const SLIDER_INIT = {
   convEndAge: () => state.convEndAge,
   homeAppreciation: () => state.homeAppreciation,
   mortgageRate: () => state.mortgageRate,
+  crashPct: () => state.crashPct,
+  crashYear: () => state.crashYear,
   confidence: () => state.confidence,
 };
 
@@ -210,6 +218,7 @@ const PERSISTED_KEYS = [
   'convMode', 'convAmount', 'convBracket', 'convStartAge', 'convEndAge',
   'homeValue', 'homeAppreciation', 'mortgageBalance', 'mortgageRate', 'mortgagePayment',
   'events',
+  'crashEnabled', 'crashPct', 'crashYear',
   'confidence', 'todaysDollars',
 ];
 
@@ -233,6 +242,7 @@ function syncControlsFromState() {
   updateContribGuidance();
   syncFilingUI();
   syncConvUI();
+  syncCrashUI();
   updateHomeReadout();
   // ensure loaded events have ids, then render
   state.events.forEach((e) => { if (!e.id) e.id = 'ev' + (eventIdSeq++); });
@@ -287,6 +297,9 @@ function initControls() {
     state.convBracket = +e.target.value;
     scheduleRecompute();
   });
+
+  // market crash stress test
+  document.getElementById('toggle-crash').addEventListener('click', toggleCrash);
 
   // scenario archive controls
   document.getElementById('save-scenario').addEventListener('click', saveScenario);
@@ -467,6 +480,29 @@ function syncConvUI() {
   if (sel) sel.value = String(state.convBracket);
 }
 
+// Market-crash stress test: toggle on/off, reveal the crash controls.
+function toggleCrash() {
+  state.crashEnabled = !state.crashEnabled;
+  syncCrashUI();
+  recompute(false);
+}
+
+function syncCrashUI() {
+  const panel = document.getElementById('controls-panel');
+  panel.classList.toggle('crash-on', state.crashEnabled);
+  const btn = document.getElementById('toggle-crash');
+  btn.setAttribute('aria-pressed', state.crashEnabled ? 'true' : 'false');
+  btn.textContent = state.crashEnabled ? 'On' : 'Off';
+  updateCrashNote();
+}
+
+function updateCrashNote() {
+  const el = document.getElementById('crash-note');
+  if (!el) return;
+  const yrs = crashRecoveryYears(state.crashPct / 100);
+  el.textContent = `Recovery calibrated to history: a ${state.crashPct}% crash restores its pre-crash trend over about ${yrs} years, then normal returns resume. The damage lands on withdrawals made during the drop (sequence risk), not as a permanent loss.`;
+}
+
 function toggleDollars() {
   state.todaysDollars = !state.todaysDollars;
   const btn = document.getElementById('toggle-dollars');
@@ -582,6 +618,7 @@ function scenarioParams(startYear) {
     events: state.events.map((e) => ({
       type: e.type, amount: e.amount, startAge: e.age, endAge: e.endAge,
     })),
+    crash: { enabled: state.crashEnabled, pct: state.crashPct / 100, year: state.crashYear },
     expectedReturn: state.expectedReturn,
     returnStdDev: state.returnStdDev,
     inflation: state.inflation,
@@ -780,6 +817,23 @@ function drawChart(years, bandsIn, lowerP, upperP) {
     ctx2d.fillStyle = '#c9781a';
     ctx2d.font = uiFont(10);
     ctx2d.fillText('Retire', x(retireIdx) + 4, padding.top + 12 * devicePixelRatio);
+  }
+
+  // market-crash marker
+  if (state.crashEnabled) {
+    const crashIdx = state.crashYear - years[0];
+    if (crashIdx >= 0 && crashIdx < years.length) {
+      ctx2d.strokeStyle = 'rgba(214,69,69,0.75)';
+      ctx2d.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
+      ctx2d.beginPath();
+      ctx2d.moveTo(x(crashIdx), padding.top);
+      ctx2d.lineTo(x(crashIdx), h - padding.bottom);
+      ctx2d.stroke();
+      ctx2d.setLineDash([]);
+      ctx2d.fillStyle = '#d64545';
+      ctx2d.font = uiFont(10);
+      ctx2d.fillText('Crash', x(crashIdx) + 4, padding.top + 24 * devicePixelRatio);
+    }
   }
 
   // remember geometry for pointer hit-testing (values in canvas px)

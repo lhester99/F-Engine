@@ -460,8 +460,13 @@ function normalizePlan(params) {
   const currentAge = p.currentAge != null ? p.currentAge : 30;
   const filingStatus = p.filingStatus === 'mfj' ? 'mfj' : 'single';
   const totalYears = Math.max(1, (p.endAge != null ? p.endAge : 92) - currentAge);
+  const expectedReturn = p.expectedReturn || 0;
+  const returnStdDev = p.returnStdDev || 0;
+  const crash = Object.assign({ enabled: false, pct: 0.3, year: startYear + 10 }, p.crash || {});
   // Deterministic mortgage amortization schedule (same across all sims).
   home.schedule = buildMortgageSchedule(home.mortgageBalance, home.mortgageRate, home.mortgagePayment, totalYears);
+  // Per-year return schedule (flat, or crash + historically-calibrated recovery).
+  const returnSchedule = buildReturnSchedule(totalYears, expectedReturn, returnStdDev, crash, startYear);
   return {
     startingBalance: p.startingBalance || 0,
     currentAge,
@@ -477,12 +482,14 @@ function normalizePlan(params) {
     employerMatch,
     socialSecurity,
     rothConversion,
-    expectedReturn: p.expectedReturn || 0,
-    returnStdDev: p.returnStdDev || 0,
+    expectedReturn,
+    returnStdDev,
     inflation: p.inflation || 0,
     alloc: normalizeAllocation(p.allocation || { traditional: 1, roth: 0, taxable: 0 }),
     events: Array.isArray(p.events) ? p.events : [],
     home,
+    crash,
+    returnSchedule,
     rmdStartAge: rmdStartAge(startYear - currentAge),
     numSims: p.numSims || 2000,
     startYear,
@@ -529,6 +536,41 @@ function eventsFlow(events, age, priceInfl) {
     }
   }
   return { outflow, inflow };
+}
+
+// --- Market crash stress test ---------------------------------------------
+// A crash of `pct` in a chosen year, followed by a recovery calibrated to
+// history: the deeper the crash, the longer the recovery. Markets have always
+// recovered to their prior trend, so we restore the pre-crash trajectory over
+// `recoveryYears`, then resume normal returns. The stress therefore lands where
+// it really does — on withdrawals made during the drawdown (sequence risk) —
+// not as a permanent, unrealistic loss.
+// Historical anchors: ~-37% 2008 → ~4y, ~-49% 2000-02 → ~5-6y, ~-22% → ~2y.
+function crashRecoveryYears(pct) {
+  return Math.max(2, Math.min(8, Math.round((pct * 100) / 9)));
+}
+
+// Per-year { mean, std } return schedule. Normally flat; a crash overrides the
+// crash year with a defined shock (−pct, no volatility) and the following
+// recoveryYears with the elevated mean that restores the no-crash trend.
+function buildReturnSchedule(totalYears, mean, std, crash, startYear) {
+  const sched = [];
+  for (let i = 0; i < totalYears; i++) sched.push({ mean, std });
+  if (crash && crash.enabled && crash.pct > 0 && crash.pct < 1) {
+    const ci = crash.year - startYear; // 1-based year index of the crash
+    if (ci >= 1 && ci <= totalYears) {
+      sched[ci - 1] = { mean: -crash.pct, std: 0 };
+      const ry = crashRecoveryYears(crash.pct);
+      // constant return that, after the crash, restores the counterfactual
+      // (no-crash) trend by the end of the recovery window
+      const rRec = Math.pow(Math.pow(1 + mean, ry + 1) / (1 - crash.pct), 1 / ry) - 1;
+      for (let k = 1; k <= ry; k++) {
+        const idx = ci - 1 + k;
+        if (idx < totalYears) sched[idx] = { mean: rRec, std };
+      }
+    }
+  }
+  return sched;
 }
 
 // Nominal Social Security cash for year-index i: benefits are entered in
@@ -694,7 +736,8 @@ function runMonteCarlo(params) {
     };
     const path = [p.startingBalance];
     for (let i = 1; i <= totalYears; i++) {
-      const r = randomNormal(p.expectedReturn, p.returnStdDev);
+      const rs = p.returnSchedule[i - 1];
+      const r = randomNormal(rs.mean, rs.std);
       const step = stepYear(b, i, r, p, matchBase);
       b = { traditional: step.traditional, roth: step.roth, taxable: step.taxable };
       path.push(step.netWorth);
@@ -738,7 +781,7 @@ function projectPlan(params) {
     homeEquity: p.home.value - p.home.mortgageBalance,
   });
   for (let i = 1; i <= totalYears; i++) {
-    const s = stepYear(b, i, p.expectedReturn, p, matchBase);
+    const s = stepYear(b, i, p.returnSchedule[i - 1].mean, p, matchBase);
     b = { traditional: s.traditional, roth: s.roth, taxable: s.taxable };
     rows.push({
       year: s.year, age: s.age, retired: s.retired, income: s.ordinaryIncome,
@@ -815,6 +858,8 @@ if (typeof module !== 'undefined') {
     bracketCeilingGross,
     rothConversionFor,
     buildMortgageSchedule,
+    crashRecoveryYears,
+    buildReturnSchedule,
     normalizePlan,
     employerMatchBase,
     stepYear,
