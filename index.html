@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Engine F — Personal Financial Planner</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -49,6 +49,7 @@
         <div id="tabbar">
           <button class="tab active" data-view="chart">Chart</button>
           <button class="tab" data-view="table">Table</button>
+          <button class="tab" data-view="cashflow">Cash flow</button>
         </div>
 
         <!-- CHART VIEW -->
@@ -106,6 +107,30 @@
             </div>
           </section>
         </div>
+
+        <!-- CASH FLOW VIEW -->
+        <div id="cashflow-view" class="view hidden">
+          <section id="budget-panel" class="panel">
+            <div class="panel-header">
+              <span>Monthly Budget</span>
+              <span class="panel-tag" id="budget-total">—</span>
+            </div>
+            <div id="budget-list"></div>
+            <button id="add-budget" class="add-btn">+ Add category</button>
+            <div class="guidance">This budget is your living expenses — its total drives the whole plan. Exclude your mortgage and any debts (those are modeled separately).</div>
+          </section>
+          <section id="cashflow-panel" class="panel">
+            <div class="panel-header">
+              <span>Fun Money &amp; Cash Build-up</span>
+              <span class="panel-tag">per month · left axis bars / right axis line</span>
+            </div>
+            <canvas id="cashflow-chart"></canvas>
+            <div class="cf-legend">
+              <span><i class="swatch" style="background:rgba(52,164,87,0.7)"></i>Fun money / mo (bars)</span>
+              <span><i class="swatch" style="background:#2b7fd4"></i>Cumulative cash if left uninvested (line)</span>
+            </div>
+          </section>
+        </div>
       </div>
 
       <!-- SIDE PANEL: SECTIONED CONTROLS -->
@@ -152,8 +177,8 @@
             <div class="num-box"><span class="unit">$</span><input type="number" id="num-spouseIncome" min="0" step="1000" inputmode="numeric"></div>
           </div>
           <div class="control">
-            <label>Living expenses / mo</label>
-            <div class="num-box"><span class="unit">$</span><input type="number" id="num-monthlyExpenses" min="0" step="100" inputmode="numeric"></div>
+            <label>Living expenses / mo <span class="control-val">from budget →</span></label>
+            <button type="button" id="exp-total" class="exp-total-btn">—</button>
           </div>
           <div class="control">
             <label>Retirement spend <span class="control-val" id="val-retirementReplacement"></span></label>
@@ -364,7 +389,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="engine.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

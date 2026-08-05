@@ -84,6 +84,15 @@ year with a defined −pct shock and the following `crashRecoveryYears` (scaled 
 crash depth, historically anchored) with the elevated return that restores the
 pre-crash trend — so a crash barely dents an accumulator but hits a retiree via
 sequence-of-returns risk, matching history rather than a permanent loss.
+Living expenses are now driven by an **itemized monthly budget** (`state.budget`,
+an array of `{id,label,amount}` rows — the persisted source of truth). Its total
+sets `monthlyExpenses`; the main-tab "Living expenses / mo" is a read-only button
+showing that total and linking to the budget. Excludes mortgage/debt (modeled
+separately). A third **Cash flow tab** holds the budget spreadsheet plus a
+fun-money chart: green bars = each year's `freeCash / 12` (money to enjoy per
+month, red when negative), and a blue **cumulative-cash line** = running sum of
+working-year `freeCash` in today's dollars (plateaus at retirement) — a reminder
+of how much idle cash would pile up if leftover surplus weren't auto-invested.
 
 ## Known simplifications — pick up from here
 

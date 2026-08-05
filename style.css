@@ -171,6 +171,31 @@ html, body {
 .swatch-tail { background: rgba(43,127,212,0.16); }
 .legend-hint { margin-left: auto; color: var(--blue); font-style: italic; }
 
+/* ===================== CASH FLOW VIEW ===================== */
+#budget-panel { flex-shrink: 0; max-height: 46%; overflow-y: auto; }
+#budget-list { display: flex; flex-direction: column; }
+#cashflow-panel { flex: 1; min-height: 0; position: relative; }
+#cashflow-chart { flex: 1; width: 100%; min-height: 0; }
+.cf-legend { display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--ink-dim); padding-top: 8px; flex-wrap: wrap; }
+
+.budget-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.budget-name {
+  flex: 1; min-width: 0; font-family: var(--font); font-size: 13px; color: var(--ink);
+  background: rgba(255,255,255,0.6); border: 1px solid var(--glass-border); border-radius: 8px;
+  padding: 7px 10px;
+}
+.budget-name:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,127,212,0.16); outline: none; }
+.budget-amt { width: 122px; flex-shrink: 0; }
+#add-budget { margin-top: 6px; }
+
+/* read-only living-expenses control on the main tab — a link into the budget */
+.exp-total-btn {
+  font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--green-deep);
+  background: rgba(255,255,255,0.6); border: 1px solid var(--glass-border); border-radius: 8px;
+  padding: 9px 12px; cursor: pointer; text-align: left; width: 100%;
+}
+.exp-total-btn:hover { border-color: var(--blue); color: var(--blue-deep); }
+
 /* ===================== SECTIONS / CONTROLS ===================== */
 .ctrl-section { padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
 .ctrl-section:last-child { border-bottom: none; margin-bottom: 0; }
@@ -424,11 +449,13 @@ button, .add-btn {
   /* The page scrolls on mobile, so nothing has a definite height for
      flex-grow to fill — drop flex growth and give panels explicit heights,
      otherwise flex:1 (basis 0%) collapses the chart canvas to nothing. */
-  #view-col, .view, #chart-view, #table-view { flex: none; min-height: 0; }
+  #view-col, .view, #chart-view, #table-view, #cashflow-view { flex: none; min-height: 0; }
   #controls-panel { width: 100%; overflow-y: visible; }
   #chart-panel { flex: none; height: 340px; }
   #tax-panel { flex: none; max-height: none; }
   #table-panel { flex: none; }
+  #budget-panel { flex: none; max-height: none; }
+  #cashflow-panel { flex: none; height: 320px; }
   #ledger-scroll { max-height: 70vh; }
   .panel-header { flex-wrap: wrap; gap: 2px 8px; }
 }

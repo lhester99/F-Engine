@@ -22,6 +22,13 @@ handled gracefully).
   household (and spouse, MFJ) income, computes taxes, subtracts living
   expenses and every account contribution, and routes the surplus to the
   taxable brokerage. There is no "savings rate" input — savings is a result.
+- **Budget spreadsheet + Cash flow tab** (`app.js`) — living expenses come
+  from an itemized monthly budget (editable rows, add/remove categories); its
+  total drives the whole model, and the main-tab expense field is read-only.
+  A dedicated Cash flow tab charts **fun money** (each year's free cash ÷ 12 as
+  monthly bars, red when negative) alongside a **cumulative uninvested-cash
+  line** — a reminder of the idle cash pile that builds if surplus isn't
+  invested (it plateaus at retirement, in today's dollars).
 - **Per-account contributions** — Traditional 401k, **Roth 401k**,
   Traditional IRA, Roth IRA, taxable, plus an **employer match** (rate up to
   a % of pay). Traditional 401k/IRA reduce current taxable income; Roth do

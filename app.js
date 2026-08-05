@@ -14,8 +14,19 @@ const state = {
   // INCOME & EXPENSES
   householdIncome: 120000,
   spouseIncome: 60000,         // used only when filingStatus === 'mfj'
-  monthlyExpenses: 6200,       // annualExpenses = *12
+  monthlyExpenses: 6200,       // DERIVED from the budget below (sum of items)
   retirementReplacement: 85,   // % of working expenses spent in retirement
+  // MONTHLY BUDGET — the itemized source of truth for living expenses.
+  // Its total drives monthlyExpenses (excludes mortgage/debt, modeled separately).
+  budget: [
+    { id: 'b1', label: 'Housing (non-mortgage)', amount: 1800 },
+    { id: 'b2', label: 'Groceries & food', amount: 1000 },
+    { id: 'b3', label: 'Transportation', amount: 700 },
+    { id: 'b4', label: 'Insurance & healthcare', amount: 700 },
+    { id: 'b5', label: 'Utilities & phone', amount: 500 },
+    { id: 'b6', label: 'Subscriptions & shopping', amount: 700 },
+    { id: 'b7', label: 'Travel & fun', amount: 800 },
+  ],
   // CONTRIBUTIONS ($/yr)
   contribTrad401k: 12000,
   contribRoth401k: 6000,
@@ -153,7 +164,6 @@ const SLIDERS = [
 const NUMBERS = [
   ['num-householdIncome', 'householdIncome'],
   ['num-spouseIncome', 'spouseIncome'],
-  ['num-monthlyExpenses', 'monthlyExpenses', () => refreshDerivedLabels()],
   ['num-startBalance', 'startingBalance', () => updateAllocationLabels()],
   ['num-contribTrad401k', 'contribTrad401k', () => updateContribGuidance()],
   ['num-contribRoth401k', 'contribRoth401k', () => updateContribGuidance()],
@@ -209,7 +219,7 @@ function refreshDerivedLabels() {
 // State fields persisted in a saved scenario.
 const PERSISTED_KEYS = [
   'currentAge', 'retireAge', 'endAge', 'filingStatus', 'spouseAge',
-  'householdIncome', 'spouseIncome', 'monthlyExpenses', 'retirementReplacement',
+  'householdIncome', 'spouseIncome', 'budget', 'retirementReplacement',
   'contribTrad401k', 'contribRoth401k', 'contribTradIRA', 'contribRothIRA', 'contribTaxable',
   'matchRate', 'matchCapPct',
   'startingBalance', 'allocTrad', 'allocRoth', 'allocTaxable',
@@ -247,6 +257,11 @@ function syncControlsFromState() {
   // ensure loaded events have ids, then render
   state.events.forEach((e) => { if (!e.id) e.id = 'ev' + (eventIdSeq++); });
   renderEvents();
+  // budget: ensure ids, sync expenses total, render
+  if (!Array.isArray(state.budget)) state.budget = [];
+  state.budget.forEach((bi) => { if (!bi.id) bi.id = 'b' + (budgetIdSeq++); });
+  renderBudget();
+  applyBudget();
   const btn = document.getElementById('toggle-dollars');
   btn.setAttribute('aria-pressed', state.todaysDollars ? 'true' : 'false');
   btn.textContent = state.todaysDollars ? "Today's $" : 'Nominal $';
@@ -289,6 +304,10 @@ function initControls() {
   // goals & debt
   document.getElementById('add-event').addEventListener('click', addEvent);
 
+  // budget
+  document.getElementById('add-budget').addEventListener('click', addBudgetItem);
+  document.getElementById('exp-total').addEventListener('click', () => switchView('cashflow'));
+
   // roth conversions
   document.querySelectorAll('#conv-toggle button').forEach((btn) => {
     btn.addEventListener('click', () => setConvMode(btn.dataset.mode));
@@ -327,8 +346,177 @@ function switchView(view) {
   document.querySelectorAll('#tabbar .tab').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('chart-view').classList.toggle('hidden', view !== 'chart');
   document.getElementById('table-view').classList.toggle('hidden', view !== 'table');
+  document.getElementById('cashflow-view').classList.toggle('hidden', view !== 'cashflow');
   if (view === 'chart') resizeCanvas();
-  else renderLedger();
+  else if (view === 'table') renderLedger();
+  else { renderBudget(); resizeCashflowCanvas(); }
+}
+
+// -------------------- BUDGET (drives living expenses) --------------------
+let budgetIdSeq = 100;
+function budgetTotal() {
+  return state.budget.reduce((s, b) => s + (+b.amount || 0), 0);
+}
+function updateBudgetTotalTag() {
+  const t = budgetTotal();
+  const totalEl = document.getElementById('budget-total');
+  if (totalEl) totalEl.textContent = '$' + t.toLocaleString() + ' / mo  ·  $' + (t * 12).toLocaleString() + ' / yr';
+}
+
+// Push the budget total into the model's expense input and refresh.
+function applyBudget() {
+  state.monthlyExpenses = budgetTotal();
+  const disp = document.getElementById('exp-total');
+  if (disp) disp.textContent = '$' + state.monthlyExpenses.toLocaleString() + ' / mo';
+  updateBudgetTotalTag(); // live-update the panel tag while editing amounts
+  refreshDerivedLabels(); // retirement-spend label depends on expenses
+  scheduleRecompute();
+}
+
+function addBudgetItem() {
+  state.budget.push({ id: 'b' + (budgetIdSeq++), label: 'New category', amount: 0 });
+  renderBudget();
+  applyBudget();
+}
+
+function deleteBudgetItem(id) {
+  state.budget = state.budget.filter((b) => b.id !== id);
+  renderBudget();
+  applyBudget();
+}
+
+function renderBudget() {
+  const list = document.getElementById('budget-list');
+  if (!list) return;
+  list.innerHTML = '';
+  state.budget.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'budget-row';
+    const name = document.createElement('input');
+    name.className = 'budget-name';
+    name.type = 'text';
+    name.value = item.label;
+    name.addEventListener('input', () => { item.label = name.value; });
+    const amtWrap = document.createElement('div');
+    amtWrap.className = 'num-box budget-amt';
+    amtWrap.innerHTML = '<span class="unit">$</span>';
+    const amt = document.createElement('input');
+    amt.type = 'number'; amt.min = 0; amt.step = 50; amt.value = item.amount; amt.inputMode = 'numeric';
+    amt.addEventListener('input', () => { item.amount = amt.value === '' ? 0 : +amt.value; applyBudget(); });
+    amtWrap.appendChild(amt);
+    const del = document.createElement('button');
+    del.className = 'ev-del'; del.textContent = '×'; del.title = 'Remove';
+    del.addEventListener('click', () => deleteBudgetItem(item.id));
+    row.append(name, amtWrap, del);
+    list.appendChild(row);
+  });
+  updateBudgetTotalTag();
+}
+
+// -------------------- CASH FLOW CHART --------------------
+const cfCanvas = document.getElementById('cashflow-chart');
+const cfCtx = cfCanvas ? cfCanvas.getContext('2d') : null;
+
+function resizeCashflowCanvas() {
+  if (!cfCanvas) return;
+  const panel = cfCanvas.parentElement;
+  const cs = getComputedStyle(panel);
+  const rect = panel.getBoundingClientRect();
+  const header = panel.querySelector('.panel-header');
+  const legend = panel.querySelector('.cf-legend');
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const chromeH = (header ? header.offsetHeight : 0) + (legend ? legend.offsetHeight : 0);
+  const cw = Math.max(80, rect.width - padX);
+  const ch = Math.max(100, rect.height - padY - chromeH - 6);
+  cfCanvas.width = cw * devicePixelRatio;
+  cfCanvas.height = ch * devicePixelRatio;
+  cfCanvas.style.width = cw + 'px';
+  cfCanvas.style.height = ch + 'px';
+  drawCashflowChart();
+}
+window.addEventListener('resize', resizeCashflowCanvas);
+window.addEventListener('orientationchange', resizeCashflowCanvas);
+
+function drawCashflowChart() {
+  if (!cfCtx || !lastProjection) return;
+  const dpr = devicePixelRatio;
+  const w = cfCanvas.width, h = cfCanvas.height;
+  cfCtx.clearRect(0, 0, w, h);
+  const uiFont = (px) => `${px * dpr}px "Segoe UI", system-ui, sans-serif`;
+  const rows = lastProjection;
+  const n = rows.length;
+
+  // per-year monthly free cash (bars) + cumulative uninvested cash (line)
+  const monthly = rows.map((r, i) => deflate(r.freeCash || 0, i) / 12);
+  let cum = 0;
+  const cumline = rows.map((r, i) => { if (!r.retired) cum += deflate(r.freeCash || 0, i); return cum; });
+
+  const padding = { top: 18 * dpr, bottom: 34 * dpr, left: 66 * dpr, right: 70 * dpr };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+
+  const minV = Math.min(0, ...monthly);
+  const maxV = Math.max(0, ...monthly);
+  const spanV = (maxV - minV) || 1;
+  const maxLine = Math.max(1, ...cumline);
+  const x = (i) => padding.left + (n <= 1 ? 0 : (i / (n - 1)) * chartW);
+  const yBar = (v) => padding.top + chartH * (1 - (v - minV) / spanV);
+  const yLine = (v) => padding.top + chartH * (1 - v / maxLine);
+  const zeroY = yBar(0);
+
+  // gridlines + left axis ($/mo)
+  cfCtx.strokeStyle = 'rgba(31,58,77,0.10)';
+  cfCtx.fillStyle = '#5b7488';
+  cfCtx.font = uiFont(10);
+  cfCtx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) {
+    const gy = padding.top + (chartH / 4) * g;
+    cfCtx.beginPath(); cfCtx.moveTo(padding.left, gy); cfCtx.lineTo(w - padding.right, gy); cfCtx.stroke();
+    const val = maxV - (spanV / 4) * g;
+    cfCtx.fillText('$' + formatCompact(val), 4, gy + 4 * dpr);
+    const lineVal = maxLine * (1 - g / 4);
+    cfCtx.fillStyle = '#2b7fd4';
+    cfCtx.fillText('$' + formatCompact(lineVal), w - padding.right + 6, gy + 4 * dpr);
+    cfCtx.fillStyle = '#5b7488';
+  }
+
+  // bars — monthly free cash
+  const barW = Math.max(1, (chartW / n) * 0.72);
+  monthly.forEach((v, i) => {
+    const cx = x(i);
+    const top = Math.min(zeroY, yBar(v));
+    const hgt = Math.abs(yBar(v) - zeroY);
+    cfCtx.fillStyle = v < 0 ? 'rgba(214,69,69,0.75)' : 'rgba(52,164,87,0.7)';
+    cfCtx.fillRect(cx - barW / 2, top, barW, Math.max(1, hgt));
+  });
+  // zero baseline
+  cfCtx.strokeStyle = 'rgba(31,58,77,0.35)';
+  cfCtx.beginPath(); cfCtx.moveTo(padding.left, zeroY); cfCtx.lineTo(w - padding.right, zeroY); cfCtx.stroke();
+
+  // cumulative uninvested-cash line
+  cfCtx.strokeStyle = '#2b7fd4';
+  cfCtx.lineWidth = 2.2 * dpr;
+  cfCtx.beginPath();
+  cumline.forEach((v, i) => { const px = x(i), py = yLine(v); if (i === 0) cfCtx.moveTo(px, py); else cfCtx.lineTo(px, py); });
+  cfCtx.stroke();
+
+  // retirement marker
+  const retireIdx = state.retireAge - state.currentAge;
+  if (retireIdx >= 0 && retireIdx < n) {
+    cfCtx.strokeStyle = 'rgba(224,138,30,0.7)';
+    cfCtx.setLineDash([4 * dpr, 4 * dpr]);
+    cfCtx.beginPath(); cfCtx.moveTo(x(retireIdx), padding.top); cfCtx.lineTo(x(retireIdx), h - padding.bottom); cfCtx.stroke();
+    cfCtx.setLineDash([]);
+    cfCtx.fillStyle = '#c9781a'; cfCtx.font = uiFont(10);
+    cfCtx.fillText('Retire', x(retireIdx) + 4, padding.top + 11 * dpr);
+  }
+
+  // x-axis year labels (every ~10 years)
+  cfCtx.fillStyle = '#5b7488'; cfCtx.font = uiFont(10);
+  for (let i = 0; i < n; i += Math.max(1, Math.round(n / 6))) {
+    cfCtx.fillText(String(rows[i].year), x(i) - 12 * dpr, h - padding.bottom + 20 * dpr);
+  }
 }
 
 function renderLedger() {
@@ -658,6 +846,7 @@ function recompute() {
   updateStatusReadouts(lastResult, lower, upper);
   updateTaxPanel(lastResult);
   renderLedger();
+  drawCashflowChart();
   checkHazard(lastResult);
 }
 
