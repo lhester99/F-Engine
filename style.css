@@ -118,6 +118,11 @@ html, body {
 .readout-value { color: var(--green-deep); font-size: 16px; font-weight: 600; }
 .readout-value.warn { color: var(--red); }
 
+/* Freedom age — the headline "when can I retire?" readout, given extra weight */
+#readout-freedom { padding-right: 22px; border-right: 1px solid var(--line); }
+#readout-freedom .readout-label { color: var(--green); font-weight: 600; letter-spacing: 0.3px; }
+#readout-freedom .readout-value { font-size: 19px; font-weight: 700; }
+
 #main { flex: 1; display: flex; gap: 16px; padding: 16px; min-height: 0; }
 
 #view-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -169,6 +174,7 @@ html, body {
 .swatch-median { background: var(--green); }
 .swatch-band { background: rgba(52,164,87,0.32); }
 .swatch-tail { background: rgba(43,127,212,0.16); }
+.swatch-freedom { background: #1f9d57; box-shadow: 0 0 5px rgba(31,157,87,0.7); }
 .legend-hint { margin-left: auto; color: var(--blue); font-style: italic; }
 
 /* ===================== CASH FLOW VIEW ===================== */

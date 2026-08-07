@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Engine F — Personal Financial Planner</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -25,6 +25,10 @@
     <header id="topbar">
       <div class="brand"><span class="brand-mark">F</span> Engine&nbsp;F <span class="brand-sub">Financial Planner</span></div>
       <div id="status-readouts">
+        <div class="readout" id="readout-freedom" title="Earliest retirement age where 90% of simulations survive">
+          <span class="readout-label">Freedom age</span>
+          <span class="readout-value">—</span>
+        </div>
         <div class="readout" id="readout-solvency">
           <span class="readout-label">Solvency</span>
           <span class="readout-value">—</span>
@@ -65,6 +69,7 @@
               <span><i class="swatch swatch-median"></i>Median</span>
               <span><i class="swatch swatch-band"></i>Likely range</span>
               <span><i class="swatch swatch-tail"></i>Tail range</span>
+              <span><i class="swatch swatch-freedom"></i>Freedom point (90%)</span>
               <span class="legend-hint">Tap the chart to inspect any year</span>
             </div>
           </section>
@@ -389,7 +394,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="engine.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

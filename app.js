@@ -848,12 +848,71 @@ function recompute() {
   renderLedger();
   drawCashflowChart();
   checkHazard(lastResult);
+  scheduleFreedomSolve(); // re-solve the earliest safe retirement age
 }
 
 function redrawChart() {
   if (!lastResult) return;
   const { lower, upper } = confidenceToPercentiles(state.confidence);
   drawChart(lastResult.years, lastBands, lower, upper);
+}
+
+// -------------------- FREEDOM POINT (earliest safe retirement) --------------------
+// The headline answer to "when can I retire?": the earliest age whose plan
+// clears a fixed 90% success bar. Solved on its own debounce (separate from the
+// chart) so a slow solve never janks the slider; the drawn marker is tweened
+// toward each solved age so it glides rather than jumps.
+const FREEDOM_TARGET = 0.90;      // 90% of simulations survive
+const FREEDOM_DRAG_SIMS = 300;    // fast, approximate solve while dragging
+let freedomResult = null;         // last solved { onTrack, age, year, probability }
+let freedomDisplayAge = null;     // age currently drawn (float, mid-tween)
+let freedomTweenRAF = null;
+let freedomSolveTimer = null;
+let freedomRefineTimer = null;
+
+function scheduleFreedomSolve() {
+  clearTimeout(freedomSolveTimer);
+  clearTimeout(freedomRefineTimer);
+  // quick low-res solve for a live feel, then a full-res refine once inputs settle
+  freedomSolveTimer = setTimeout(() => runFreedomSolve(Math.min(state.numSims, FREEDOM_DRAG_SIMS)), 110);
+  freedomRefineTimer = setTimeout(() => runFreedomSolve(state.numSims), 650);
+}
+
+function runFreedomSolve(sims) {
+  const params = scenarioParams(new Date().getFullYear());
+  freedomResult = solveFreedomAge(params, FREEDOM_TARGET, { sims });
+  updateFreedomReadout();
+  tweenFreedomTo(freedomResult.age);
+}
+
+// Ease the drawn marker from its current age to the newly solved one.
+function tweenFreedomTo(targetAge) {
+  if (freedomDisplayAge == null) { freedomDisplayAge = targetAge; redrawChart(); return; }
+  if (Math.abs(targetAge - freedomDisplayAge) < 0.02) { freedomDisplayAge = targetAge; redrawChart(); return; }
+  cancelAnimationFrame(freedomTweenRAF);
+  const from = freedomDisplayAge, to = targetAge, dur = 420, t0 = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    const ease = 1 - Math.pow(1 - k, 3); // easeOutCubic
+    freedomDisplayAge = from + (to - from) * ease;
+    redrawChart();
+    if (k < 1) freedomTweenRAF = requestAnimationFrame(step);
+  };
+  freedomTweenRAF = requestAnimationFrame(step);
+}
+
+function updateFreedomReadout() {
+  const el = document.querySelector('#readout-freedom .readout-value');
+  if (!el || !freedomResult) return;
+  if (!freedomResult.onTrack) {
+    el.textContent = 'NOT ON TRACK';
+    el.classList.add('warn');
+    return;
+  }
+  el.classList.remove('warn');
+  el.textContent = freedomResult.age <= state.currentAge
+    ? 'RETIRE NOW'
+    : `${freedomResult.age}`;
 }
 
 // -------------------- CHART --------------------
@@ -1025,6 +1084,54 @@ function drawChart(years, bandsIn, lowerP, upperP) {
     }
   }
 
+  // FREEDOM POINT — earliest age clearing the 90% success bar. A gliding flag
+  // that ties the "when can I retire?" answer to the net-worth curve.
+  if (freedomDisplayAge != null && freedomResult) {
+    const fIdx = freedomDisplayAge - state.currentAge;
+    const onTrack = freedomResult.onTrack;
+    if (fIdx >= 0 && fIdx <= years.length - 1) {
+      const fx = x(fIdx);
+      const lineCol = onTrack ? 'rgba(31,157,87,0.95)' : 'rgba(214,69,69,0.95)';
+      const solidCol = onTrack ? '#1f9d57' : '#d64545';
+      // glowing vertical line (the retro accent)
+      ctx2d.save();
+      ctx2d.strokeStyle = lineCol;
+      ctx2d.lineWidth = 2 * devicePixelRatio;
+      ctx2d.shadowColor = onTrack ? 'rgba(31,157,87,0.55)' : 'rgba(214,69,69,0.55)';
+      ctx2d.shadowBlur = 9;
+      ctx2d.beginPath();
+      ctx2d.moveTo(fx, padding.top + 7 * devicePixelRatio);
+      ctx2d.lineTo(fx, h - padding.bottom);
+      ctx2d.stroke();
+      ctx2d.restore();
+      // diamond flag at the top of the line
+      const fy = padding.top + 3 * devicePixelRatio;
+      const ds = 5 * devicePixelRatio;
+      ctx2d.fillStyle = solidCol;
+      ctx2d.beginPath();
+      ctx2d.moveTo(fx, fy - ds); ctx2d.lineTo(fx + ds, fy);
+      ctx2d.lineTo(fx, fy + ds); ctx2d.lineTo(fx - ds, fy);
+      ctx2d.closePath(); ctx2d.fill();
+      // label pill — flips to the left of the line when near the right edge
+      const label = onTrack
+        ? (freedomResult.age <= state.currentAge ? 'FREEDOM · retire now' : `FREEDOM · age ${freedomResult.age}`)
+        : 'NOT ON TRACK';
+      ctx2d.font = `600 ${11 * devicePixelRatio}px "Segoe UI", system-ui, sans-serif`;
+      const tw = ctx2d.measureText(label).width;
+      const padPill = 7 * devicePixelRatio, pillH = 18 * devicePixelRatio;
+      const flipLeft = fx + tw + padPill * 2 + 10 * devicePixelRatio > w - padding.right;
+      const pillX = flipLeft ? fx - tw - padPill * 2 - 8 * devicePixelRatio : fx + 8 * devicePixelRatio;
+      const pillY = padding.top + 6 * devicePixelRatio;
+      ctx2d.fillStyle = onTrack ? 'rgba(31,157,87,0.12)' : 'rgba(214,69,69,0.12)';
+      roundRect(ctx2d, pillX, pillY, tw + padPill * 2, pillH, 5 * devicePixelRatio);
+      ctx2d.fill();
+      ctx2d.fillStyle = solidCol;
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText(label, pillX + padPill, pillY + pillH / 2 + devicePixelRatio);
+      ctx2d.textBaseline = 'alphabetic';
+    }
+  }
+
   // remember geometry for pointer hit-testing (values in canvas px)
   chartGeom = { padL: padding.left, padT: padding.top, chartW, chartH, bottom: h - padding.bottom, n: years.length };
 
@@ -1046,6 +1153,19 @@ function drawChart(years, bandsIn, lowerP, upperP) {
     ctx2d.lineWidth = 1.5 * devicePixelRatio;
     ctx2d.stroke();
   }
+}
+
+// Trace a rounded-rect path (caller fills/strokes). Kept explicit rather than
+// relying on ctx.roundRect for broad browser support.
+function roundRect(ctx, rx, ry, rw, rh, r) {
+  const rad = Math.min(r, rw / 2, rh / 2);
+  ctx.beginPath();
+  ctx.moveTo(rx + rad, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, rad);
+  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, rad);
+  ctx.arcTo(rx, ry + rh, rx, ry, rad);
+  ctx.arcTo(rx, ry, rx + rw, ry, rad);
+  ctx.closePath();
 }
 
 function formatCompact(v) {

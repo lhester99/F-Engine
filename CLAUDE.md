@@ -93,6 +93,16 @@ fun-money chart: green bars = each year's `freeCash / 12` (money to enjoy per
 month, red when negative), and a blue **cumulative-cash line** = running sum of
 working-year `freeCash` in today's dollars (plateaus at retirement) — a reminder
 of how much idle cash would pile up if leftover surplus weren't auto-invested.
+**Freedom Point** (`solveFreedomAge` in engine.js): the headline "when can I
+retire?" answer — the earliest retirement age whose plan clears a fixed **90%
+success bar**. Because success rises monotonically with retirement age (more
+accumulation, fewer withdrawal years), it's a **binary search** over `retireAge`
+(~log₂(span) sim runs, not one per year) rather than a scan. Surfaced two ways:
+a topbar **"Freedom age" readout** (the age, or `RETIRE NOW` / `NOT ON TRACK`)
+and a **gliding green flag on the net-worth chart** that tweens to the solved
+age as sliders move (red + parked at the end when not on track). Solved on its
+own debounce — a fast low-res solve (`FREEDOM_DRAG_SIMS`) during drags, a
+full-res refine on settle — so the expensive solve never janks the sliders.
 
 ## Known simplifications — pick up from here
 

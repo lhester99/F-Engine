@@ -29,6 +29,12 @@ handled gracefully).
   monthly bars, red when negative) alongside a **cumulative uninvested-cash
   line** — a reminder of the idle cash pile that builds if surplus isn't
   invested (it plateaus at retirement, in today's dollars).
+- **Freedom Point** — the headline "when can I retire?" answer: the earliest
+  age where **90% of simulations survive**, solved by binary-searching the
+  retirement age (success rises monotonically with it). Shown as a topbar
+  "Freedom age" readout and a gliding green flag on the net-worth chart that
+  slides to the new age as you drag sliders (red "NOT ON TRACK" when no age
+  clears the bar). Solved on its own debounce so it never janks the controls.
 - **Per-account contributions** — Traditional 401k, **Roth 401k**,
   Traditional IRA, Roth IRA, taxable, plus an **employer match** (rate up to
   a % of pay). Traditional 401k/IRA reduce current taxable income; Roth do

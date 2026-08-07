@@ -836,6 +836,52 @@ function successProbability(paths) {
   return 1 - ruinCount / paths.length;
 }
 
+/**
+ * Freedom Point: the earliest retirement age whose plan clears a target success
+ * probability (default 90%). Because retiring LATER is monotonically safer —
+ * more years accumulating, fewer years drawing down — the predicate
+ * "success(age) >= target" is monotonic in age, so we binary-search it instead
+ * of scanning every age (~log2(span) sim runs, not one per year).
+ *
+ * Returns { onTrack, age, year, probability, target } where:
+ *   onTrack=false -> even retiring at endAge misses the target (marker goes red)
+ *   age           -> the solved freedom age (== currentAge means "retire now")
+ * `opts.sims` overrides the sim count (use fewer for live drags, full on settle).
+ */
+function solveFreedomAge(params, target, opts) {
+  const t = target != null ? target : 0.9;
+  const o = opts || {};
+  const base = normalizePlan(params);
+  const currentAge = base.currentAge;
+  const endAge = base.endAge;
+  const startYear = base.startYear;
+  const sims = o.sims || base.numSims;
+
+  // success probability for a candidate retirement age (fresh MC each time)
+  const probAt = (age) => {
+    const res = runMonteCarlo(Object.assign({}, params, { retireAge: age, numSims: sims }));
+    return successProbability(res.paths);
+  };
+
+  // If even the latest possible retirement can't clear the bar, not on track.
+  const probLatest = probAt(endAge);
+  if (probLatest < t) {
+    return { onTrack: false, age: endAge, year: startYear + (endAge - currentAge), probability: probLatest, target: t };
+  }
+  // If retiring right now already clears it, freedom is today.
+  const probNow = probAt(currentAge);
+  if (probNow >= t) {
+    return { onTrack: true, age: currentAge, year: startYear, probability: probNow, target: t };
+  }
+  // Binary-search the smallest age in (currentAge, endAge] with prob >= target.
+  let lo = currentAge + 1, hi = endAge;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (probAt(mid) >= t) hi = mid; else lo = mid + 1;
+  }
+  return { onTrack: true, age: lo, year: startYear + (lo - currentAge), probability: probAt(lo), target: t };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     computeFederalTax,
@@ -869,5 +915,6 @@ if (typeof module !== 'undefined') {
     computePercentileBands,
     confidenceToPercentiles,
     successProbability,
+    solveFreedomAge,
   };
 }
