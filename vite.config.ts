@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Recharts accounts for most of the bundle; one chunk is fine for this app.
+  build: { chunkSizeWarningLimit: 800 },
   test: {
     globals: true,
     environment: 'jsdom',

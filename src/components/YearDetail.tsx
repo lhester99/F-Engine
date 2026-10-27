@@ -1,0 +1,138 @@
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import type { YearResult } from '../types';
+import { formatSignedUsd, formatUsd } from '../utils/format';
+
+interface Props {
+  baseline: YearResult | undefined;
+  strategy: YearResult;
+  years: number[];
+  onSelectYear: (year: number) => void;
+  onClose: () => void;
+}
+
+interface RowDef {
+  label: string;
+  value: (y: YearResult) => number | null;
+  format?: 'usd' | 'period';
+  note?: string;
+}
+
+const ROWS: RowDef[] = [
+  { label: 'Prior Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.priorBalancePretax },
+  { label: 'Prior Dec 31 balance (Roth IRA)', value: (y) => y.totals.priorBalanceRoth },
+  { label: 'Distribution period (Uniform Lifetime Table)', value: (y) => y.people[0]?.distributionPeriod ?? null, format: 'period' },
+  { label: 'RMD calculated for this year', value: (y) => y.totals.rmdForYear },
+  { label: 'Prior-year RMD deferred to April 1', value: (y) => y.totals.deferredRmdFromPriorYear },
+  { label: 'RMD deferred to April 1 next year', value: (y) => y.totals.rmdDeferredToNextYear },
+  { label: 'Required RMD this calendar year', value: (y) => y.totals.requiredRmd },
+  { label: 'QCD', value: (y) => y.totals.qcd },
+  { label: 'Extra withdrawal', value: (y) => y.totals.extraWithdrawal },
+  { label: 'Taxable IRA distribution', value: (y) => y.totals.taxableDistribution },
+  { label: 'Roth conversion (gross)', value: (y) => y.totals.conversionGross },
+  { label: '  of which withheld for taxes', value: (y) => y.totals.conversionWithheld },
+  { label: 'Contributions', value: (y) => y.totals.contributions },
+  { label: 'Investment growth', value: (y) => y.totals.growth },
+  { label: 'Ending Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.endBalancePretax },
+  { label: 'Ending Dec 31 balance (Roth IRA)', value: (y) => y.totals.endBalanceRoth },
+  { label: 'Ending Dec 31 balance (total)', value: (y) => y.totals.endBalanceTotal },
+];
+
+const OPTIONAL = new Set(['Prior-year RMD deferred to April 1', 'RMD deferred to April 1 next year', '  of which withheld for taxes']);
+
+function fmt(v: number | null, kind: RowDef['format']) {
+  if (v === null) return '—';
+  if (kind === 'period') return v.toFixed(1);
+  return formatUsd(v);
+}
+
+/** Year-level breakdown, baseline vs strategy. */
+export function YearDetail({ baseline, strategy, years, onSelectYear, onClose }: Props) {
+  const idx = years.indexOf(strategy.year);
+  const rows = ROWS.filter((r) => !OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5));
+  const notes = strategy.messages;
+
+  return (
+    <section className="panel p-3 sm:p-4" aria-labelledby="year-detail-title" data-testid="year-detail">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h3 id="year-detail-title" className="text-sm font-semibold text-ink">
+          Year detail — age {strategy.age}, {strategy.year}
+        </h3>
+        <div className="flex items-center gap-1">
+          <button type="button" className="btn-icon" aria-label="Previous year" disabled={idx <= 0} onClick={() => onSelectYear(years[idx - 1]!)}>
+            <ChevronLeft aria-hidden className="h-4 w-4" />
+          </button>
+          <label className="sr-only" htmlFor="year-select">
+            Select year
+          </label>
+          <select
+            id="year-select"
+            className="field-input w-auto py-1"
+            value={strategy.year}
+            onChange={(e) => onSelectYear(Number(e.target.value))}
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y} (age {strategy.age - strategy.year + y})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="Next year"
+            disabled={idx >= years.length - 1}
+            onClick={() => onSelectYear(years[idx + 1]!)}
+          >
+            <ChevronRight aria-hidden className="h-4 w-4" />
+          </button>
+          <button type="button" className="btn-icon" aria-label="Close year detail" onClick={onClose}>
+            <X aria-hidden className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm tabular-nums">
+          <caption className="sr-only">
+            Year {strategy.year} breakdown, no strategy compared with current strategy
+          </caption>
+          <thead>
+            <tr className="border-b border-line text-xs text-muted">
+              <th scope="col" className="py-1.5 pr-2 text-left font-medium">Item</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-medium">No strategy</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-medium">Strategy</th>
+              <th scope="col" className="hidden py-1.5 pl-2 text-right font-medium sm:table-cell">Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const b = baseline ? r.value(baseline) : null;
+              const s = r.value(strategy);
+              const emphasize = r.label.startsWith('Required RMD') || r.label.startsWith('Taxable');
+              return (
+                <tr key={r.label} className={`border-b border-line-soft ${emphasize ? 'font-semibold' : ''}`}>
+                  <th scope="row" className={`py-1.5 pr-2 text-left font-normal text-ink-2 ${r.label.startsWith('  ') ? 'pl-4' : ''} ${emphasize ? 'font-semibold text-ink' : ''}`}>
+                    {r.label.trim()}
+                  </th>
+                  <td className="px-2 py-1.5 text-right text-ink">{fmt(b, r.format)}</td>
+                  <td className="px-2 py-1.5 text-right text-ink">{fmt(s, r.format)}</td>
+                  <td className="hidden py-1.5 pl-2 text-right text-ink-2 sm:table-cell">
+                    {r.format === 'period' || b === null || s === null ? '' : formatSignedUsd(s - b)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {notes.length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs text-ink-2">
+          {notes.map((m, i) => (
+            <li key={i}>
+              <span className="font-semibold">{m.severity === 'error' ? 'Blocked' : m.severity === 'warning' ? 'Note' : 'Info'}:</span> {m.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

@@ -1,65 +1,136 @@
-# Engine F — v1 (Build-01)
+# RMD Smoothing Analyzer
 
-A tactile, dark-mode financial planning toy. Drag sliders, watch a Monte Carlo
-net-worth trajectory react live, and see federal + NC marginal tax bracket
-creep tracked alongside it.
+A web app for financial advisors that projects a client's future Required Minimum
+Distributions (RMDs). It shows how return assumptions, multi-year Roth conversions,
+and Qualified Charitable Distributions (QCDs) change the size and path of those
+distributions.
 
-## Running it
+It answers three questions:
 
-No build step — it's plain HTML/CSS/JS, same shape as Emberfell.
+1. How large could future RMDs get?
+2. How fast do they grow?
+3. How can conversions, QCDs, and return assumptions manage that path?
 
-1. Open a terminal in this folder
-2. `python3 -m http.server 8080` (or any static file server)
-3. Visit `http://localhost:8080`
+Lower RMDs are not automatically better. The app compares results neutrally and
+does not make recommendations.
 
-Or just open `index.html` directly in a browser (audio may be blocked until
-you click something, due to browser autoplay policy — this is expected and
-handled gracefully).
+> Hypothetical illustration only. Not a recommendation, forecast, or tax advice.
 
-## What's working in v1
+## How to open it
 
-- **Monte Carlo engine** (`engine.js`) — simulates thousands of net-worth
-  paths given savings rate, retirement age, spend, expected return, and
-  volatility. Outputs percentile bands (5/25/50/75/95, plus whatever the
-  confidence toggle needs).
-- **Tax engine** (`engine.js`) — federal (progressive brackets) + NC (flat
-  rate) marginal tax calculation, versioned by year so brackets can be
-  updated annually. Detects bracket-crossing ("creep") events across a
-  projected income path.
-- **Hero chart** (`app.js`, canvas-based) — median line, 25–75 "likely" band,
-  and a confidence-driven tail band that widens/narrows with the toggle.
-  Retirement age marked with a dashed line.
-- **Sliders** — retirement age, savings rate, retirement spend, expected
-  return, volatility, and the confidence-band toggle (50–99%). No clamping —
-  push them to the extremes and the plan will actually break.
-- **Status readouts** — SOLVENCY / TRAJECTORY / CONF. BAND, styled as
-  ship's-computer status lines.
-- **Hazard modal** — fires when simulated success probability drops below
-  50%, styled as a warning klaxon popup.
-- **Boot sequence** — low-poly spinning "F" cube, PS1-style, retro synth
-  stinger, scrolling boot log. Skippable.
-- **Aesthetic** — amber/green CRT phosphor, scanline overlay, holographic
-  panel layout.
+- **Live site:** see "Deployment status" below.
+- **On your own computer (for a developer):** install Node.js 20+, then run
+  `npm install` and `npm run dev`, and open the address it prints.
 
-## Known simplifications (v1, by design)
+Nothing you type is stored or sent anywhere. All calculations run in your browser,
+and refreshing the page resets to the default hypothetical client.
 
-- Tax bracket data is single-filer, placeholder 2025 figures, hardcoded in
-  `engine.js` — update `FEDERAL_BRACKETS` / `NC_TAX` as real numbers change,
-  or extend for filing status.
-- Retirement-phase "income" used for bracket-creep detection is a proxy
-  (withdrawal amount), not a real withdrawal-sequencing/account-type model
-  (no Traditional vs. Roth vs. taxable bucket distinction yet).
-- One asset-return distribution (normal, single mean/stdev) — no glide path,
-  no separate accumulation vs. retirement volatility.
-- Subsystem naming in the tax/sim panels is still generic — open for your
-  own MU-TH-UR-style designations.
-- No persistence yet — refreshing the page resets to default scenario
-  (nothing saved/compared across sessions).
+## What's in Phase 1
 
-## Natural next steps for Claude Code
+**Inputs:** date of birth; each account's prior December 31 balance (more than one
+Traditional IRA allowed, plus a Roth IRA); projection ending age (default 95);
+annual return, entered as one rate or as a stock/bond mix; optional Roth IRA
+contributions; optional extra pre-tax withdrawals; and an option to delay the first
+RMD to April 1 of the next year.
 
-- Scenario save/compare (name a scenario, store slider state + result)
-- IRMAA cliff detection layered onto the tax panel
-- Real subsystem names + copy pass
-- Account-type-aware withdrawal modeling (Traditional/Roth/taxable)
-- GitHub Pages deploy config
+**Planning levers** (side panel on desktop, "Inputs & planning levers" button on a phone):
+- **Investment returns.** Everything updates immediately.
+- **Roth conversions.** Fill a range of ages with an amount, then edit or delete
+  single years. Optional tax withholding. Any conversion that would use RMD dollars
+  is blocked or reduced, with a message explaining why.
+- **QCDs.** Recurring (amount, from age, through age) and one-time gifts. Age 70½
+  eligibility and the annual limit are enforced. QCDs count toward the RMD first.
+
+**Tab 1, RMD Projections:** one bar per year (by age or calendar year). Switch
+between *Required RMDs* and *Taxable IRA Distributions*. A "No strategy" baseline
+(same inputs, no conversions or QCDs) appears beside each bar, shown with a striped
+pattern. Conversions can be shown as a separate line. Click or tap a year for a full
+breakdown, baseline versus strategy. A year-by-year table is available.
+
+**Tab 2, Account Balances:** Traditional, Roth, and total December 31 balances,
+strategy (solid lines) versus no strategy (dashed lines).
+
+**Header:** Reset, and a Methodology panel with the calculation order, rules,
+sources, and known limitations.
+
+## Methodology (summary)
+
+Each year, for every scenario:
+
+1. Start with the prior December 31 balance.
+2. Required RMD = prior December 31 balance ÷ Uniform Lifetime Table factor.
+3. Apply QCDs (they count toward the RMD first).
+4. Take the rest of the RMD as a taxable distribution.
+5. Apply extra withdrawals.
+6. Apply Roth conversions (only after the RMD is satisfied).
+7. Add contributions.
+8. Apply the year's return to what remains.
+9. Record the December 31 balance.
+
+Balances are never rounded mid-calculation; only displayed numbers are rounded.
+
+RMD start age: born before 7/1/1949 → 70½; 7/1/1949–1950 → 72; 1951–1959 → 73
+(1959 per the 2024 proposed regulations); 1960 or later → 75. Full sources and
+verification notes are in [`docs/research.md`](docs/research.md).
+
+## Supported accounts
+
+| Account | Phase 1 | Rules applied |
+|---|---|---|
+| Traditional IRA (one or more) | Yes | RMD per IRA, total may come from any IRA (modeled pro rata) |
+| Roth IRA | Yes | No lifetime RMDs; receives conversions and contributions |
+| 401(k), 403(b), SEP, SIMPLE, Roth 401(k) | Not yet | The engine already holds their rules; the app doesn't offer them yet |
+
+## Known limitations
+
+- One person only. Spouses and the Joint and Last Survivor Table are not modeled
+  yet; the Uniform Lifetime Table is always used.
+- Traditional and Roth IRAs only. The still-working exception is not modeled.
+- Out of scope: inherited accounts, non-spouse beneficiaries, the 10-year rule,
+  death of a spouse during the projection, spousal rollovers.
+- Assumes none of the current year's RMD has been taken yet. A prior-year first RMD
+  deferred into this year is not modeled.
+- One constant return for every account in every year; no sequence-of-returns risk.
+- All flows happen before the year's growth, which slightly understates growth.
+- Withdrawals and conversions are taken pro rata across Traditional IRAs.
+- QCDs are annual. In the 70½ year they must be made on or after the 70½ date. The
+  one-time split-interest QCD is not modeled. Limits after 2026 use an editable
+  assumed value, held flat by default.
+- No income tax, IRMAA, Social Security, or penalty calculations. Balance totals are
+  pre-tax and not a measure of after-tax wealth.
+- Roth contribution limits and five-year rules are not enforced.
+
+## Testing
+
+- `npm test`: 79 calculation and component tests, including IRS boundary cases and
+  three hand-calculated multi-year projections with expected numbers in comments.
+- `npm run test:e2e`: browser tests on desktop Chrome and an emulated iPhone 13
+  viewport (iPhone screen size, touch, and user agent, but running in Chromium, not
+  real Safari). Set `PW_WEBKIT=1` to add a real WebKit run where WebKit is installed,
+  and `PW_BASE_URL=<url>` to test a deployed site.
+- `npm run typecheck` and `npm run build`.
+
+## How to redeploy
+
+The site is hosted on Vercel and linked to this GitHub repository. Any change merged
+into the branch Vercel deploys from goes live automatically within about a minute.
+To redeploy by hand: sign in at vercel.com, open the project, go to **Deployments**,
+click **⋯** on the latest one, and choose **Redeploy**.
+
+## Deployment status
+
+Not deployed yet. Vercel needs a one-time sign-in by the account owner; see the
+latest progress report.
+
+## Project layout
+
+```
+src/calculations/  pure TypeScript math (projection engine, RMD rules, validation)
+src/data/          IRS tables and dated limits (Uniform Lifetime Table, QCD limits, account rules)
+src/strategies/    conversion and QCD schedule helpers
+src/inputs/        input panels
+src/charts/        Recharts charts and legends
+src/components/    layout, summary, year detail, methodology
+tests/             Vitest (calculations, components) and Playwright (e2e)
+docs/research.md   sources and verification notes
+```

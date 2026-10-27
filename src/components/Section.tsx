@@ -1,0 +1,38 @@
+import { ChevronDown } from 'lucide-react';
+import { useId, useState, type ReactNode } from 'react';
+
+interface Props {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  /** Short status shown beside the title, e.g. "3 years". */
+  badge?: string;
+}
+
+/** Collapsible sidebar section. */
+export function Section({ title, children, defaultOpen = true, badge }: Props) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+  return (
+    <section className="border-b border-line-soft last:border-b-0">
+      <h2>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="section-title">{title}</span>
+          <span className="flex items-center gap-2">
+            {badge && <span className="rounded bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">{badge}</span>}
+            <ChevronDown aria-hidden className={`h-4 w-4 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+      </h2>
+      <div id={id} hidden={!open} className="space-y-3 px-4 pb-4">
+        {children}
+      </div>
+    </section>
+  );
+}
