@@ -1,0 +1,353 @@
+import { ACCOUNT_RULES, hasLifetimeRmd } from '../data/accountRules';
+import type {
+  Account,
+  AccountYear,
+  EngineMessage,
+  PersonYear,
+  ProjectionResult,
+  Scenario,
+  YearResult,
+  YearTotals,
+} from '../types';
+import { emptyStrategy, requestedConversion, requestedQcd } from '../strategies/schedule';
+import { allocateProRata } from './allocate';
+import { ageAttainedInYear, dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from './dates';
+import { qcdLimitForYear } from './qcd';
+import { effectiveAnnualReturn } from './returns';
+import { computeRmd, getRmdStart, uniformLifetimeDivisor } from './rmdRules';
+import { validateScenario } from './validate';
+
+const usd = (n: number) =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+/**
+ * Projects every account year by year. Annual order (same for every year and
+ * every scenario; see the Methodology panel):
+ *   1) start from the prior December 31 balance
+ *   2) compute the required RMD
+ *   3) apply QCDs (counting toward the RMD first)
+ *   4) take the remaining RMD as a taxable distribution
+ *   5) apply extra withdrawals
+ *   6) apply Roth conversions
+ *   7) add contributions
+ *   8) apply the year's investment return to the remaining balance
+ *   9) record the December 31 balance
+ * Nothing is rounded here; rounding is for display only.
+ */
+export function runProjection(scenario: Scenario): ProjectionResult {
+  const validation = validateScenario(scenario);
+  const errors = validation.filter((m) => m.severity === 'error');
+  if (errors.length > 0) return { ok: false, errors, years: [], messages: validation };
+
+  const messages: EngineMessage[] = [...validation];
+  const primary = scenario.people[0]!;
+  const primaryBirth = parseIsoDate(primary.dateOfBirth)!;
+  const lastYear = primaryBirth.year + scenario.endAge;
+  const rate = effectiveAnnualReturn(scenario.returns);
+  const strategy = scenario.strategy;
+
+  // Working balances, keyed by account id, carried from year to year.
+  const balance = new Map<string, number>(scenario.accounts.map((a) => [a.id, a.priorYearEndBalance]));
+  // First-year RMD amounts deferred to April 1 of the next year, keyed by RMD bucket.
+  let deferred = new Map<string, number>();
+
+  const years: YearResult[] = [];
+  for (let year = scenario.startYear; year <= lastYear; year++) {
+    const yearMessages: EngineMessage[] = [];
+    const accountYears = new Map<string, AccountYear>();
+    for (const a of scenario.accounts) {
+      const prior = balance.get(a.id)!;
+      accountYears.set(a.id, {
+        accountId: a.id,
+        type: a.type,
+        priorYearEndBalance: prior,
+        rmdComputed: 0,
+        qcd: 0,
+        rmdTaxableWithdrawal: 0,
+        extraWithdrawal: 0,
+        conversionOut: 0,
+        conversionIn: 0,
+        contribution: 0,
+        growth: 0,
+        endBalance: prior,
+      });
+    }
+    // `avail` tracks each account's balance as flows are applied during the year.
+    const avail = new Map(balance);
+    const take = (accounts: Account[], amount: number, field: 'qcd' | 'rmdTaxableWithdrawal' | 'extraWithdrawal' | 'conversionOut') => {
+      const parts = allocateProRata(amount, accounts.map((a) => avail.get(a.id)!));
+      let taken = 0;
+      accounts.forEach((a, i) => {
+        const part = parts[i]!;
+        avail.set(a.id, avail.get(a.id)! - part);
+        accountYears.get(a.id)![field] += part;
+        taken += part;
+      });
+      return taken;
+    };
+    const sumAvail = (accounts: Account[]) => accounts.reduce((s, a) => s + avail.get(a.id)!, 0);
+
+    const nextDeferred = new Map<string, number>();
+    const personYears: PersonYear[] = [];
+
+    for (const person of scenario.people) {
+      const birth = parseIsoDate(person.dateOfBirth)!;
+      const age = ageAttainedInYear(birth, year);
+      const start = getRmdStart(birth);
+      const isRmdYear = year >= start.firstRmdYear;
+      const isFirstRmdYear = year === start.firstRmdYear;
+      const deferralThisYear = person.delayFirstRmd && isFirstRmdYear;
+      const distributionPeriod = isRmdYear ? uniformLifetimeDivisor(age) : null;
+      const msg = (severity: EngineMessage['severity'], code: string, text: string, field?: string) =>
+        yearMessages.push({ severity, code, text, year, personId: person.id, field });
+
+      const owned = scenario.accounts.filter((a) => a.ownerId === person.id);
+      const pretaxIras = owned.filter(
+        (a) => ACCOUNT_RULES[a.type].taxTreatment === 'pretax' && ACCOUNT_RULES[a.type].rmdAggregation === 'ira',
+      );
+      const qcdSources = pretaxIras.filter((a) => ACCOUNT_RULES[a.type].qcdEligible);
+      const rothIra = owned.find((a) => a.type === 'roth_ira');
+
+      // RMD buckets: all of the person's IRAs together, and each employer plan on its own.
+      const buckets: { key: string; accounts: Account[] }[] = [];
+      const iraRmdAccounts = owned.filter((a) => ACCOUNT_RULES[a.type].rmdAggregation === 'ira' && hasLifetimeRmd(a.type, year));
+      if (iraRmdAccounts.length) buckets.push({ key: `${person.id}:ira`, accounts: iraRmdAccounts });
+      for (const a of owned) {
+        if (ACCOUNT_RULES[a.type].rmdAggregation === 'plan' && hasLifetimeRmd(a.type, year)) {
+          buckets.push({ key: `${person.id}:plan:${a.id}`, accounts: [a] });
+        }
+      }
+
+      // Step 2: required RMD per account (prior Dec 31 balance ÷ distribution period).
+      let rmdForYear = 0;
+      let deferredIn = 0;
+      const bucketState = buckets.map((b) => {
+        let bucketRmd = 0;
+        if (distributionPeriod !== null) {
+          for (const a of b.accounts) {
+            const r = computeRmd(accountYears.get(a.id)!.priorYearEndBalance, distributionPeriod);
+            accountYears.get(a.id)!.rmdComputed = r;
+            bucketRmd += r;
+          }
+        }
+        const carriedIn = deferred.get(b.key) ?? 0;
+        rmdForYear += bucketRmd;
+        deferredIn += carriedIn;
+        return {
+          ...b,
+          // Must be distributed by December 31 this year.
+          dueThisYear: carriedIn + (deferralThisYear ? 0 : bucketRmd),
+          // First-year RMD that may instead be taken by April 1 next year.
+          deferrable: deferralThisYear ? bucketRmd : 0,
+        };
+      });
+      const iraBucket = bucketState.find((b) => b.key === `${person.id}:ira`);
+      // Amount the IRS requires to be distributed in this calendar year.
+      const requiredRmd = bucketState.reduce((s, b) => s + b.dueThisYear, 0);
+
+      // Step 3: QCDs, counting toward the IRA RMD first.
+      let qcd = 0;
+      let qcdTowardRmd = 0;
+      const qcdRequested = requestedQcd(strategy, person.id, year, age);
+      if (qcdRequested > 0) {
+        const halfDate = dateAttaining70AndAHalf(birth);
+        if (halfDate.year > year) {
+          msg('error', 'qcd-age', `Age ${age} (${year}): QCD of ${usd(qcdRequested)} blocked. QCDs require age 70½ (reached ${formatCalendarDate(halfDate)}).`, 'qcd');
+        } else {
+          let amount = qcdRequested;
+          if (halfDate.year === year) {
+            msg('info', 'qcd-half-year', `Age ${age} (${year}): QCDs must be made on or after ${formatCalendarDate(halfDate)}, the date age 70½ is reached.`, 'qcd');
+          }
+          const limit = qcdLimitForYear(scenario.qcdLimits, year);
+          if (amount > limit) {
+            msg('warning', 'qcd-limit', `Age ${age} (${year}): QCD of ${usd(amount)} exceeds the ${usd(limit)} annual limit; limited to ${usd(limit)}.`, 'qcd');
+            amount = limit;
+          }
+          const available = sumAvail(qcdSources);
+          if (amount > available) {
+            msg('warning', 'qcd-balance', `Age ${age} (${year}): QCD limited to the ${usd(available)} remaining in eligible IRAs.`, 'qcd');
+          }
+          qcd = take(qcdSources, amount, 'qcd');
+          if (iraBucket) {
+            let left = qcd;
+            const toDue = Math.min(left, iraBucket.dueThisYear);
+            iraBucket.dueThisYear -= toDue;
+            left -= toDue;
+            const toDeferrable = Math.min(left, iraBucket.deferrable);
+            iraBucket.deferrable -= toDeferrable;
+            qcdTowardRmd = toDue + toDeferrable;
+          }
+        }
+      }
+
+      // Step 4: remaining RMD as a taxable distribution, from each bucket's own accounts.
+      let rmdTaxable = 0;
+      let rmdShortfall = 0;
+      for (const b of bucketState) {
+        const taken = take(b.accounts, b.dueThisYear, 'rmdTaxableWithdrawal');
+        rmdTaxable += taken;
+        rmdShortfall += b.dueThisYear - taken;
+        b.dueThisYear -= taken;
+      }
+      if (rmdShortfall > 0.005) {
+        msg('warning', 'rmd-shortfall', `Age ${age} (${year}): accounts are depleted; ${usd(rmdShortfall)} of the required RMD could not be distributed.`);
+      }
+
+      // Step 5: extra pre-tax withdrawals. In a deferral year they count toward the first-year RMD.
+      let extraRequested = 0;
+      for (const w of scenario.extraWithdrawals) {
+        if (w.personId === person.id && age >= w.startAge && age <= w.endAge) extraRequested += w.annualAmount;
+      }
+      let extra = 0;
+      if (extraRequested > 0) {
+        const available = sumAvail(pretaxIras);
+        if (extraRequested > available) {
+          msg('warning', 'extra-balance', `Age ${age} (${year}): extra withdrawal limited to the ${usd(available)} remaining.`, 'extraWithdrawals');
+        }
+        extra = take(pretaxIras, extraRequested, 'extraWithdrawal');
+        if (iraBucket && iraBucket.deferrable > 0) iraBucket.deferrable -= Math.min(extra, iraBucket.deferrable);
+      }
+
+      const rmdDeferredToNextYear = bucketState.reduce((s, b) => s + b.deferrable, 0);
+      for (const b of bucketState) if (b.deferrable > 0) nextDeferred.set(b.key, b.deferrable);
+      if (rmdDeferredToNextYear > 0 && year === lastYear) {
+        msg('info', 'deferral-beyond-horizon', `Age ${age} (${year}): ${usd(rmdDeferredToNextYear)} deferred to April 1, ${year + 1}, after the projection ends.`);
+      }
+
+      // Step 6: Roth conversions, only after the RMD has been satisfied.
+      const conversionRequested = requestedConversion(strategy.conversions, person.id, year);
+      let conversionGross = 0;
+      let conversionWithheld = 0;
+      let conversionToRoth = 0;
+      if (conversionRequested > 0) {
+        if (!rothIra) {
+          msg('error', 'conversion-no-roth', `Age ${age} (${year}): conversion blocked; add a Roth IRA to receive it.`, 'conversion');
+        } else if (rmdDeferredToNextYear > 0) {
+          msg(
+            'error',
+            'conversion-deferred-rmd',
+            `Age ${age} (${year}): conversion of ${usd(conversionRequested)} blocked. In the first RMD year, distributions count toward that year's RMD first, so a conversion is only allowed after the ${usd(rmdDeferredToNextYear)} first-year RMD is taken in ${year}. Turn off the April 1 deferral or move the conversion.`,
+            'conversion',
+          );
+        } else if (rmdShortfall > 0.005) {
+          msg('error', 'conversion-rmd-unmet', `Age ${age} (${year}): conversion blocked because the required RMD could not be fully distributed.`, 'conversion');
+        } else {
+          const available = sumAvail(pretaxIras);
+          let amount = conversionRequested;
+          if (amount > available) {
+            msg(
+              'error',
+              'conversion-exceeds',
+              `Age ${age} (${year}): conversion of ${usd(conversionRequested)} exceeds the ${usd(available)} left after the RMD and withdrawals. Only ${usd(available)} is converted; the excess is blocked.`,
+              'conversion',
+            );
+            amount = available;
+          }
+          conversionGross = take(pretaxIras, amount, 'conversionOut');
+          conversionWithheld = conversionGross * strategy.conversionWithholdingRate;
+          conversionToRoth = conversionGross - conversionWithheld;
+          avail.set(rothIra.id, avail.get(rothIra.id)! + conversionToRoth);
+          accountYears.get(rothIra.id)!.conversionIn += conversionToRoth;
+        }
+      }
+
+      // Step 7: contributions.
+      for (const a of owned) {
+        if (a.contribution && a.contribution.annualAmount > 0 && age <= a.contribution.throughAge) {
+          avail.set(a.id, avail.get(a.id)! + a.contribution.annualAmount);
+          accountYears.get(a.id)!.contribution += a.contribution.annualAmount;
+        }
+      }
+
+      const taxableDistribution = rmdTaxable + extra;
+      personYears.push({
+        personId: person.id,
+        age,
+        isRmdYear,
+        isFirstRmdYear,
+        distributionPeriod,
+        rmdForYear,
+        deferredRmdFromPriorYear: deferredIn,
+        rmdDeferredToNextYear,
+        requiredRmd,
+        qcd,
+        qcdTowardRmd,
+        taxableDistribution,
+        rmdTaxableWithdrawal: rmdTaxable,
+        extraWithdrawal: extra,
+        totalDistributions: qcd + taxableDistribution,
+        conversionRequested,
+        conversionGross,
+        conversionWithheld,
+        conversionToRoth,
+        rmdShortfall,
+      });
+    }
+
+    // Steps 8–9: growth on the remaining balance, then record December 31.
+    for (const a of scenario.accounts) {
+      const ay = accountYears.get(a.id)!;
+      const remaining = avail.get(a.id)!;
+      ay.growth = remaining * rate;
+      ay.endBalance = remaining + ay.growth;
+      balance.set(a.id, ay.endBalance);
+    }
+    deferred = nextDeferred;
+
+    const accounts = scenario.accounts.map((a) => accountYears.get(a.id)!);
+    years.push({
+      year,
+      age: ageAttainedInYear(primaryBirth, year),
+      returnRate: rate,
+      people: personYears,
+      accounts,
+      totals: sumTotals(accounts, personYears),
+      messages: yearMessages,
+    });
+    messages.push(...yearMessages);
+  }
+
+  return { ok: true, errors: [], years, messages };
+}
+
+function sumTotals(accounts: AccountYear[], people: PersonYear[]): YearTotals {
+  const isRoth = (a: AccountYear) => ACCOUNT_RULES[a.type].taxTreatment === 'roth';
+  const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
+  const pretax = accounts.filter((a) => !isRoth(a));
+  const roth = accounts.filter(isRoth);
+  const endPretax = sum(pretax, (a) => a.endBalance);
+  const endRoth = sum(roth, (a) => a.endBalance);
+  return {
+    priorBalancePretax: sum(pretax, (a) => a.priorYearEndBalance),
+    priorBalanceRoth: sum(roth, (a) => a.priorYearEndBalance),
+    requiredRmd: sum(people, (p) => p.requiredRmd),
+    rmdForYear: sum(people, (p) => p.rmdForYear),
+    deferredRmdFromPriorYear: sum(people, (p) => p.deferredRmdFromPriorYear),
+    rmdDeferredToNextYear: sum(people, (p) => p.rmdDeferredToNextYear),
+    qcd: sum(people, (p) => p.qcd),
+    taxableDistribution: sum(people, (p) => p.taxableDistribution),
+    extraWithdrawal: sum(people, (p) => p.extraWithdrawal),
+    totalDistributions: sum(people, (p) => p.totalDistributions),
+    conversionGross: sum(people, (p) => p.conversionGross),
+    conversionWithheld: sum(people, (p) => p.conversionWithheld),
+    contributions: sum(accounts, (a) => a.contribution),
+    growth: sum(accounts, (a) => a.growth),
+    endBalancePretax: endPretax,
+    endBalanceRoth: endRoth,
+    endBalanceTotal: endPretax + endRoth,
+  };
+}
+
+/** Same inputs with no conversions and no QCDs: the "No strategy" baseline. */
+export function toBaseline(scenario: Scenario): Scenario {
+  return { ...scenario, strategy: emptyStrategy(scenario.strategy.conversionWithholdingRate) };
+}
+
+export interface Comparison {
+  baseline: ProjectionResult;
+  strategy: ProjectionResult;
+}
+
+export function runComparison(scenario: Scenario): Comparison {
+  return { baseline: runProjection(toBaseline(scenario)), strategy: runProjection(scenario) };
+}
