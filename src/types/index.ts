@@ -24,6 +24,12 @@ export interface ContributionRule {
   annualAmount: number;
   /** Contributions are made in every projection year through this age (inclusive). */
   throughAge: number;
+  /**
+   * Pre-tax accounts only: whether the contribution is tax-deductible. Deductible
+   * contributions for years ending on or after age 70½ reduce later QCD exclusions
+   * (IRC §408(d)(8)(A)). Defaults to true. Ignored for Roth accounts.
+   */
+  deductible?: boolean;
 }
 
 export interface Account {
@@ -80,6 +86,30 @@ export interface Strategy {
   oneTimeQcds: OneTimeQcd[];
 }
 
+export type FilingStatus = 'single' | 'joint';
+
+/** Inputs for the IRMAA check and the estimated tax comparison. Not used by the RMD projection itself. */
+export interface AnalysisSettings {
+  filingStatus: FilingStatus;
+  /** People on Medicare whose premiums IRMAA affects (1 or 2). */
+  medicareEnrollees: 1 | 2;
+  /** Other income counted in MAGI, in first-projection-year dollars (entered, never calculated). */
+  otherIncome: number;
+  /** Annual rate used to grow other income and to index IRMAA thresholds and surcharges after the latest published year. */
+  inflationRate: number;
+  /** Assumed marginal tax rate on taxable income the strategy adds (mostly conversion years). */
+  addedIncomeTaxRate: number;
+  /** Assumed marginal tax rate on taxable income the strategy avoids, including pre-tax money left at the end. */
+  avoidedIncomeTaxRate: number;
+  /** Annual rate used to express future dollars in present value (ignored when discountMatchesReturn). */
+  discountRate: number;
+  /**
+   * Use the investment return as the discount rate. With equal tax rates this
+   * makes a Roth conversion tax-neutral in present value, the standard result.
+   */
+  discountMatchesReturn: boolean;
+}
+
 export interface Scenario {
   /** First projection year. Balances are as of December 31 of the prior year. */
   startYear: number;
@@ -91,6 +121,7 @@ export interface Scenario {
   extraWithdrawals: ExtraWithdrawalRule[];
   qcdLimits: QcdLimitSettings;
   strategy: Strategy;
+  analysis: AnalysisSettings;
 }
 
 export type MessageSeverity = 'error' | 'warning' | 'info';
@@ -141,7 +172,14 @@ export interface PersonYear {
   qcd: number;
   /** QCD dollars that counted toward the required RMD. */
   qcdTowardRmd: number;
-  /** Taxable distributions: RMD not covered by QCDs, plus extra withdrawals. */
+  /**
+   * QCD dollars that are taxable because of deductible IRA contributions made
+   * for years on or after age 70½ (IRC §408(d)(8)(A)). Included in taxableDistribution.
+   */
+  qcdNotExcluded: number;
+  /** Deductible pre-tax IRA contributions this year (reduce AGI/MAGI). */
+  deductibleContributions: number;
+  /** Taxable distributions: RMD not covered by QCDs, plus extra withdrawals, plus any QCD amount made taxable by the contribution offset. */
   taxableDistribution: number;
   rmdTaxableWithdrawal: number;
   extraWithdrawal: number;
@@ -163,9 +201,11 @@ export interface YearTotals {
   deferredRmdFromPriorYear: number;
   rmdDeferredToNextYear: number;
   qcd: number;
+  qcdNotExcluded: number;
   taxableDistribution: number;
   extraWithdrawal: number;
   totalDistributions: number;
+  deductibleContributions: number;
   conversionGross: number;
   conversionWithheld: number;
   contributions: number;

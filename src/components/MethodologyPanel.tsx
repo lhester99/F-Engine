@@ -13,7 +13,11 @@ export const KNOWN_LIMITATIONS = [
   'RMDs, QCDs, extra withdrawals, and conversions are taken pro rata across Traditional IRAs. IRS rules allow the IRA RMD total to come from any IRA, so actual account-level balances may differ.',
   'QCDs are modeled annually. In the year age 70½ is reached, a QCD is only valid if made on or after the 70½ date. The one-time QCD to a split-interest entity is not modeled.',
   'QCD limits after the latest published year use an editable assumed value (default: held flat), which understates future inflation indexing.',
-  'No income tax, IRMAA, Social Security, or penalty calculations. Tax withheld on conversions is shown but not reconciled to a tax liability. The 10% early-distribution penalty before age 59½ is not modeled.',
+  'Tax figures are estimates at the two marginal rates you enter, not a tax calculation. Brackets, deductions, Social Security taxation, credits, and state rules are not modeled, so a large conversion that crosses brackets is taxed at one rate. The 10% early-distribution penalty before age 59½ is not modeled.',
+  'The tax comparison treats QCD dollars as income avoided. It assumes the client would not otherwise make the same gifts; if they would give cash anyway, the real benefit of a QCD depends on whether they itemize.',
+  'IRMAA uses estimated MAGI: the single other-income amount you enter (grown with inflation) plus modeled IRA income. Married filing separately, IRMAA appeals for life-changing events, and the spouse’s own Medicare timing are not modeled. Income in the last two projection years affects premiums after the projection and is not counted.',
+  'IRMAA thresholds and surcharges after 2026 are projections at the inflation rate entered, not published figures.',
+  'Traditional IRA contribution limits, deductibility rules, and earned-income requirements are not checked; contributions go to the first Traditional IRA.',
   'Balance comparisons are pre-tax account values only. Withdrawn RMDs and QCDs leave the model, and income tax on conversions is assumed to be paid from outside the accounts unless withholding is entered, so a higher strategy total does not mean higher after-tax wealth.',
   'Roth IRA contribution limits, earned-income requirements, and the Roth five-year rules are not enforced.',
 ];
@@ -138,6 +142,64 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
                 {PUBLISHED_QCD_LIMITS.map((e) => `${e.year} ${formatUsd(e.limit)}`).join('; ')}.
               </li>
               <li>Each person’s RMDs are computed independently before being combined (engine supports spouses).</li>
+              <li>
+                Pre-tax contributions are added after the year’s RMD (step 7), so they raise the next year’s RMD. Deductible
+                IRA contributions for years on or after the year age 70½ is reached reduce the tax-free amount of later QCDs,
+                dollar for dollar, carried forward until used (IRC §408(d)(8)(A)). The QCD still counts toward the RMD; the
+                matched amount is treated as a taxable distribution.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Estimated tax trade-off</h3>
+            <p className="mb-2">
+              This is an estimate at the marginal rates you enter, not a tax calculation. For each year, the app compares
+              taxable IRA income (taxable distributions plus Roth conversions) under the strategy and under no strategy:
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Income the strategy adds is taxed at the “income added” rate.</li>
+              <li>Income the strategy avoids is taxed at the “income avoided” rate.</li>
+              <li>
+                The difference in pre-tax balances left at the end of the projection counts as income added or avoided one
+                year after the last year, because that money is taxable whenever it is withdrawn, by the client or heirs.
+              </li>
+              <li>
+                Present value discounts each year to the start of the first projection year. By default the discount rate is
+                the investment return; with equal tax rates, a Roth conversion is then tax-neutral, the standard result.
+              </li>
+              <li>
+                Breakeven rate: the “income avoided” rate at which the present-value net is zero, holding the “income added”
+                rate fixed. Above it, estimated income tax is lower under the strategy.
+              </li>
+              <li>
+                QCD gifts count as income not taxed. The comparison covers income tax only and does not treat the gifts
+                themselves as a cost.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Medicare IRMAA</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Estimated MAGI = other income entered (grown with inflation) + taxable IRA distributions + Roth conversions −
+                deductible IRA contributions. QCDs are excluded from MAGI.
+              </li>
+              <li>
+                Each year’s MAGI sets the premium surcharge two years later. IRMAA applies only from the premium year the
+                client is 65 or older.
+              </li>
+              <li>
+                Tiers apply when MAGI is more than a threshold; the top tier applies at or above it. 2026 thresholds: single
+                $109,000 / $137,000 / $171,000 / $205,000 / $500,000; joint $218,000 / $274,000 / $342,000 / $410,000 /
+                $750,000. Monthly surcharges per person (Part B + Part D): $95.70, $240.40, $385.00, $529.60, $578.00.
+              </li>
+              <li>
+                Later years: thresholds grow at the inflation rate and are rounded to the nearest $1,000, as the statute
+                requires; the top tier stays at $500,000 / $750,000 through 2027. Surcharges grow at the same rate.
+              </li>
+              <li>Annual surcharge = monthly surcharge × 12 × the number of people on Medicare.</li>
             </ul>
           </section>
 
@@ -148,7 +210,8 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
               <li>Treas. Reg. §1.401(a)(9)-9 (life expectancy and distribution period tables), as amended by T.D. 9930 (November 2020), effective 2022.</li>
               <li>Treas. Reg. §1.401(a)(9) final regulations (T.D. 10001) and proposed regulations, published July 19, 2024.</li>
               <li>SECURE Act (2019) §114; SECURE 2.0 Act (2022) §107 (applicable age), §307 (QCD indexing), §325 (Roth 401(k)).</li>
-              <li>IRC §408(d)(8) (qualified charitable distributions); IRS notices announcing the indexed QCD limit.</li>
+              <li>IRC §408(d)(8) (qualified charitable distributions), including the reduction for deductible contributions after age 70½ added by the SECURE Act (2019) §107; IRS notices announcing the indexed QCD limit.</li>
+              <li>Social Security Act §1839(i) (Part B income-related premium) and §1860D-13(a)(7) (Part D); CMS announcement of 2026 Medicare Part B premiums and IRMAA amounts.</li>
             </ul>
             <p className="mt-2 text-xs text-muted">
               Verification notes, dates, and any figures confirmed only through secondary sources are recorded in the

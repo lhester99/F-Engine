@@ -16,6 +16,7 @@
   --color-conversion: #c2571a;
   --color-roth: #1a8a66;
   --color-total: #14213d;
+  --color-threshold: #a3470f;
   --color-error: #b42318;
   --color-error-soft: #fef3f2;
   --color-warning: #8a5a00;
@@ -87,5 +88,35 @@
   .seg-btn[aria-pressed='true'],
   .seg-btn[aria-selected='true'] {
     @apply bg-surface text-ink shadow-sm ring-1 ring-line;
+  }
+}
+
+/* Printed client summary: inputs and controls are hidden in markup with print:hidden. */
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+  body {
+    background: #fff;
+  }
+  .panel {
+    border-color: #c8ced6;
+  }
+  /* Charts keep their on-screen proportions and shrink to fit the page width. */
+  /* Recharts nests the chart in a zero-size div; give it the page width so max-width works. */
+  .recharts-responsive-container > div {
+    width: 100% !important;
+    height: auto !important;
+  }
+  .recharts-wrapper {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  .recharts-surface {
+    max-width: 100%;
+    height: auto;
+  }
+  .recharts-tooltip-wrapper {
+    display: none !important;
   }
 }

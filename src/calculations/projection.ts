@@ -50,6 +50,9 @@ export function runProjection(scenario: Scenario): ProjectionResult {
   const balance = new Map<string, number>(scenario.accounts.map((a) => [a.id, a.priorYearEndBalance]));
   // First-year RMD amounts deferred to April 1 of the next year, keyed by RMD bucket.
   let deferred = new Map<string, number>();
+  // Deductible IRA contributions for years on or after age 70½ not yet used to
+  // reduce a QCD exclusion (IRC §408(d)(8)(A)), keyed by person.
+  const qcdOffsetPool = new Map<string, number>();
 
   const years: YearResult[] = [];
   for (let year = scenario.startYear; year <= lastYear; year++) {
@@ -107,6 +110,19 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       );
       const qcdSources = pretaxIras.filter((a) => ACCOUNT_RULES[a.type].qcdEligible);
       const rothIra = owned.find((a) => a.type === 'roth_ira');
+      const halfDate = dateAttaining70AndAHalf(birth);
+
+      // Deductible pre-tax IRA contributions this year. Those for years ending on or
+      // after the 70½ date add to the QCD offset, including against this year's QCDs,
+      // as on the tax return.
+      let deductibleContributions = 0;
+      for (const a of pretaxIras) {
+        const c = a.contribution;
+        if (c && c.annualAmount > 0 && age <= c.throughAge && c.deductible !== false) deductibleContributions += c.annualAmount;
+      }
+      if (year >= halfDate.year) {
+        qcdOffsetPool.set(person.id, (qcdOffsetPool.get(person.id) ?? 0) + deductibleContributions);
+      }
 
       // RMD buckets: all of the person's IRAs together, and each employer plan on its own.
       const buckets: { key: string; accounts: Account[] }[] = [];
@@ -148,9 +164,9 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       // Step 3: QCDs, counting toward the IRA RMD first.
       let qcd = 0;
       let qcdTowardRmd = 0;
+      let qcdNotExcluded = 0;
       const qcdRequested = requestedQcd(strategy, person.id, year, age);
       if (qcdRequested > 0) {
-        const halfDate = dateAttaining70AndAHalf(birth);
         if (halfDate.year > year) {
           msg('error', 'qcd-age', `Age ${age} (${year}): QCD of ${usd(qcdRequested)} blocked. QCDs require age 70½ (reached ${formatCalendarDate(halfDate)}).`, 'qcd');
         } else {
@@ -176,6 +192,19 @@ export function runProjection(scenario: Scenario): ProjectionResult {
             const toDeferrable = Math.min(left, iraBucket.deferrable);
             iraBucket.deferrable -= toDeferrable;
             qcdTowardRmd = toDue + toDeferrable;
+          }
+          // The QCD still counts toward the RMD, but the part matched by post-70½
+          // deductible contributions is not excluded from income.
+          const pool = qcdOffsetPool.get(person.id) ?? 0;
+          qcdNotExcluded = Math.min(qcd, pool);
+          if (qcdNotExcluded > 0) {
+            qcdOffsetPool.set(person.id, pool - qcdNotExcluded);
+            msg(
+              'info',
+              'qcd-contribution-offset',
+              `Age ${age} (${year}): ${usd(qcdNotExcluded)} of the QCD is taxable because of deductible IRA contributions made after age 70½.`,
+              'qcd',
+            );
           }
         }
       }
@@ -259,7 +288,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         }
       }
 
-      const taxableDistribution = rmdTaxable + extra;
+      const taxableDistribution = rmdTaxable + extra + qcdNotExcluded;
       personYears.push({
         personId: person.id,
         age,
@@ -272,10 +301,13 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         requiredRmd,
         qcd,
         qcdTowardRmd,
+        qcdNotExcluded,
+        deductibleContributions,
         taxableDistribution,
         rmdTaxableWithdrawal: rmdTaxable,
         extraWithdrawal: extra,
-        totalDistributions: qcd + taxableDistribution,
+        // QCD dollars are counted once, even when part of a QCD is taxable.
+        totalDistributions: qcd + rmdTaxable + extra,
         conversionRequested,
         conversionGross,
         conversionWithheld,
@@ -325,6 +357,8 @@ function sumTotals(accounts: AccountYear[], people: PersonYear[]): YearTotals {
     deferredRmdFromPriorYear: sum(people, (p) => p.deferredRmdFromPriorYear),
     rmdDeferredToNextYear: sum(people, (p) => p.rmdDeferredToNextYear),
     qcd: sum(people, (p) => p.qcd),
+    qcdNotExcluded: sum(people, (p) => p.qcdNotExcluded),
+    deductibleContributions: sum(people, (p) => p.deductibleContributions),
     taxableDistribution: sum(people, (p) => p.taxableDistribution),
     extraWithdrawal: sum(people, (p) => p.extraWithdrawal),
     totalDistributions: sum(people, (p) => p.totalDistributions),

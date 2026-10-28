@@ -23,6 +23,8 @@ export function ClientPanel({ scenario, update, messages }: Props) {
   const priorYear = scenario.startYear - 1;
   const traditional = scenario.accounts.filter((a) => a.type === 'traditional_ira');
   const roth = scenario.accounts.find((a) => a.type === 'roth_ira');
+  const firstTrad = traditional[0];
+  const tradContribution = firstTrad?.contribution ?? { annualAmount: 0, throughAge: 72, deductible: true };
   const extra = scenario.extraWithdrawals[0];
   const dobError = fieldError(messages, 'dateOfBirth');
   const deferralNotes = messages.filter((m) => m.field === 'delayFirstRmd');
@@ -127,6 +129,44 @@ export function ClientPanel({ scenario, update, messages }: Props) {
           <Plus aria-hidden className="h-4 w-4" /> Add Traditional IRA
         </button>
       </fieldset>
+
+      {firstTrad && (
+        <fieldset className="space-y-2">
+          <legend className="field-label">Pre-tax contributions to {firstTrad.label}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label="Annual pre-tax contribution"
+              kind="currency"
+              min={0}
+              value={tradContribution.annualAmount}
+              onCommit={(v) => setAccount(firstTrad.id, { contribution: { ...tradContribution, annualAmount: v } })}
+              testId="trad-contribution"
+            />
+            <NumberField
+              label="Pre-tax contributions through age"
+              kind="integer"
+              min={0}
+              max={120}
+              value={tradContribution.throughAge}
+              onCommit={(v) => setAccount(firstTrad.id, { contribution: { ...tradContribution, throughAge: v } })}
+              testId="trad-contribution-age"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-accent"
+              checked={tradContribution.deductible !== false}
+              onChange={(e) => setAccount(firstTrad.id, { contribution: { ...tradContribution, deductible: e.target.checked } })}
+            />
+            Contributions are tax-deductible
+          </label>
+          <p className="field-hint">
+            Added after the year's RMD, so they raise next year's RMD. Deductible contributions after age 70½ make an equal
+            amount of later QCDs taxable. Deductibility and contribution limits are not checked.
+          </p>
+        </fieldset>
+      )}
 
       {roth && (
         <fieldset className="space-y-2">

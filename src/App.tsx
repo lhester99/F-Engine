@@ -1,8 +1,15 @@
-import { BookOpen, RotateCcw, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { BookOpen, ChevronDown, MonitorPlay, Printer, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { BalanceChart, BALANCE_SERIES } from './charts/BalanceChart';
 import { ChartLegend, HatchSwatch, LineSwatch, SolidSwatch } from './charts/Legend';
+import { IncomeChart } from './charts/IncomeChart';
 import { RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/RmdChart';
+import type { SavedStrategy } from './calculations/compare';
+import { Disclosures } from './components/Disclosures';
+import { Findings } from './components/Findings';
+import { ScenarioCompare } from './components/ScenarioCompare';
+import { TradeOffs } from './components/TradeOffs';
+import { AssumptionsPanel } from './inputs/AssumptionsPanel';
 import { MessageList } from './components/MessageList';
 import { MethodologyPanel } from './components/MethodologyPanel';
 import { Section } from './components/Section';
@@ -19,11 +26,17 @@ import { defaultScenario } from './utils/defaultScenario';
 import { formatPercent } from './utils/format';
 import { effectiveAnnualReturn } from './calculations/returns';
 
-type Tab = 'rmd' | 'balances';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'rmd', label: 'RMD Projections' },
-  { id: 'balances', label: 'Account Balances' },
+type Tab = 'rmd' | 'income' | 'balances';
+const TABS: { id: Tab; label: string; short: string }[] = [
+  { id: 'rmd', label: 'RMD Projections', short: 'RMDs' },
+  { id: 'income', label: 'Income & IRMAA', short: 'Income & IRMAA' },
+  { id: 'balances', label: 'Account Balances', short: 'Balances' },
 ];
+
+/** The claude.ai preview build cannot open the print dialog, so it hides the print button. */
+const CAN_PRINT = import.meta.env.VITE_NO_PRINT !== '1';
+
+let savedCounter = 0;
 
 export default function App() {
   const [scenario, setScenario] = useState<Scenario>(() => defaultScenario());
@@ -38,22 +51,40 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, balances: null });
+  const [presenting, setPresenting] = useState(false);
+  const [saved, setSaved] = useState<SavedStrategy[]>([]);
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, income: null, balances: null });
 
   const update = useCallback((fn: (s: Scenario) => Scenario) => setScenario(fn), []);
-  const { baseline, strategy, baselineSummary, strategySummary } = useProjection(scenario);
+  const {
+    baseline,
+    strategy,
+    baselineSummary,
+    strategySummary,
+    analysisErrors,
+    baselineIncome,
+    strategyIncome,
+    baselineIrmaa,
+    strategyIrmaa,
+    tax,
+    findings,
+  } = useProjection(scenario);
   const closeMethodology = useCallback(() => setMethodologyOpen(false), []);
 
   const allMessages = strategy.messages;
   const years = useMemo(() => strategy.years.map((y) => y.year), [strategy.years]);
   const selected = selectedYear !== null ? strategy.years.find((y) => y.year === selectedYear) : undefined;
   const selectedBaseline = selected ? baseline.years.find((y) => y.year === selected.year) : undefined;
+  const selectedIncome = selected ? strategyIncome.find((y) => y.year === selected.year) : undefined;
+  const selectedBaselineIncome = selected ? baselineIncome.find((y) => y.year === selected.year) : undefined;
   const conversionYears = scenario.strategy.conversions.length;
   const qcdCount = scenario.strategy.recurringQcds.length + scenario.strategy.oneTimeQcds.length;
   const rate = effectiveAnnualReturn(scenario.returns);
 
   const reset = () => {
     setScenario(defaultScenario());
+    setSaved([]);
+    setPresenting(false);
     setResetKey((k) => k + 1);
     setSelectedYear(null);
     setView('required');
@@ -63,37 +94,112 @@ export default function App() {
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const next: Tab = tab === 'rmd' ? 'balances' : 'rmd';
+    const i = TABS.findIndex((t) => t.id === tab);
+    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]!.id;
     setTab(next);
     tabRefs.current[next]?.focus();
+  };
+
+  const saveStrategy = (name: string) =>
+    setSaved((list) => [
+      ...list,
+      { id: `saved-${++savedCounter}`, name, strategy: scenario.strategy, returns: scenario.returns },
+    ]);
+  const loadStrategy = (id: string) => {
+    const s = saved.find((x) => x.id === id);
+    if (s) setScenario((cur) => ({ ...cur, strategy: s.strategy, returns: s.returns }));
+  };
+  const deleteStrategy = (id: string) => setSaved((list) => list.filter((x) => x.id !== id));
+  const printSummary = () => {
+    setSelectedYear(null);
+    // Let React drop interactive-only UI before the print snapshot.
+    setTimeout(() => window.print(), 50);
   };
 
   const caption =
     view === 'required'
       ? 'Required RMDs: the amount the IRS requires to be distributed each calendar year. QCDs can satisfy it but do not reduce it. Roth conversions are excluded.'
-      : 'Taxable IRA distributions: RMD dollars not satisfied by QCDs, plus extra withdrawals. Roth conversions are excluded.';
+      : 'Taxable IRA distributions: RMD dollars not satisfied by QCDs, plus extra withdrawals and any QCD amount made taxable by deductible contributions after 70½. Roth conversions are excluded.';
+
+  const chartControls = (
+    <div className="flex flex-wrap items-center gap-2 print:hidden">
+      {tab === 'rmd' && (
+        <div className="seg" role="group" aria-label="Distribution series">
+          <button type="button" className="seg-btn" aria-pressed={view === 'required'} onClick={() => setView('required')}>
+            Required RMDs
+          </button>
+          <button type="button" className="seg-btn" aria-pressed={view === 'taxable'} onClick={() => setView('taxable')}>
+            Taxable IRA Distributions
+          </button>
+        </div>
+      )}
+      <div className="seg" role="group" aria-label="Horizontal axis">
+        <button type="button" className="seg-btn" aria-pressed={axis === 'age'} onClick={() => setAxis('age')}>
+          Age
+        </button>
+        <button type="button" className="seg-btn" aria-pressed={axis === 'year'} onClick={() => setAxis('year')}>
+          Year
+        </button>
+      </div>
+      {tab === 'rmd' && (
+        <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
+          <input type="checkbox" className="h-4 w-4 accent-accent" checked={showConversions} onChange={(e) => setShowConversions(e.target.checked)} />
+          Show Roth conversions
+        </label>
+      )}
+      {tab === 'balances' && (
+        <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
+          <input type="checkbox" className="h-4 w-4 accent-accent" checked={showBaselineBalances} onChange={(e) => setShowBaselineBalances(e.target.checked)} />
+          Show no-strategy lines
+        </label>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
+      <header className="border-b border-line bg-surface print:border-b-2 print:border-ink">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">RMD Smoothing Analyzer</h1>
             <p className="text-xs text-muted sm:text-sm">Model future required distributions and evaluate smoothing strategies.</p>
+            <p className="hidden text-xs text-muted print:block">
+              Hypothetical illustration prepared {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 print:hidden">
+            {presenting ? (
+              <button type="button" className="btn btn-primary" onClick={() => setPresenting(false)}>
+                <X aria-hidden className="h-4 w-4" /> Exit presentation
+              </button>
+            ) : (
+              <button type="button" className="btn" onClick={() => setPresenting(true)} disabled={!strategy.ok}>
+                <MonitorPlay aria-hidden className="h-4 w-4" /> Present
+              </button>
+            )}
+            {CAN_PRINT && (
+              <button type="button" className="btn" onClick={printSummary} disabled={!strategy.ok}>
+                <Printer aria-hidden className="h-4 w-4" /> Print summary
+              </button>
+            )}
             <button type="button" className="btn" onClick={() => setMethodologyOpen(true)}>
               <BookOpen aria-hidden className="h-4 w-4" /> Methodology
             </button>
-            <button type="button" className="btn" onClick={reset}>
-              <RotateCcw aria-hidden className="h-4 w-4" /> Reset
-            </button>
+            {!presenting && (
+              <button type="button" className="btn" onClick={reset}>
+                <RotateCcw aria-hidden className="h-4 w-4" /> Reset
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1440px] gap-5 px-4 py-4 sm:px-6 lg:grid lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:py-5">
-        <aside aria-label="Inputs and planning levers" className="mb-4 lg:mb-0">
+      <div
+        className={`mx-auto max-w-[1440px] gap-5 px-4 py-4 sm:px-6 lg:py-5 print:block print:px-0 ${
+          presenting ? '' : 'lg:grid lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]'
+        }`}
+      >
+        <aside aria-label="Inputs and planning levers" className={`mb-4 lg:mb-0 print:hidden ${presenting ? 'hidden' : ''}`}>
           <button
             type="button"
             className="btn mb-2 w-full justify-between lg:hidden"
@@ -126,10 +232,16 @@ export default function App() {
             <Section title="Qualified charitable distributions" badge={qcdCount ? `${qcdCount}` : undefined}>
               <QcdPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
+            <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
+              Assumptions
+            </p>
+            <Section title="Tax & IRMAA assumptions">
+              <AssumptionsPanel scenario={scenario} update={update} errors={analysisErrors} />
+            </Section>
           </div>
         </aside>
 
-        <main className="min-w-0 space-y-4">
+        <main className="min-w-0 space-y-4 print:space-y-3">
           {!strategy.ok ? (
             <div className="panel p-4" role="alert" data-testid="input-errors">
               <p className="mb-2 text-sm font-semibold text-ink">Fix these inputs to see the projection:</p>
@@ -137,10 +249,11 @@ export default function App() {
             </div>
           ) : (
             <>
+              <Findings findings={findings} large={presenting} />
               <SummaryStats baseline={baselineSummary} strategy={strategySummary} />
 
-              <div className="panel">
-                <div role="tablist" aria-label="Views" className="flex border-b border-line px-2 sm:px-3">
+              <div className="panel print:break-inside-avoid">
+                <div role="tablist" aria-label="Views" className="flex overflow-x-auto border-b border-line px-2 sm:px-3 print:hidden">
                   {TABS.map((t) => (
                     <button
                       key={t.id}
@@ -155,49 +268,23 @@ export default function App() {
                       tabIndex={tab === t.id ? 0 : -1}
                       onKeyDown={onTabKey}
                       onClick={() => setTab(t.id)}
-                      className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium ${
+                      className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
                         tab === t.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
                       }`}
                     >
-                      {t.label}
+                      <span className="sm:hidden" aria-hidden>
+                        {t.short}
+                      </span>
+                      <span className="max-sm:sr-only">{t.label}</span>
                     </button>
                   ))}
                 </div>
+                <h2 className="hidden px-3 pt-3 text-sm font-semibold text-ink print:block">{TABS.find((t) => t.id === tab)!.label}</h2>
 
                 <div className="space-y-3 p-3 sm:p-4" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {tab === 'rmd' && (
-                      <div className="seg" role="group" aria-label="Distribution series">
-                        <button type="button" className="seg-btn" aria-pressed={view === 'required'} onClick={() => setView('required')}>
-                          Required RMDs
-                        </button>
-                        <button type="button" className="seg-btn" aria-pressed={view === 'taxable'} onClick={() => setView('taxable')}>
-                          Taxable IRA Distributions
-                        </button>
-                      </div>
-                    )}
-                    <div className="seg" role="group" aria-label="Horizontal axis">
-                      <button type="button" className="seg-btn" aria-pressed={axis === 'age'} onClick={() => setAxis('age')}>
-                        Age
-                      </button>
-                      <button type="button" className="seg-btn" aria-pressed={axis === 'year'} onClick={() => setAxis('year')}>
-                        Year
-                      </button>
-                    </div>
-                    {tab === 'rmd' ? (
-                      <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
-                        <input type="checkbox" className="h-4 w-4 accent-accent" checked={showConversions} onChange={(e) => setShowConversions(e.target.checked)} />
-                        Show Roth conversions
-                      </label>
-                    ) : (
-                      <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
-                        <input type="checkbox" className="h-4 w-4 accent-accent" checked={showBaselineBalances} onChange={(e) => setShowBaselineBalances(e.target.checked)} />
-                        Show no-strategy lines
-                      </label>
-                    )}
-                  </div>
+                  {chartControls}
 
-                  {tab === 'rmd' ? (
+                  {tab === 'rmd' && (
                     <>
                       <RmdChart
                         baseline={baseline.years}
@@ -220,7 +307,38 @@ export default function App() {
                         {caption}
                       </p>
                     </>
-                  ) : (
+                  )}
+
+                  {tab === 'income' && (
+                    <>
+                      {analysisErrors.length > 0 ? (
+                        <MessageList messages={analysisErrors} />
+                      ) : (
+                        <IncomeChart
+                          baseline={baselineIncome}
+                          strategy={strategyIncome}
+                          axis={axis}
+                          selectedYear={selectedYear}
+                          onSelectYear={setSelectedYear}
+                        />
+                      )}
+                      <ChartLegend
+                        label="Chart legend"
+                        items={[
+                          { label: 'MAGI, no strategy', swatch: <HatchSwatch /> },
+                          { label: 'MAGI, current strategy', swatch: <SolidSwatch color={SERIES_COLORS.strategy} /> },
+                          { label: 'IRMAA tier thresholds (premiums two years later)', swatch: <LineSwatch color="var(--color-threshold)" dashed /> },
+                        ]}
+                      />
+                      <p className="text-xs text-ink-2" data-testid="chart-caption">
+                        Estimated MAGI by income year: other income entered, plus taxable IRA distributions and Roth conversions,
+                        minus deductible IRA contributions. QCDs are excluded. Each year's income sets Medicare premiums two years
+                        later; thresholds appear from the age the client is on Medicare in that premium year.
+                      </p>
+                    </>
+                  )}
+
+                  {tab === 'balances' && (
                     <>
                       <BalanceChart
                         baseline={baseline.years}
@@ -245,25 +363,29 @@ export default function App() {
                     </>
                   )}
 
-                  {selected ? (
-                    <YearDetail
-                      baseline={selectedBaseline}
-                      strategy={selected}
-                      years={years}
-                      onSelectYear={setSelectedYear}
-                      onClose={() => setSelectedYear(null)}
-                    />
-                  ) : (
-                    <p className="text-xs text-muted">
-                      Click or tap any year in the chart for a full breakdown.{' '}
-                      <button type="button" className="font-medium text-accent underline" onClick={() => setSelectedYear(strategySummary.firstRmd?.year ?? years[0] ?? null)}>
-                        Open year detail
-                      </button>
-                    </p>
-                  )}
+                  <div className="print:hidden">
+                    {selected ? (
+                      <YearDetail
+                        baseline={selectedBaseline}
+                        strategy={selected}
+                        baselineIncome={selectedBaselineIncome}
+                        strategyIncome={selectedIncome}
+                        years={years}
+                        onSelectYear={setSelectedYear}
+                        onClose={() => setSelectedYear(null)}
+                      />
+                    ) : (
+                      <p className="text-xs text-muted">
+                        Click or tap any year in the chart for a full breakdown.{' '}
+                        <button type="button" className="font-medium text-accent underline" onClick={() => setSelectedYear(strategySummary.firstRmd?.year ?? years[0] ?? null)}>
+                          Open year detail
+                        </button>
+                      </p>
+                    )}
+                  </div>
 
-                  {tab === 'rmd' && (
-                    <div>
+                  {tab === 'rmd' && !presenting && (
+                    <div className="print:hidden">
                       <button type="button" className="btn" aria-expanded={showTable} onClick={() => setShowTable((v) => !v)}>
                         {showTable ? 'Hide' : 'Show'} year-by-year table
                       </button>
@@ -276,17 +398,32 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              <div className="print:break-inside-avoid">
+                <TradeOffs tax={tax} baselineIrmaa={baselineIrmaa} strategyIrmaa={strategyIrmaa} analysis={scenario.analysis} errors={analysisErrors} />
+              </div>
+              <div className="print:break-inside-avoid">
+                <ScenarioCompare
+                  scenario={scenario}
+                  saved={saved}
+                  onSave={saveStrategy}
+                  onLoad={loadStrategy}
+                  onDelete={deleteStrategy}
+                  readOnly={presenting}
+                />
+              </div>
             </>
           )}
 
-          <footer className="pb-6 text-xs leading-relaxed text-muted">
-            Hypothetical illustration only. Projections depend on the assumptions entered, are not recommendations, and do
-            not account for taxes beyond the distribution amounts shown. Lower RMDs are not automatically better; weigh the
-            trade-offs. See{' '}
-            <button type="button" className="font-medium text-accent underline" onClick={() => setMethodologyOpen(true)}>
-              Methodology
-            </button>{' '}
-            for rules, sources, and known limitations.
+          <footer className="space-y-2 border-t border-line pt-3 pb-6">
+            <Disclosures compact={!presenting} />
+            <p className="text-xs text-muted print:hidden">
+              See{' '}
+              <button type="button" className="font-medium text-accent underline" onClick={() => setMethodologyOpen(true)}>
+                Methodology
+              </button>{' '}
+              for rules, sources, and known limitations.
+            </p>
           </footer>
         </main>
       </div>

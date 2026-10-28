@@ -1,10 +1,13 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import type { IncomeYear } from '../calculations/irmaa';
 import type { YearResult } from '../types';
 import { formatSignedUsd, formatUsd } from '../utils/format';
 
 interface Props {
   baseline: YearResult | undefined;
   strategy: YearResult;
+  baselineIncome?: IncomeYear;
+  strategyIncome?: IncomeYear;
   years: number[];
   onSelectYear: (year: number) => void;
   onClose: () => void;
@@ -12,8 +15,8 @@ interface Props {
 
 interface RowDef {
   label: string;
-  value: (y: YearResult) => number | null;
-  format?: 'usd' | 'period';
+  value: (y: YearResult, inc?: IncomeYear) => number | null;
+  format?: 'usd' | 'period' | 'tier';
   note?: string;
 }
 
@@ -26,29 +29,51 @@ const ROWS: RowDef[] = [
   { label: 'RMD deferred to April 1 next year', value: (y) => y.totals.rmdDeferredToNextYear },
   { label: 'Required RMD this calendar year', value: (y) => y.totals.requiredRmd },
   { label: 'QCD', value: (y) => y.totals.qcd },
+  { label: '  of which taxable (deductible contributions after 70½)', value: (y) => y.totals.qcdNotExcluded },
   { label: 'Extra withdrawal', value: (y) => y.totals.extraWithdrawal },
   { label: 'Taxable IRA distribution', value: (y) => y.totals.taxableDistribution },
   { label: 'Roth conversion (gross)', value: (y) => y.totals.conversionGross },
   { label: '  of which withheld for taxes', value: (y) => y.totals.conversionWithheld },
   { label: 'Contributions', value: (y) => y.totals.contributions },
+  { label: '  of which deductible (pre-tax)', value: (y) => y.totals.deductibleContributions },
   { label: 'Investment growth', value: (y) => y.totals.growth },
   { label: 'Ending Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.endBalancePretax },
   { label: 'Ending Dec 31 balance (Roth IRA)', value: (y) => y.totals.endBalanceRoth },
   { label: 'Ending Dec 31 balance (total)', value: (y) => y.totals.endBalanceTotal },
+  { label: 'Estimated MAGI (including other income)', value: (_y, inc) => inc?.magi ?? null },
+  { label: 'IRMAA tier', value: (_y, inc) => (inc && inc.medicareApplies ? inc.tier : null), format: 'tier' },
 ];
 
-const OPTIONAL = new Set(['Prior-year RMD deferred to April 1', 'RMD deferred to April 1 next year', '  of which withheld for taxes']);
+const OPTIONAL = new Set([
+  'Prior-year RMD deferred to April 1',
+  'RMD deferred to April 1 next year',
+  '  of which withheld for taxes',
+  '  of which taxable (deductible contributions after 70½)',
+  '  of which deductible (pre-tax)',
+]);
 
 function fmt(v: number | null, kind: RowDef['format']) {
   if (v === null) return '—';
   if (kind === 'period') return v.toFixed(1);
+  if (kind === 'tier') return v === 0 ? 'None' : `Tier ${v}`;
   return formatUsd(v);
 }
 
 /** Year-level breakdown, baseline vs strategy. */
-export function YearDetail({ baseline, strategy, years, onSelectYear, onClose }: Props) {
+export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome, years, onSelectYear, onClose }: Props) {
   const idx = years.indexOf(strategy.year);
-  const rows = ROWS.filter((r) => !OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5));
+  const rows = ROWS.filter(
+    (r) =>
+      (!OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5)) &&
+      (r.format !== 'tier' || strategyIncome !== undefined) &&
+      (!r.label.startsWith('Estimated MAGI') || strategyIncome !== undefined),
+  );
+  const tierLabel = (label: string) =>
+    label === 'IRMAA tier' && strategyIncome
+      ? strategyIncome.medicareApplies
+        ? `IRMAA tier for ${strategyIncome.premiumYear} premiums`
+        : `IRMAA (${strategyIncome.premiumYear}: before Medicare)`
+      : label;
   const notes = strategy.messages;
 
   return (
@@ -105,18 +130,18 @@ export function YearDetail({ baseline, strategy, years, onSelectYear, onClose }:
           </thead>
           <tbody>
             {rows.map((r) => {
-              const b = baseline ? r.value(baseline) : null;
-              const s = r.value(strategy);
+              const b = baseline ? r.value(baseline, baselineIncome) : null;
+              const s = r.value(strategy, strategyIncome);
               const emphasize = r.label.startsWith('Required RMD') || r.label.startsWith('Taxable');
               return (
                 <tr key={r.label} className={`border-b border-line-soft ${emphasize ? 'font-semibold' : ''}`}>
                   <th scope="row" className={`py-1.5 pr-2 text-left font-normal text-ink-2 ${r.label.startsWith('  ') ? 'pl-4' : ''} ${emphasize ? 'font-semibold text-ink' : ''}`}>
-                    {r.label.trim()}
+                    {tierLabel(r.label).trim()}
                   </th>
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(b, r.format)}</td>
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(s, r.format)}</td>
                   <td className="hidden py-1.5 pl-2 text-right text-ink-2 sm:table-cell">
-                    {r.format === 'period' || b === null || s === null ? '' : formatSignedUsd(s - b)}
+                    {r.format === 'period' || r.format === 'tier' || b === null || s === null ? '' : formatSignedUsd(s - b)}
                   </td>
                 </tr>
               );

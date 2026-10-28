@@ -112,7 +112,54 @@ Re-checked October 28, 2026: secondary sources said the IRS had not yet publishe
 for 2027 from CPI data; that is an estimate, not an IRS figure, so it is not used.
 The one-time QCD to a split-interest entity is not modeled.
 
-## 5. Out of scope (stated in the app and README)
+## 5. QCD reduction for deductible contributions after 70½
+
+IRC §408(d)(8)(A), as amended by SECURE Act (2019) §107(b): the amount of a QCD
+excluded from income is reduced by the total deductible IRA contributions for tax
+years ending on or after the date the owner reaches 70½, minus amounts already used
+to reduce earlier QCDs. The app applies this dollar for dollar, includes the same
+year's deductible contribution (as on that year's return), and carries any unused
+amount forward. The QCD still counts toward the RMD. Engineer knowledge of the
+statute; not separately verified online on October 28, 2026.
+
+## 6. Medicare IRMAA (added October 28, 2026)
+
+Authority: Social Security Act §1839(i) (Part B) and §1860D-13(a)(7) (Part D).
+Premiums for a year are based on MAGI (AGI plus tax-exempt interest) from the tax
+return two years earlier.
+
+2026 figures, from several secondary sources that agreed with each other, checked
+October 28, 2026 (Humana, Medicare Advocates, Current Federal Tax Developments, The
+Finance Buff, among others). The CMS fact sheet could not be opened from the build
+environment.
+
+| Tier | Single MAGI more than | Joint MAGI more than | Part B surcharge / mo | Part D surcharge / mo |
+|---|---|---|---|---|
+| 1 | $109,000 | $218,000 | $81.20 | $14.50 |
+| 2 | $137,000 | $274,000 | $202.90 | $37.50 |
+| 3 | $171,000 | $342,000 | $324.60 | $60.40 |
+| 4 | $205,000 | $410,000 | $446.30 | $83.30 |
+| 5 | $500,000 or more | $750,000 or more | $487.00 | $91.00 |
+
+Standard 2026 Part B premium: $202.90.
+
+- The top-tier thresholds are fixed in statute through 2027 and indexed afterward.
+  Indexed thresholds are rounded to the nearest $1,000.
+- **2027 figures were not published** as of the October 28, 2026 check (expected
+  November 2026). Some sources say the 2027 Medicare & You handbook shows $111,000 /
+  $222,000 for tier 1; projections range from $111,000 to $113,000. The app projects
+  every year after 2026 from the 2026 table at the inflation rate the advisor enters
+  (default 2.5%), and labels these as projections.
+- Married filing separately uses a different schedule and is not supported.
+
+## 7. Tax comparison method
+
+Not a tax calculation, by design (see CLAUDE.md scope fence). Validated with a
+hand-calculated case and with the standard equivalence result: with equal tax rates
+and a discount rate equal to the investment return, a Roth conversion is
+tax-neutral in present value. The test suite checks this to within one cent.
+
+## 8. Out of scope (stated in the app and README)
 
 Inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse
 during the projection, and spousal rollovers.

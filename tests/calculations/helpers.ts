@@ -1,6 +1,7 @@
 import { DEFAULT_QCD_LIMIT_SETTINGS } from '../../src/data/qcdLimits';
 import { emptyStrategy } from '../../src/strategies/schedule';
-import type { Account, Scenario, Strategy } from '../../src/types';
+import { DEFAULT_ANALYSIS } from '../../src/utils/defaultScenario';
+import type { Account, AnalysisSettings, ContributionRule, Scenario, Strategy } from '../../src/types';
 
 export interface TestScenarioOptions {
   dob: string;
@@ -13,6 +14,9 @@ export interface TestScenarioOptions {
   delayFirstRmd?: boolean;
   strategy?: Partial<Strategy>;
   extra?: { annualAmount: number; startAge: number; endAge: number };
+  /** Contribution to the first Traditional IRA ("t0"). */
+  tradContribution?: ContributionRule;
+  analysis?: Partial<AnalysisSettings>;
 }
 
 /** Builds a one-person scenario with Traditional IRAs "t0", "t1", … and a Roth IRA "roth". */
@@ -23,6 +27,7 @@ export function scenario(o: TestScenarioOptions): Scenario {
     type: 'traditional_ira',
     label: `Traditional IRA ${i + 1}`,
     priorYearEndBalance: bal,
+    contribution: i === 0 ? o.tradContribution : undefined,
   }));
   accounts.push({
     id: 'roth',
@@ -41,5 +46,6 @@ export function scenario(o: TestScenarioOptions): Scenario {
     extraWithdrawals: o.extra ? [{ personId: 'p1', ...o.extra }] : [],
     qcdLimits: DEFAULT_QCD_LIMIT_SETTINGS,
     strategy: { ...emptyStrategy(), ...o.strategy },
+    analysis: { ...DEFAULT_ANALYSIS, ...o.analysis },
   };
 }

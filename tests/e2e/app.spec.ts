@@ -223,3 +223,79 @@ test('sidebar sections collapse and expand', async ({ page }) => {
   await sectionBtn.click();
   await expect(page.getByLabel('Annual expected return')).toBeVisible();
 });
+
+test('findings, trade-offs, and assumptions respond to the strategy', async ({ page }) => {
+  await openInputs(page);
+  await expect(page.getByTestId('finding-strategy')).toContainText('No Roth conversions or QCDs');
+  await page.getByRole('button', { name: 'Apply to range' }).click();
+  await page.getByRole('button', { name: 'Add recurring QCD' }).click();
+  await expect(page.getByTestId('finding-tax')).toContainText('estimated income tax is about');
+  const breakeven = page.getByTestId('breakeven');
+  const before = await breakeven.textContent();
+  await page.getByTestId('rate-added').fill('15');
+  await expect(breakeven).not.toHaveText(before!);
+  await page.getByTestId('rate-avoided').fill('30');
+  await page.getByRole('button', { name: 'Joint' }).click();
+  await page.getByRole('button', { name: '2 people' }).click();
+  await page.getByTestId('other-income').fill('150000');
+  await page.getByTestId('inflation').fill('3');
+  await page.getByRole('checkbox', { name: /Discount at the investment return/ }).uncheck();
+  await page.getByTestId('discount-rate').fill('5');
+  await expect(page.getByTestId('tradeoffs')).toContainText('Present value at 5.0% a year');
+  await page.getByTestId('trad-contribution').fill('7000');
+  await page.getByTestId('trad-contribution-age').fill('75');
+  await page.getByRole('checkbox', { name: 'Contributions are tax-deductible' }).uncheck();
+  await expectNoHorizontalScroll(page);
+});
+
+test('Income & IRMAA tab: chart and tap/click year detail with MAGI', async ({ page }) => {
+  await page.getByRole('tab', { name: 'Income & IRMAA' }).click();
+  const chart = page.getByTestId('income-chart');
+  await expect(chart.locator('.recharts-bar-rectangle').first()).toBeVisible();
+  const box = (await chart.boundingBox())!;
+  const n = 2051 - new Date().getFullYear() + 1;
+  // Centre of the 4th band (index 3).
+  const x = box.x + 56 + ((box.width - 56 - 8) * 3.5) / n;
+  const y = box.y + box.height / 2;
+  if (isMobile(page)) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+  const detail = page.getByTestId('year-detail');
+  await expect(detail.getByRole('heading')).toContainText(String(new Date().getFullYear() + 3));
+  await expect(detail.getByRole('rowheader', { name: 'Estimated MAGI (including other income)' })).toBeVisible();
+  await expect(detail.getByRole('rowheader', { name: /IRMAA tier for \d{4} premiums/ })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+test('compare strategies: save, load, delete', async ({ page }) => {
+  await openInputs(page);
+  await page.getByRole('button', { name: 'Apply to range' }).click();
+  await page.getByLabel('Strategy name').fill('Convert 50K');
+  await page.getByRole('button', { name: 'Save current' }).click();
+  const table = page.getByTestId('compare-table');
+  await expect(table.getByRole('columnheader', { name: /Convert 50K/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.getByRole('button', { name: 'Load Convert 50K' }).click();
+  await expect(page.getByTestId('conversion-table').locator('tbody tr')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Delete Convert 50K' }).click();
+  await expect(table.getByRole('columnheader', { name: /Convert 50K/ })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+});
+
+test('presentation mode and print summary', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __printed: number }).__printed = 0;
+    window.print = () => {
+      (window as unknown as { __printed: number }).__printed++;
+    };
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Present' }).click();
+  await expect(page.getByRole('button', { name: 'Exit presentation' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inputs & planning levers' })).toBeHidden();
+  await expect(page.getByTestId('findings')).toBeVisible();
+  await expect(page.getByTestId('disclosures')).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.getByRole('button', { name: 'Exit presentation' }).click();
+  await page.getByRole('button', { name: 'Print summary' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
+});

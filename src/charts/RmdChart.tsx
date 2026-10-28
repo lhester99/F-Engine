@@ -98,7 +98,7 @@ export function RmdChart({ baseline, strategy, view, axis, showConversions, sele
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
 
   return (
-    <div className="h-[300px] w-full sm:h-[380px]" data-testid="rmd-chart" {...selection}>
+    <div className="h-[300px] w-full sm:h-[380px] print:h-auto" data-testid="rmd-chart" {...selection}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={rows}

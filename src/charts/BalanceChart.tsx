@@ -83,7 +83,7 @@ export function BalanceChart({ baseline, strategy, axis, showBaseline, selectedY
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
 
   return (
-    <div className="h-[300px] w-full sm:h-[380px]" data-testid="balance-chart" {...selection}>
+    <div className="h-[300px] w-full sm:h-[380px] print:h-auto" data-testid="balance-chart" {...selection}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={rows}
