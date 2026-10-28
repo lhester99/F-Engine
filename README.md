@@ -112,15 +112,19 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## How to redeploy
 
-The site is hosted on Vercel and linked to this GitHub repository. Any change merged
-into the branch Vercel deploys from goes live automatically within about a minute.
+The site is hosted on Vercel and linked to this GitHub repository. Any change pushed
+to the branch Vercel deploys from (currently `claude/rmd-smoothing-foundation-kc53hd`)
+goes live automatically within about a minute.
 To redeploy by hand: sign in at vercel.com, open the project, go to **Deployments**,
 click **⋯** on the latest one, and choose **Redeploy**.
 
 ## Deployment status
 
-Not deployed yet. Vercel needs a one-time sign-in by the account owner; see the
-latest progress report.
+Hosted on Vercel, connected to the GitHub repository `lhester99/F-Engine`. Vercel's
+production branch is set to `claude/rmd-smoothing-foundation-kc53hd`, so every
+change pushed to that branch goes live automatically. The live address is shown on
+the project's page in Vercel (it ends in `.vercel.app`). It has not yet been
+verified by an automated test.
 
 ## Project layout
 
