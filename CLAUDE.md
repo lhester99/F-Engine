@@ -13,7 +13,10 @@ It answers three questions: How large could future RMDs get? How fast do they gr
 Philosophy: we are not trying to eliminate RMDs. Lower RMDs are not automatically better. Stay analytically neutral and show trade-offs.
 
 3. SCOPE FENCE (strict)
-Do NOT build: Social Security, pensions, budgeting, income gaps, Monte Carlo, full federal or state tax calculations, IRMAA, estate planning, insurance, portfolio management, or general financial planning. Every feature must directly improve RMD modeling or interpretation. If it doesn't, leave it out.
+Do NOT build: Social Security, pensions, budgeting, income gaps, Monte Carlo, full federal or state tax calculations (tax brackets, deductions, Social Security taxation, state tax), estate planning, insurance, portfolio management, or general financial planning. Every feature must directly improve RMD modeling or interpretation. If it doesn't, leave it out.
+Allowed, because they interpret RMD, conversion, and QCD decisions (approved by the owner October 28, 2026):
+- An estimated tax comparison using tax rates the advisor enters, with a breakeven rate. Never present it as "taxes saved"; label it an estimate at the entered rates.
+- IRMAA tier detection and estimated surcharges, using filing status and a single "other income" amount the advisor enters. Other income is entered, never calculated (no Social Security or pension modeling). IRMAA thresholds and surcharges are dated, editable values in data/.
 
 4. USER AND DESIGN
 User: an advisor, possibly mid-conversation with a client holding $500K to several million in retirement accounts. The app must be fast, accurate, and uncluttered. One professional interface; no beginner/advanced modes. Desktop-first, fully usable in iPhone Safari.
