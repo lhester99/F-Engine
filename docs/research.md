@@ -37,8 +37,13 @@ two applicable ages (73 and 75). The IRS proposed regulations published in the
 Federal Register on **July 19, 2024** (alongside final regulations T.D. 10001) treat
 the 1959 cohort as **age 73**, consistent with congressional intent and a Senate
 technical-corrections discussion draft. Several secondary sources checked
-October 27, 2026 describe this provision as still *proposed*, not final. The app
-uses 73 and says so in the Methodology panel.
+October 27, 2026 describe this provision as still *proposed*, not final. Re-checked
+October 28, 2026: per a Morgan Lewis post (March 2026) on IRS Announcement 2026-7,
+the applicability of the delayed RMD provisions, including the 1959 clarification,
+was pushed to January 1, 2027 at the earliest, and those final regulations had not
+been published as of that post. Until they apply, a reasonable good-faith reading of
+the statute governs, and the industry uses 73. The app uses 73 and says so in the
+Methodology panel.
 
 - The first distribution year is the calendar year the applicable age is reached.
 - Age 70½ is the date six calendar months after the 70th birthday (Pub. 590-B).
@@ -102,6 +107,9 @@ yet (Phase 1 is single-person) and is listed as a known limitation.
 | 2026 | $111,000 | IRS Notice 2025-67 (as cited by secondary sources) | Several secondary sources Oct 27, 2026; one stale source still showed $108,000 |
 
 Years after 2026 use an editable "assumed future limit" (default $111,000 held flat).
+Re-checked October 28, 2026: secondary sources said the IRS had not yet published the
+2027 limit (one checked October 23, 2026). Some calculators estimate about $114,000
+for 2027 from CPI data; that is an estimate, not an IRS figure, so it is not used.
 The one-time QCD to a split-interest entity is not modeled.
 
 ## 5. Out of scope (stated in the app and README)
