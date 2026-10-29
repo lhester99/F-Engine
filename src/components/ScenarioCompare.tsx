@@ -57,6 +57,7 @@ const ROWS: RowDef[] = [
     },
   },
   { label: 'After-tax value at end', value: (c) => formatUsd(c.m.afterTaxEnd) },
+  { label: 'What heirs keep (present value)', value: (c) => formatUsd(c.m.taxTotals.legacy.netToHeirsPv) },
   {
     label: 'Breakeven age (after-tax value)',
     value: (c) => {

@@ -8,7 +8,9 @@ export const KNOWN_LIMITATIONS = [
   'First death: the death is assumed at the end of the death year (joint return, full RMD taken). The survivor always does a spousal rollover; remaining a beneficiary of an inherited IRA instead, and qualifying-surviving-spouse filing with a dependent child, are not modeled. The survivor keeps the larger of the two Social Security benefits as entered, a simplification of the survivor benefit rules.',
   'Only one first death is modeled; the survivor lives to the end of the projection. The projection ends when the client would reach the ending age.',
   'Traditional and Roth IRAs only. 401(k), 403(b), SEP and SIMPLE IRAs, Roth 401(k)s, and the still-working exception are not yet modeled.',
-  'Heirs are represented only by one tax rate applied to the pre-tax balance left at the end. The 10-year rule and heirs’ own brackets are not modeled yet. Accounts the client has already inherited, and trusts as beneficiaries, are out of scope.',
+  'Heirs inherit everything at the end of the projection (the last death is assumed then). Each heir is a non-spouse designated beneficiary under the 10-year rule and withdraws the inherited IRA evenly over 10 years. Eligible designated beneficiaries (minor children, disabled or chronically ill heirs, heirs not more than 10 years younger), trusts as beneficiaries, accounts the client has already inherited, and estate tax are out of scope.',
+  'Even 10-year withdrawals meet the annual RMDs required in years 1–9 for heirs younger than about 80. Heirs could instead bunch or time withdrawals; that is not modeled.',
+  'Heirs’ tax from income uses current federal brackets indexed at inflation, the standard deduction, no other deductions or credits, and a flat state rate. Heirs’ income is entered in today’s dollars and grows with inflation. Heirs are assumed to share equally, file the same way, and have the same income.',
   'Assumes none of the current year’s RMD has been taken yet. If the first RMD year was last year and that RMD was deferred to April 1 of this year, the deferred amount is not modeled.',
   'One constant annual return is applied to every account in every year. Real returns vary; sequence of returns is not modeled.',
   'All flows (RMDs, QCDs, withdrawals, conversions, contributions) are assumed to occur before the year’s growth, which slightly understates growth compared with mid-year or year-end withdrawals.',
@@ -214,16 +216,18 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
                 Avoided later: the years in which they are lower, plus lower heirs’ tax.
               </li>
               <li>
-                Heirs’ tax: the pre-tax balance left at the end, times the heirs’ rate entered, counted one year after the
-                last projection year.
+                Heirs’ tax: heirs withdraw the pre-tax balance left at the end evenly over 10 years (the 10-year rule),
+                and each year’s tax is counted in that year. Tax is either the heirs’ rate entered, or estimated from each
+                heir’s own income and brackets.
               </li>
               <li>
                 Present value discounts each year to the start of the first projection year, by default at the investment
                 return.
               </li>
               <li>
-                Breakeven heirs’ rate: the heirs’ rate at which the present-value totals are equal. Above it, the
-                strategy’s estimated total is lower.
+                Breakeven heirs’ rate: the flat heirs’ rate at which the present-value totals are equal. Above it, the
+                strategy’s estimated total is lower. With heirs’ tax from their income, compare it with the heirs’ average
+                rate shown.
               </li>
               <li>
                 QCD gifts count as income not taxed. The comparison covers taxes only and does not treat the gifts
@@ -284,10 +288,28 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
           </section>
 
           <section>
+            <h3>Heirs and the 10-year rule</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Inherited pre-tax IRA: grows at the investment return; in year k of 10 heirs withdraw the balance ÷ (11 − k),
+                so it is empty after year 10. Each withdrawal is taxable to the heirs.
+              </li>
+              <li>Inherited Roth IRA: passes tax-free (it must also be emptied within 10 years).</li>
+              <li>Taxable account and cash: basis steps up at death (IRC §1014), so earlier gains are not taxed.</li>
+              <li>
+                What heirs keep, present value = Roth + taxable + cash + inherited IRA withdrawals − heirs’ tax, each
+                discounted to the start of the projection. The heirs’ average rate is heirs’ tax ÷ withdrawals, both in present
+                value.
+              </li>
+            </ul>
+          </section>
+
+          <section>
             <h3>After-tax value and breakeven age</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 After-tax value each December 31 = Roth IRA + taxable account + cash + pre-tax IRAs × (1 − heirs’ tax rate).
+                With heirs’ tax from their income, the rate is the heirs’ estimated average rate for that scenario.
                 Taxable-account gains are not taxed because heirs receive a step-up in basis.
               </li>
               <li>

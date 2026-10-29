@@ -182,6 +182,12 @@ export function validateScenario(s: Scenario): EngineMessage[] {
     }
     if (!BRACKET_RATES.includes(f.bracketRate)) err('fill-rate', 'Choose a federal bracket to fill.', `fill:${f.id}`, f.personId);
   }
+  const hs = s.heirs;
+  if (hs.mode === 'income') {
+    if (!Number.isInteger(hs.count) || hs.count < 1 || hs.count > 20) err('heirs-count', 'Number of heirs must be a whole number from 1 to 20.', 'heirsCount');
+    if (!isNum(hs.otherIncome) || hs.otherIncome < 0) err('heirs-income', "Heirs' income must be zero or positive.", 'heirsIncome');
+    if (!isNum(hs.stateTaxRate) || hs.stateTaxRate < 0 || hs.stateTaxRate > 1) err('heirs-state', "Heirs' state tax rate must be between 0% and 100%.", 'heirsStateRate');
+  }
   out.push(...validateAnalysis(s.analysis));
   return out;
 }

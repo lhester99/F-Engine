@@ -194,7 +194,8 @@ bracket rate (10%).
 
 Since October 29, 2026 the comparison uses the bracket-based estimate above for each
 year, IRMAA in its premium year, and the heirs' rate on the pre-tax balance left at the
-end. Validated with a hand-calculated case (tests/calculations/analysis.test.ts) and the
+end (since step 4, heirs' tax over the 10-year withdrawal schedule; see section 10).
+Validated with a hand-calculated case (tests/calculations/analysis.test.ts) and the
 identity net = avoided later − paid earlier.
 
 ## 9. Spouses and the first death (added October 29, 2026)
@@ -219,7 +220,42 @@ Pub. 590-B, "Spouse as sole beneficiary".
   spouse more than 10 years younger. Not implemented, because the table values could
   not be verified from the build environment; the app warns when it applies.
 
-## 10. Out of scope (stated in the app and README)
+## 10. Heirs and the 10-year rule (added October 29, 2026)
 
-Inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse
-during the projection, and spousal rollovers.
+From the engineer's knowledge of the rules. These were not verified online on this
+date, because IRS.gov could not be reached from the build environment. Please
+spot-check them against Pub. 590-B ("Designated beneficiaries" and "10-year rule")
+and the July 2024 final regulations (T.D. 10001).
+
+- SECURE Act §401 / IRC §401(a)(9)(H): for an owner dying after 2019, a designated
+  beneficiary who is not an eligible designated beneficiary must empty the inherited
+  account by December 31 of the 10th year after the year of death.
+- Final regulations (Treas. Reg. §1.401(a)(9)-5, July 2024): if the owner died on or
+  after their required beginning date, the beneficiary must also take annual RMDs in
+  years 1–9, based on the beneficiary's single life expectancy. IRS Notice 2024-35
+  waived the penalty for missed 10-year-rule RMDs for 2021–2024, and the annual RMDs
+  apply from 2025.
+- Roth IRA owners are treated as dying before their required beginning date, so an
+  inherited Roth IRA has no annual RMDs in years 1–9; it must still be emptied by year
+  10, and qualified distributions are tax-free.
+- IRC §1014: inherited taxable assets receive a basis equal to fair market value at
+  death (step-up), so gains before death are not taxed.
+
+**How the app models it:** inheritance at the end of the last projection year. The
+inherited pre-tax IRA grows at the investment return and is withdrawn ratably: in
+year k it withdraws balance ÷ (11 − k), so it is empty after year 10. The ratable
+withdrawal is at least the annual RMD when the heir's single-life divisor is larger
+than the years left in the window, which holds for heirs younger than about 80. In
+rate mode, heirs' tax is the withdrawal times the entered rate. In income mode, each
+heir's federal tax (current brackets indexed at inflation, standard deduction, under
+65) with and without their share, plus a flat state rate. Hand-checked cases
+(tests/calculations/legacy.test.ts): $1,050,000 inherited at 5% gives withdrawals of
+$105,000, then $110,250, …, totaling $1,320,678.72 and $316,962.89 of tax at 24%. One
+heir filing jointly, with $150,000 of other income, has 2026 taxable income of $217,800
+with a $100,000 share, and owes $22,128 more tax (the 22% to 24% bracket boundary).
+
+## 11. Out of scope (stated in the app and README)
+
+Accounts the client has already inherited; eligible designated beneficiaries other
+than the spouse (minor children, disabled or chronically ill heirs, heirs not more
+than 10 years younger); trusts as beneficiaries; estate tax.

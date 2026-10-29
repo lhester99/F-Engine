@@ -308,11 +308,12 @@ describe('findings', () => {
 
   it('describes size and growth, and says when no strategy is entered', () => {
     const f = build();
-    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'strategy']);
+    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'heirs', 'strategy']);
     const by = (id: string) => f.find((x) => x.id === id)!.text;
     expect(by('size')).toMatch(/^Without a strategy, required RMDs start at \$[\d,]+ at age 73 \(2029\)/);
     expect(by('excess')).toMatch(/^Without a strategy, \$[\d,]+ of IRA withdrawals is left after taxes over the projection and goes into the taxable account/);
     expect(by('strategy')).toMatch(/No Roth conversions or QCDs/);
+    expect(by('heirs')).toMatch(/^With no strategy, heirs would inherit \$[\d,]+ of pre-tax IRA in \d{4} and must empty it by \d{4}, paying an estimated \$[\d,]+ of tax on it\.$/);
   });
 
   it('describes the strategy, income shift, tax trade-off, and IRMAA in neutral terms', () => {
@@ -320,13 +321,14 @@ describe('findings', () => {
       conversions: [70, 71, 72].map((a) => ({ personId: 'p1', year: 1956 + a, amount: 100_000 })),
       recurringQcds: [{ id: 'q', personId: 'p1', annualAmount: 20_000, startAge: 73, endAge: 95 }],
     });
-    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'strategy', 'shift', 'brackets', 'tax', 'wealth', 'irmaa']);
+    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'strategy', 'shift', 'brackets', 'tax', 'wealth', 'heirs', 'irmaa']);
     const by = (id: string) => f.find((x) => x.id === id)!.text;
     expect(by('strategy')).toMatch(/lowers the peak RMD by \$[\d,]+ \(\d+%\)/);
     expect(by('shift')).toContain('Conversions move $300,000 of taxable income into ages 70–72.');
     expect(by('brackets')).toMatch(/^In conversion years \(ages 70–72\), income reaches the \d+% federal bracket\./);
     expect(by('tax')).toMatch(/^The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
     expect(by('tax')).toContain('it does not count the gifts themselves');
+    expect(by('heirs')).toMatch(/With the strategy they would inherit \$[\d,]+ pre-tax and \$[\d,]+ Roth, and keep about \$[\d,]+ (more|less) in present value\.$/);
     expect(by('wealth')).toMatch(/^At age 95, after-tax value is \$[\d,]+ with the strategy and \$[\d,]+ without it/);
     const all = f.map((x) => x.text).join(' ').toLowerCase();
     expect(all).not.toMatch(/sav(e|ed|ing)/);

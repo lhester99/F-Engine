@@ -81,32 +81,17 @@ export function AssumptionsPanel({ scenario, update, messages }: Props) {
       </div>
       <p className="field-hint">All amounts are in today's dollars and grow with inflation.</p>
 
-      <div className="grid grid-cols-2 gap-2">
-        <NumberField
-          label="Inflation"
-          kind="percent"
-          min={-50}
-          max={20}
-          value={a.inflationRate}
-          externalError={err('inflationRate')}
-          onCommit={(v) => set({ inflationRate: v })}
-          testId="inflation"
-        />
-        <NumberField
-          label="Heirs' tax rate"
-          kind="percent"
-          min={0}
-          max={100}
-          value={a.heirsTaxRate}
-          externalError={err('heirsTaxRate')}
-          onCommit={(v) => set({ heirsTaxRate: v })}
-          testId="heirs-rate"
-        />
-      </div>
-      <p className="field-hint -mt-1">
-        Inflation grows the amounts above and indexes brackets and IRMAA after 2026. The heirs' rate applies to the
-        pre-tax balance left at the end.
-      </p>
+      <NumberField
+        label="Inflation"
+        kind="percent"
+        min={-50}
+        max={20}
+        value={a.inflationRate}
+        externalError={err('inflationRate')}
+        onCommit={(v) => set({ inflationRate: v })}
+        hint="Grows the amounts above and indexes brackets and IRMAA after 2026."
+        testId="inflation"
+      />
 
       <div className="space-y-2">
         <label className="flex items-start gap-2 text-sm text-ink-2">

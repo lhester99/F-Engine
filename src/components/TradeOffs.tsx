@@ -1,6 +1,6 @@
 import type { IrmaaSummary } from '../calculations/irmaa';
 import type { TaxComparison, TaxTotals } from '../calculations/taxComparison';
-import type { AnalysisSettings } from '../types';
+import type { AnalysisSettings, HeirSettings } from '../types';
 import { formatPercent, formatUsd } from '../utils/format';
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   baselineIrmaa: IrmaaSummary | null;
   strategyIrmaa: IrmaaSummary | null;
   analysis: AnalysisSettings;
+  heirs: HeirSettings;
 }
 
 interface Row {
@@ -18,16 +19,19 @@ interface Row {
 }
 
 /** Estimated taxes with and without the strategy, now versus later, and the breakeven heirs' rate. */
-export function TradeOffs({ tax, baselineIrmaa, strategyIrmaa, analysis }: Props) {
+export function TradeOffs({ tax, baselineIrmaa, strategyIrmaa, analysis, heirs: heirSettings }: Props) {
   if (!tax || !baselineIrmaa || !strategyIrmaa) return null;
-  const heirs = formatPercent(analysis.heirsTaxRate, 0);
+  const income = heirSettings.mode === 'income';
+  const heirsLabel = income
+    ? "Heirs' tax over 10 years, from their brackets"
+    : `Heirs' tax over 10 years at ${formatPercent(analysis.heirsTaxRate, 0)}`;
   const rows: Row[] = [
     { label: 'Federal income tax', value: (t) => t.federal },
     { label: 'State income tax', value: (t) => t.state },
     { label: 'IRMAA surcharges', value: (t) => t.irmaa },
     { label: 'Total during the projection', value: (t) => t.lifetime, strong: true },
     { label: 'Pre-tax balance left at the end', value: (t) => t.endingPretax },
-    { label: `Heirs' tax on it at ${heirs}`, value: (t) => t.heirsTax, indent: true },
+    { label: heirsLabel, value: (t) => t.heirsTax, indent: true },
     { label: 'Total including heirs', value: (t) => t.total, strong: true },
     { label: 'Total including heirs, present value', value: (t) => t.totalPv, strong: true },
   ];
@@ -71,6 +75,13 @@ export function TradeOffs({ tax, baselineIrmaa, strategyIrmaa, analysis }: Props
           <>
             Breakeven: the strategy’s estimated total comes out lower whenever the heirs’ tax rate is above{' '}
             <strong>{formatPercent(be)}</strong>.
+            {income && (
+              <>
+                {' '}
+                Estimated from the heirs' income, their average rate is {formatPercent(tax.baseline.legacy.effectiveRate)} with no
+                strategy and {formatPercent(tax.strategy.legacy.effectiveRate)} with it.
+              </>
+            )}
           </>
         )}
       </p>

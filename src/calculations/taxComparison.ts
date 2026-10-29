@@ -1,13 +1,14 @@
 import type { ProjectionResult, Scenario } from '../types';
 import { incomeByYear, type IncomeYear } from './irmaa';
+import { computeLegacy, type Legacy } from './legacy';
 import { effectiveAnnualReturn } from './returns';
 
 /**
  * Estimated tax comparison, strategy vs. no strategy. Each year's federal and
  * state income tax comes from the bracket-based estimate; IRMAA surcharges are
  * counted in their premium year (premium years after the projection are not
- * counted). Pre-tax money left at the end of the projection is taxed at the
- * heirs' rate entered, one year after the last projection year. Present values
+ * counted). Pre-tax money left at the end of the projection is withdrawn by
+ * heirs over 10 years and taxed as legacy.ts describes. Present values
  * discount to the start of the first projection year.
  */
 export interface TaxTotals {
@@ -19,9 +20,11 @@ export interface TaxTotals {
   lifetimePv: number;
   /** Pre-tax balance left at the end. */
   endingPretax: number;
-  /** endingPretax × heirs' rate. */
+  /** Heirs' tax on the inherited pre-tax IRA over the 10-year window (see legacy.ts). */
   heirsTax: number;
   heirsTaxPv: number;
+  /** The heirs' 10-year withdrawal schedule and what they keep. */
+  legacy: Legacy;
   /** lifetime + heirs' tax. */
   total: number;
   totalPv: number;
@@ -50,7 +53,13 @@ export interface TaxComparison {
   discountRate: number;
 }
 
-function totals(income: IncomeYear[], result: ProjectionResult, scenario: Scenario, df: (t: number) => number): TaxTotals {
+function totals(
+  income: IncomeYear[],
+  result: ProjectionResult,
+  scenario: Scenario,
+  df: (t: number) => number,
+  discountRate: number,
+): TaxTotals {
   const start = scenario.startYear;
   const last = result.years[result.years.length - 1];
   const lastYear = last?.year ?? start;
@@ -68,8 +77,9 @@ function totals(income: IncomeYear[], result: ProjectionResult, scenario: Scenar
     }
   }
   const endingPretax = last?.totals.endBalancePretax ?? 0;
-  const heirsTax = endingPretax * scenario.analysis.heirsTaxRate;
-  const heirsTaxPv = heirsTax * df(lastYear + 1 - start);
+  const legacy = computeLegacy(result, scenario, discountRate);
+  const heirsTax = legacy.heirsTax;
+  const heirsTaxPv = legacy.heirsTaxPv;
   const lifetime = federal + state + irmaa;
   return {
     federal,
@@ -80,6 +90,7 @@ function totals(income: IncomeYear[], result: ProjectionResult, scenario: Scenar
     endingPretax,
     heirsTax,
     heirsTaxPv,
+    legacy,
     total: lifetime + heirsTax,
     totalPv: lifetimePv + heirsTaxPv,
   };
@@ -93,8 +104,8 @@ export function compareTaxes(baseline: ProjectionResult, strategy: ProjectionRes
 
   const bIncome = incomeByYear(baseline, scenario);
   const sIncome = incomeByYear(strategy, scenario);
-  const b = totals(bIncome, baseline, scenario, df);
-  const s = totals(sIncome, strategy, scenario, df);
+  const b = totals(bIncome, baseline, scenario, df, discountRate);
+  const s = totals(sIncome, strategy, scenario, df, discountRate);
   const lastYear = strategy.years[strategy.years.length - 1]?.year ?? start;
 
   // Year-by-year differences, with each IRMAA surcharge placed in its premium year.
@@ -105,7 +116,7 @@ export function compareTaxes(baseline: ProjectionResult, strategy: ProjectionRes
     addFlow(sy.year, sy.tax.totalTax - by.tax.totalTax);
     if (sy.premiumYear <= lastYear) addFlow(sy.premiumYear, sy.annualSurcharge - by.annualSurcharge);
   });
-  addFlow(lastYear + 1, s.heirsTax - b.heirsTax);
+  s.legacy.schedule.forEach((sy, k) => addFlow(sy.year, sy.tax - (b.legacy.schedule[k]?.tax ?? 0)));
 
   let earlier = 0;
   let earlierPv = 0;
@@ -122,7 +133,9 @@ export function compareTaxes(baseline: ProjectionResult, strategy: ProjectionRes
   }
 
   const lifetimeDiffPv = s.lifetimePv - b.lifetimePv;
-  const pretaxDiffPv = (b.endingPretax - s.endingPretax) * df(lastYear + 1 - start);
+  // Heirs' tax is (rate × inherited withdrawals) at a flat rate, so the breakeven flat rate
+  // compares the lifetime difference with the difference in inherited withdrawals.
+  const pretaxDiffPv = b.legacy.withdrawalsPv - s.legacy.withdrawalsPv;
   let breakevenHeirsRate: number | null = null;
   if (pretaxDiffPv > 0.5) breakevenHeirsRate = Math.max(0, lifetimeDiffPv / pretaxDiffPv);
   else if (lifetimeDiffPv < -0.5) breakevenHeirsRate = 0;

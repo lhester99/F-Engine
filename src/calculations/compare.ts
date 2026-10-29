@@ -47,7 +47,13 @@ export function metricsForStrategy(
   if (!baseline.ok || !strategy.ok) return null;
   const last = lastYearOf(strategy);
   const tax = compareTaxes(baseline, strategy, scenario);
-  const wealth = compareWealth(baseline, strategy);
+  const wealth = compareWealth(
+    baseline,
+    strategy,
+    scenario.heirs.mode === 'income'
+      ? { baseline: tax.baseline.legacy.effectiveRate, strategy: tax.strategy.legacy.effectiveRate }
+      : undefined,
+  );
   return {
     baseline: {
       summary: summarize(baseline),

@@ -1,7 +1,7 @@
 import { DEFAULT_QCD_LIMIT_SETTINGS } from '../../src/data/qcdLimits';
 import { emptyStrategy } from '../../src/strategies/schedule';
-import { DEFAULT_ANALYSIS, DEFAULT_SURVIVORSHIP } from '../../src/utils/defaultScenario';
-import type { Account, AnalysisSettings, CashFlowSettings, ContributionRule, Scenario, Strategy, SurvivorshipSettings } from '../../src/types';
+import { DEFAULT_ANALYSIS, DEFAULT_HEIRS, DEFAULT_SURVIVORSHIP } from '../../src/utils/defaultScenario';
+import type { Account, AnalysisSettings, CashFlowSettings, ContributionRule, HeirSettings, Scenario, Strategy, SurvivorshipSettings } from '../../src/types';
 
 export interface TestScenarioOptions {
   dob: string;
@@ -25,6 +25,7 @@ export interface TestScenarioOptions {
   /** Adds a spouse "p2" with these values (Traditional IRA "s0", Roth IRA "sroth"). */
   spouse?: { dob: string; traditional?: number; roth?: number; ss?: number; ssAge?: number };
   survivorship?: Partial<SurvivorshipSettings>;
+  heirs?: Partial<HeirSettings>;
 }
 
 /**
@@ -97,6 +98,7 @@ export function scenario(o: TestScenarioOptions): Scenario {
     analysis: { ...DEFAULT_ANALYSIS, ...withoutPersonFields(o.analysis) },
     cashFlow: { ...TEST_CASH_FLOW, ...o.cashFlow },
     survivorship: { ...DEFAULT_SURVIVORSHIP, firstDeathPersonId: 'p1', ...o.survivorship },
+    heirs: { ...DEFAULT_HEIRS, ...o.heirs },
   };
 }
 

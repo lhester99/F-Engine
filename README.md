@@ -10,6 +10,8 @@ It answers:
 - What does the conversion plan look like year by year: income, federal bracket, tax?
 - What tax is paid now versus avoided later, and what is the breakeven?
 - How large could future RMDs get, and how fast do they grow?
+- What happens to RMD money the client doesn't need, and what the survivor pays filing single?
+- What do heirs keep from a large pre-tax IRA under the 10-year rule, versus Roth and taxable assets?
 
 Lower RMDs and conversions are not automatically better. The app compares results
 neutrally and does not make recommendations.
@@ -17,7 +19,7 @@ neutrally and does not make recommendations.
 **Build plan:** 1) tax engine, bracket view, fill-to-bracket conversions (done);
 2) taxable account for unneeded RMDs, how conversion taxes are paid (withheld, taxable
 account, or cash), after-tax wealth and breakeven age (done); 3) spouses and the
-survivor's switch to single filing (done); 4) heirs under the 10-year rule.
+survivor's switch to single filing (done); 4) heirs under the 10-year rule (done).
 
 > Hypothetical illustration only. Not a recommendation, forecast, or tax advice.
 
@@ -42,12 +44,16 @@ to April 1 of the next year.
 **Household income & taxes:** filing status (single or married filing jointly, with
 the spouse's date of birth), Social Security benefits and the age they start,
 pensions/wages/interest, qualified dividends and gains, tax-exempt interest, itemized
-deductions, a flat state tax rate, inflation, the heirs' tax rate, and a discount rate
+deductions, a flat state tax rate, inflation, and a discount rate
 (by default the investment return). All amounts are entered in today's dollars.
 
 **Spouse & survivor:** add a spouse with their own date of birth, Social Security,
 Traditional IRAs, and Roth IRA. Optionally model the first death: who dies first and
 at what age, and how much other income and spending continue for the survivor.
+
+**Heirs:** either one tax rate for heirs, or estimate it from the heirs themselves:
+how many heirs share equally, each heir's own income, their filing status, and their
+state tax rate.
 
 **Taxable account, cash & spending:** taxable brokerage balance, its cost basis, and
 dividend yield; cash and its interest rate; and how much of the IRA withdrawals the
@@ -87,6 +93,12 @@ IRMAA tier thresholds that apply two years later.
 the heirs' tax rate), strategy against no strategy, with the breakeven age marked; or
 account balances (Traditional, Roth, taxable, cash, total).
 
+**Tab 5, Heirs:** what heirs inherit with and without the strategy (pre-tax IRA,
+Roth IRA, taxable and cash), the inherited IRA withdrawn over 10 years, heirs' tax and
+average rate, the highest bracket an heir reaches (when estimated from their income),
+and what heirs keep in present value. The chart shows each year of the 10-year window,
+against the heirs' bracket lines when estimated from their income.
+
 **Tax trade-off:** federal, state, and IRMAA costs with and without the strategy;
 tax paid earlier versus avoided later (including heirs' tax on the pre-tax balance
 left), in dollars and present value; and the breakeven heirs' tax rate.
@@ -123,9 +135,17 @@ itemized deductions, the 2025–2028 senior deduction and its phase-out, 0/15/20
 on qualified income, and the 3.8% NIIT. State tax is a flat rate. Later years are
 indexed at the inflation rate entered.
 
-**Tax trade-off:** taxes with and without the strategy, year by year, plus the
-heirs' rate times the pre-tax balance left at the end. The breakeven is the heirs'
-rate at which the present-value totals are equal.
+**Tax trade-off:** taxes with and without the strategy, year by year, plus heirs'
+tax on the pre-tax balance left at the end. The breakeven is the flat heirs' rate at
+which the present-value totals are equal.
+
+**Heirs and the 10-year rule:** heirs inherit at the end of the projection. The
+inherited pre-tax IRA keeps growing at the investment return and is withdrawn evenly
+(year k takes the balance ÷ (11 − k)), so it is empty after 10 years; this meets the
+annual RMDs required in years 1–9 for heirs younger than about 80. Heirs' tax is
+either the rate entered, or each heir's extra federal tax on their share stacked on
+their own income (current brackets, indexed), plus a flat state rate. The Roth IRA
+passes tax-free; the taxable account gets a step-up in basis.
 
 **Spouses and the first death:** each spouse's RMDs use their own IRAs and age;
 the couple files jointly. Conversions are sized after both spouses' RMDs are known.
@@ -141,7 +161,7 @@ the Roth IRA. Taxable-account dividends are taxed yearly; selling realizes gains
 which are taxed in the same year.
 
 **After-tax value and breakeven age:** after-tax value = Roth + taxable + cash +
-pre-tax × (1 − heirs' rate). The breakeven age is the first age from which the
+pre-tax × (1 − heirs' rate, or their estimated average rate). The breakeven age is the first age from which the
 strategy stays at or above no strategy.
 
 **IRMAA:** MAGI = AGI + tax-exempt interest; it sets premiums two years later for each
@@ -167,15 +187,18 @@ verification notes are in [`docs/research.md`](docs/research.md).
   Lifetime Table, which overstates RMDs in that case.
 - First death: always a spousal rollover; one death only; Social Security survivor
   benefit simplified to the larger of the two entered benefits.
-- Heirs are one tax rate on the pre-tax balance left; the 10-year rule comes in step 4.
+- Heirs: everyone is a non-spouse heir under the 10-year rule, inheriting at the end
+  of the projection and withdrawing evenly. Eligible designated beneficiaries (minor
+  children, disabled or chronically ill heirs, heirs not more than 10 years younger),
+  trusts as beneficiaries, and estate tax are not modeled. Heirs estimated from income
+  share equally and have the same income and filing status; standard deduction only.
 - Other entered income pays its own tax and isn't spent from the modeled accounts.
   The taxable account earns the IRA return; dividends are all qualified; Roth
   withdrawals for spending are assumed tax-free.
 - After-tax value is a legacy view (pre-tax at the heirs' rate, taxable gains
   stepped up), not what the client would net by cashing out in one year.
 - Traditional and Roth IRAs only. The still-working exception is not modeled.
-- Out of scope: inherited accounts, non-spouse beneficiaries, the 10-year rule,
-  death of a spouse during the projection, spousal rollovers.
+- Out of scope: accounts the client has already inherited.
 - Assumes none of the current year's RMD has been taken yet. A prior-year first RMD
   deferred into this year is not modeled.
 - One constant return for every account in every year; no sequence-of-returns risk.
@@ -198,7 +221,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 157 calculation and component tests, including IRS boundary cases,
+- `npm test`: 163 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a
@@ -206,7 +229,8 @@ verification notes are in [`docs/research.md`](docs/research.md).
   tax from each source, realized gains settling, unneeded RMDs invested, Roth covering
   spending, IRMAA paid two years later, after-tax value and breakeven age), and
   spouses (independent RMDs, joint deductions, the death-year RMD, spousal rollover
-  RMDs on the survivor's age, single filing, survivor Social Security).
+  RMDs on the survivor's age, single filing, survivor Social Security), and heirs
+  (hand-calculated 10-year withdrawals, heirs' tax at a rate and from heirs' brackets).
 - `npm run test:e2e`: browser tests on desktop Chrome and an emulated iPhone 13
   viewport (iPhone screen size, touch, and user agent, but running in Chromium, not
   real Safari). Set `PW_WEBKIT=1` to add a real WebKit run where WebKit is installed,

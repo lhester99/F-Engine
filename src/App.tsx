@@ -14,6 +14,8 @@ import { Findings } from './components/Findings';
 import { ScenarioCompare } from './components/ScenarioCompare';
 import { TradeOffs } from './components/TradeOffs';
 import { AssumptionsPanel } from './inputs/AssumptionsPanel';
+import { HeirsPanel } from './inputs/HeirsPanel';
+import { LegacyView } from './components/LegacyView';
 import { MessageList } from './components/MessageList';
 import { MethodologyPanel } from './components/MethodologyPanel';
 import { Section } from './components/Section';
@@ -32,12 +34,13 @@ import { effectiveAnnualReturn } from './calculations/returns';
 import { deathYear } from './calculations/household';
 import { SpousePanel } from './inputs/SpousePanel';
 
-type Tab = 'rmd' | 'brackets' | 'income' | 'wealth';
+type Tab = 'rmd' | 'brackets' | 'income' | 'wealth' | 'heirs';
 const TABS: { id: Tab; label: string; short: string }[] = [
   { id: 'rmd', label: 'RMD Projections', short: 'RMDs' },
   { id: 'brackets', label: 'Tax Brackets', short: 'Brackets' },
   { id: 'income', label: 'IRMAA', short: 'IRMAA' },
   { id: 'wealth', label: 'Wealth', short: 'Wealth' },
+  { id: 'heirs', label: 'Heirs', short: 'Heirs' },
 ];
 
 /** The claude.ai preview build cannot open the print dialog, so it hides the print button. */
@@ -61,7 +64,7 @@ export default function App() {
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<SavedStrategy[]>([]);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, wealth: null });
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, wealth: null, heirs: null });
 
   const update = useCallback((fn: (s: Scenario) => Scenario) => setScenario(fn), []);
   const {
@@ -78,6 +81,10 @@ export default function App() {
     findings,
   } = useProjection(scenario);
   const closeMethodology = useCallback(() => setMethodologyOpen(false), []);
+  const heirsRateText =
+    scenario.heirs.mode === 'income' && tax
+      ? `average ${formatPercent(tax.strategy.legacy.effectiveRate)} (strategy) / ${formatPercent(tax.baseline.legacy.effectiveRate)} (no strategy)`
+      : formatPercent(scenario.analysis.heirsTaxRate, 0);
 
   const allMessages = strategy.messages;
   const years = useMemo(() => strategy.years.map((y) => y.year), [strategy.years]);
@@ -142,6 +149,7 @@ export default function App() {
           </button>
         </div>
       )}
+      {tab !== 'heirs' && (
       <div className="seg" role="group" aria-label="Horizontal axis">
         <button type="button" className="seg-btn" aria-pressed={axis === 'age'} onClick={() => setAxis('age')}>
           Age
@@ -150,6 +158,7 @@ export default function App() {
           Year
         </button>
       </div>
+      )}
       {tab === 'rmd' && (
         <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
           <input type="checkbox" className="h-4 w-4 accent-accent" checked={showConversions} onChange={(e) => setShowConversions(e.target.checked)} />
@@ -247,6 +256,9 @@ export default function App() {
             </Section>
             <Section title="Taxable account, cash & spending">
               <CashFlowPanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
+            <Section title="Heirs" badge={scenario.heirs.mode === 'income' ? 'Brackets' : formatPercent(scenario.analysis.heirsTaxRate, 0)}>
+              <HeirsPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
             <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
               Planning levers
@@ -397,7 +409,7 @@ export default function App() {
                       />
                       <p className="text-xs text-ink-2" data-testid="chart-caption">
                         After-tax value on December 31 of each year: Roth IRA + taxable account + cash + pre-tax IRAs after the
-                        heirs' {formatPercent(scenario.analysis.heirsTaxRate, 0)} tax rate. Taxes on IRA income and conversions are
+                        heirs' {heirsRateText} tax rate. Taxes on IRA income and conversions are
                         already paid from these accounts. Gains in the taxable account are not taxed here, because heirs receive a
                         step-up in basis.
                       </p>
@@ -429,7 +441,11 @@ export default function App() {
                     </>
                   )}
 
-                  <div className="print:hidden">
+                  {tab === 'heirs' && tax && (
+                    <LegacyView baseline={tax.baseline.legacy} strategy={tax.strategy.legacy} scenario={scenario} discountRate={tax.discountRate} />
+                  )}
+
+                  <div className={`print:hidden ${tab === 'heirs' ? 'hidden' : ''}`}>
                     {selected ? (
                       <YearDetail
                         baseline={selectedBaseline}
@@ -466,7 +482,7 @@ export default function App() {
               </div>
 
               <div className="print:break-inside-avoid">
-                <TradeOffs tax={tax} baselineIrmaa={baselineIrmaa} strategyIrmaa={strategyIrmaa} analysis={scenario.analysis} />
+                <TradeOffs tax={tax} baselineIrmaa={baselineIrmaa} strategyIrmaa={strategyIrmaa} analysis={scenario.analysis} heirs={scenario.heirs} />
               </div>
               <div className="print:break-inside-avoid">
                 <ScenarioCompare

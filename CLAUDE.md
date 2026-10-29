@@ -29,6 +29,7 @@ Allowed (approved by the owner October 28–29, 2026):
 - A taxable brokerage account and a cash account, used only to hold unneeded RMDs and to pay conversion taxes, with simple entered growth and tax-drag assumptions. The advisor enters how much of each RMD is spent.
 - Spouses, an assumed age at the first death, spousal rollover to the survivor, and single filing for the survivor.
 - Heirs: the 10-year rule for non-spouse beneficiaries, a tax rate the advisor enters for heirs, and step-up in basis for taxable assets.
+  - Added in step 4, pending owner confirmation: an optional estimate of heirs' tax from their own income and brackets (number of heirs, each heir's income, filing status, state rate), from the owner's request to show how an inheritance can push heirs in their peak earning years into a higher bracket.
 
 4. USER AND DESIGN
 User: an advisor, possibly mid-conversation with a client holding $500K to several million in retirement accounts. The app must be fast, accurate, and uncluttered. One professional interface; no beginner/advanced modes. Desktop-first, fully usable in iPhone Safari.

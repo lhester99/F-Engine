@@ -376,3 +376,21 @@ test('spouse, first death, and survivor view', async ({ page }) => {
   await expect(page.getByTestId('finding-survivor')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
+
+test('Heirs tab: 10-year rule comparison and bracket-based heirs tax', async ({ page }) => {
+  await expect(page.getByTestId('finding-heirs')).toContainText('heirs would inherit');
+  const tab = page.getByRole('tab', { name: 'Heirs' });
+  await tab.scrollIntoViewIfNeeded();
+  await tab.click();
+  await expect(page.getByTestId('legacy-table')).toContainText('What heirs keep, present value');
+  await expect(page.locator('[data-testid="heirs-chart"] .recharts-bar-rectangle').first()).toBeVisible();
+  await openInputs(page);
+  const income = page.getByRole('button', { name: "From heirs' income" });
+  await income.scrollIntoViewIfNeeded();
+  await income.click();
+  await page.getByTestId('heirs-count').fill('1');
+  await page.getByTestId('heirs-income').fill('250000');
+  await expect(page.getByTestId('legacy-table')).toContainText('Highest federal bracket an heir reaches');
+  await expect(page.getByTestId('finding-heirs')).toContainText('bracket for each heir');
+  await expectNoHorizontalScroll(page);
+});

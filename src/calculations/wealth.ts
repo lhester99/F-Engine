@@ -1,4 +1,4 @@
-import type { ProjectionResult } from '../types';
+import type { ProjectionResult, YearTotals } from '../types';
 
 export interface WealthPoint {
   year: number;
@@ -27,12 +27,24 @@ export interface WealthComparison {
  * Compares after-tax value (Roth + taxable account + cash + pre-tax balance
  * after the heirs' tax rate) year by year.
  */
-export function compareWealth(baseline: ProjectionResult, strategy: ProjectionResult): WealthComparison {
+export function compareWealth(
+  baseline: ProjectionResult,
+  strategy: ProjectionResult,
+  /**
+   * Heirs' rates to value pre-tax money at, per path. When omitted, each year's
+   * afterTaxValue (at the entered heirs' rate) is used. When heirs' tax is
+   * estimated from their income, each path passes its own average rate, since a
+   * larger inherited IRA is taxed at higher brackets.
+   */
+  rates?: { baseline: number; strategy: number },
+): WealthComparison {
+  const value = (t: YearTotals | undefined, rate: number | undefined) =>
+    !t ? 0 : rate === undefined ? t.afterTaxValue : t.endBalanceRoth + t.endBalanceTaxable + t.endBalanceCash + t.endBalancePretax * (1 - rate);
   const points: WealthPoint[] = strategy.years.map((s, i) => ({
     year: s.year,
     age: s.age,
-    baseline: baseline.years[i]?.totals.afterTaxValue ?? 0,
-    strategy: s.totals.afterTaxValue,
+    baseline: value(baseline.years[i]?.totals, rates?.baseline),
+    strategy: value(s.totals, rates?.strategy),
   }));
   let breakevenIdx: number | null = null;
   for (let i = points.length - 1; i >= 0; i--) {

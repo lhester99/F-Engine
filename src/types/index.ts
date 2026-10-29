@@ -152,7 +152,7 @@ export interface AnalysisSettings {
   stateTaxRate: number;
   /** Grows entered income and deductions, and indexes tax brackets and IRMAA after the latest published year. */
   inflationRate: number;
-  /** Tax rate assumed for whoever eventually withdraws the pre-tax balance left at the end (usually heirs). */
+  /** Heirs' tax rate on the inherited pre-tax IRA (used when heirs.mode is 'rate'). */
   heirsTaxRate: number;
   /** Annual rate used to express future dollars in present value (ignored when discountMatchesReturn). */
   discountRate: number;
@@ -181,6 +181,22 @@ export interface CashFlowSettings {
   spendingFromIra: number;
 }
 
+/**
+ * Heirs who inherit at the end of the projection (the last death). Non-spouse
+ * heirs must empty an inherited IRA within 10 years; the app withdraws it evenly.
+ */
+export interface HeirSettings {
+  /** 'rate': heirs' tax is the entered heirs' tax rate. 'income': estimated from each heir's brackets. */
+  mode: 'rate' | 'income';
+  /** Number of heirs sharing equally (income mode). */
+  count: number;
+  /** Each heir's other taxable income per year, in today's dollars (income mode). */
+  otherIncome: number;
+  filingStatus: FilingStatus;
+  /** Heirs' flat state income tax rate (income mode). */
+  stateTaxRate: number;
+}
+
 export interface Scenario {
   /** First projection year. Balances are as of December 31 of the prior year. */
   startYear: number;
@@ -196,6 +212,7 @@ export interface Scenario {
   analysis: AnalysisSettings;
   cashFlow: CashFlowSettings;
   survivorship: SurvivorshipSettings;
+  heirs: HeirSettings;
 }
 
 export type MessageSeverity = 'error' | 'warning' | 'info';

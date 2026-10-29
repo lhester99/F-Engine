@@ -1,9 +1,18 @@
 import { DEFAULT_QCD_LIMIT_SETTINGS } from '../data/qcdLimits';
 import { emptyStrategy } from '../strategies/schedule';
-import type { Account, AnalysisSettings, CashFlowSettings, Person, Scenario, SurvivorshipSettings } from '../types';
+import type { Account, AnalysisSettings, CashFlowSettings, HeirSettings, Person, Scenario, SurvivorshipSettings } from '../types';
 
 export const PRIMARY_ID = 'client';
 export const SPOUSE_ID = 'spouse';
+
+/** Default heirs: tax at the entered heirs' rate; income-mode fields prefilled for two working-age heirs. */
+export const DEFAULT_HEIRS: HeirSettings = {
+  mode: 'rate',
+  count: 2,
+  otherIncome: 150_000,
+  filingStatus: 'joint',
+  stateTaxRate: 0,
+};
 
 /** Default first-death settings (off until the advisor turns it on). */
 export const DEFAULT_SURVIVORSHIP: SurvivorshipSettings = {
@@ -102,5 +111,6 @@ export function defaultScenario(startYear = new Date().getFullYear()): Scenario 
     analysis: { ...DEFAULT_ANALYSIS },
     cashFlow: { ...DEFAULT_CASH_FLOW },
     survivorship: { ...DEFAULT_SURVIVORSHIP },
+    heirs: { ...DEFAULT_HEIRS },
   };
 }

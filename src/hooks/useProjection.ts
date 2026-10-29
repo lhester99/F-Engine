@@ -20,7 +20,11 @@ export function useProjection(scenario: Scenario) {
     const baselineIrmaa = ok ? summarizeIrmaa(baselineIncome, lastYear) : null;
     const strategyIrmaa = ok ? summarizeIrmaa(strategyIncome, lastYear) : null;
     const tax = ok ? compareTaxes(baseline, strategy, scenario) : null;
-    const wealth = ok ? compareWealth(baseline, strategy) : null;
+    const rates =
+      tax && scenario.heirs.mode === 'income'
+        ? { baseline: tax.baseline.legacy.effectiveRate, strategy: tax.strategy.legacy.effectiveRate }
+        : undefined;
+    const wealth = ok ? compareWealth(baseline, strategy, rates) : null;
     const findings = ok
       ? buildFindings({
           scenario,

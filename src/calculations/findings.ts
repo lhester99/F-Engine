@@ -7,7 +7,7 @@ import type { ProjectionSummary } from './summary';
 import type { TaxComparison } from './taxComparison';
 
 export interface Finding {
-  id: 'size' | 'excess' | 'strategy' | 'shift' | 'brackets' | 'survivor' | 'tax' | 'wealth' | 'irmaa';
+  id: 'size' | 'excess' | 'strategy' | 'shift' | 'brackets' | 'survivor' | 'tax' | 'wealth' | 'heirs' | 'irmaa';
   /** Short label for the finding. */
   title: string;
   text: string;
@@ -79,9 +79,12 @@ export function buildFindings(i: FindingsInput): Finding[] {
 
   // Shown even without a strategy: the survivor's switch to single filing matters on its own.
   const survivor = survivorFinding(i);
+  // Also shown without a strategy: the 10-year rule's tax on a large pre-tax balance is the starting point.
+  const heirs = heirsFinding(i);
 
   if (!hasStrategy) {
     if (survivor) out.push(survivor);
+    if (heirs) out.push(heirs);
     out.push({
       id: 'strategy',
       title: 'Strategy',
@@ -156,6 +159,10 @@ export function buildFindings(i: FindingsInput): Finding[] {
     else if (t.breakevenHeirsRate !== null) {
       breakeven = ` It comes out lower whenever the heirs' tax rate is above ${formatPercent(t.breakevenHeirsRate)}.`;
     }
+    const heirsBasis =
+      i.scenario.heirs.mode === 'income'
+        ? `estimated from the heirs' income, an average ${formatPercent(t.strategy.legacy.effectiveRate)} with the strategy and ${formatPercent(t.baseline.legacy.effectiveRate)} without`
+        : `at the ${formatPercent(a.heirsTaxRate, 0)} rate entered`;
     const qcdNote =
       t.qcdExcludedIncome > 0.5
         ? ` This counts the ${formatUsd(t.qcdExcludedIncome)} of QCD gifts as income not taxed; it does not count the gifts themselves.`
@@ -163,7 +170,7 @@ export function buildFindings(i: FindingsInput): Finding[] {
     out.push({
       id: 'tax',
       title: 'Estimated tax trade-off',
-      text: `The strategy adds about ${formatUsd(t.taxPaidEarlier)} of federal, state, and IRMAA costs in the years it raises income, and avoids about ${formatUsd(t.taxAvoidedLater)} in later years and for heirs (at the ${formatPercent(a.heirsTaxRate, 0)} rate entered). In present value, its estimated total is ${verdict}.${breakeven}${qcdNote}`,
+      text: `The strategy adds about ${formatUsd(t.taxPaidEarlier)} of federal, state, and IRMAA costs in the years it raises income, and avoids about ${formatUsd(t.taxAvoidedLater)} in later years and for heirs (${heirsBasis}). In present value, its estimated total is ${verdict}.${breakeven}${qcdNote}`,
     });
   }
 
@@ -171,7 +178,10 @@ export function buildFindings(i: FindingsInput): Finding[] {
     const w = i.wealth;
     const diff = w.endStrategy - w.endBaseline;
     const lastAge = i.strategy.years[i.strategy.years.length - 1]?.age;
-    const heirs = formatPercent(i.scenario.analysis.heirsTaxRate, 0);
+    const heirs =
+      i.scenario.heirs.mode === 'income' && i.tax
+        ? `the heirs' estimated average tax (${formatPercent(i.tax.strategy.legacy.effectiveRate)} with the strategy, ${formatPercent(i.tax.baseline.legacy.effectiveRate)} without)`
+        : `a ${formatPercent(i.scenario.analysis.heirsTaxRate, 0)} tax`;
     const when =
       w.breakevenAge === null
         ? ' It stays behind through the end of the projection at these assumptions.'
@@ -181,9 +191,11 @@ export function buildFindings(i: FindingsInput): Finding[] {
     out.push({
       id: 'wealth',
       title: 'After-tax wealth',
-      text: `At age ${lastAge}, after-tax value is ${formatUsd(w.endStrategy)} with the strategy and ${formatUsd(w.endBaseline)} without it (${diff >= 0 ? '+' : '−'}${formatUsd(Math.abs(diff))}), counting pre-tax money after a ${heirs} tax.${when}`,
+      text: `At age ${lastAge}, after-tax value is ${formatUsd(w.endStrategy)} with the strategy and ${formatUsd(w.endBaseline)} without it (${diff >= 0 ? '+' : '−'}${formatUsd(Math.abs(diff))}), counting pre-tax money after ${heirs}.${when}`,
     });
   }
+
+  if (heirs) out.push(heirs);
 
   if (i.baselineIrmaa && i.strategyIrmaa) {
     const bi = i.baselineIrmaa;
@@ -230,4 +242,30 @@ function survivorFinding(i: FindingsInput): Finding | null {
       `After ${deceased?.label ?? 'the first spouse'} dies at ${i.scenario.survivorship.deathAge} (${dy}), the survivor files single with about the same RMDs. Without the strategy, ${describe(b)}.` +
       (hasStrategy ? ` With the strategy, ${describe(s)}.` : ''),
   };
+}
+
+/** What heirs inherit and the tax they pay emptying the pre-tax IRA under the 10-year rule. */
+function heirsFinding(i: FindingsInput): Finding | null {
+  if (!i.tax) return null;
+  const b = i.tax.baseline.legacy;
+  const st = i.tax.strategy.legacy;
+  const keepDiff = st.netToHeirsPv - b.netToHeirsPv;
+  const bracket =
+    i.scenario.heirs.mode === 'income' && b.highestBracket > 0
+      ? ` Spread over 10 years on top of their own income, it reaches the ${Math.round(b.highestBracket * 100)}% bracket for each heir${
+          st.highestBracket !== b.highestBracket ? ` (${Math.round(st.highestBracket * 100)}% with the strategy)` : ''
+        }.`
+      : '';
+  const compare =
+    Math.abs(st.pretax - b.pretax) < 0.5
+      ? ''
+      : ` With the strategy they would inherit ${formatUsd(st.pretax)} pre-tax and ${formatUsd(st.roth)} Roth, and keep about ${formatUsd(Math.abs(keepDiff))} ${keepDiff >= 0 ? 'more' : 'less'} in present value.`;
+  if (b.pretax > 0.5 || st.pretax > 0.5) {
+    return {
+      id: 'heirs',
+      title: 'Heirs and the 10-year rule',
+      text: `With no strategy, heirs would inherit ${formatUsd(b.pretax)} of pre-tax IRA in ${b.inheritanceYear} and must empty it by ${b.inheritanceYear + 10}, paying an estimated ${formatUsd(b.heirsTax)} of tax on it.${bracket}${compare}`,
+    };
+  }
+  return null;
 }
