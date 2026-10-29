@@ -34,7 +34,7 @@ test('loads with the chart rendered and no horizontal scroll', async ({ page }) 
   const logo = page.getByRole('img', { name: 'Retirement XP' });
   await expect(logo).toBeVisible();
   expect(await logo.getAttribute('src')).toMatch(/^data:image\/webp/);
-  expect((await logo.boundingBox())!.height).toBeLessThanOrEqual(90);
+  expect((await logo.boundingBox())!.height).toBeLessThanOrEqual(120);
   await expect(page.getByTestId('rmd-chart').locator('.recharts-bar-rectangle').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

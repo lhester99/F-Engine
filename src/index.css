@@ -115,15 +115,16 @@ body {
 }
 .xp-logo {
   display: block;
-  height: 72px;
-  width: auto;
-  max-width: 100%;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 78%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 78%, transparent 100%);
+  /* Phones: full width, keeping the image's proportions. */
+  width: 100%;
+  height: auto;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 84%, transparent 100%);
 }
 @media (min-width: 640px) {
   .xp-logo {
-    height: 88px;
+    width: auto;
+    height: 112px;
   }
 }
 .xp-header .btn:not(.btn-primary) {
