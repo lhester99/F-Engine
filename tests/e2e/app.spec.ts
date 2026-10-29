@@ -391,6 +391,9 @@ test('Heirs tab: 10-year rule comparison and bracket-based heirs tax', async ({ 
   await tab.scrollIntoViewIfNeeded();
   await tab.click();
   await expect(page.getByTestId('legacy-table')).toContainText('What heirs keep, present value');
+  await expect(page.getByTestId('legacy-table')).toContainText('Roth IRA after tax-free growth, withdrawn in year 10');
+  await expect(page.locator('[data-testid="inheritance-chart"] .recharts-bar-rectangle').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Pre-tax withdrawals' }).click();
   await expect(page.locator('[data-testid="heirs-chart"] .recharts-bar-rectangle').first()).toBeVisible();
   await openInputs(page);
   const income = page.getByRole('button', { name: "From heirs' income" });

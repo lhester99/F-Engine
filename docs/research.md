@@ -276,6 +276,17 @@ against Pub. 590-B (2025), Treas. Reg. §1.401(a)(9)-5 and -9, §1.408A-6, Notic
 - IRC §1014: inherited taxable assets receive a basis equal to fair market value at
   death (step-up), so gains before death are not taxed.
 
+**Inherited Roth IRA (October 29, 2026):** Pub. 590-B: "If a Roth IRA owner dies, the
+minimum distribution rules that apply to traditional IRAs apply to Roth IRAs as though
+the Roth IRA owner died before their required beginning date"; and "If the IRA owner
+dies before the required beginning date and the 10-year rule applies, no distribution is
+required for any year before the 10th year." So heirs may leave an inherited Roth IRA
+invested for the full window. The app grows it at the investment return and withdraws it
+tax-free at the start of year 10 (the same point as the last pre-tax withdrawal; heirs
+could wait until December 31 of that year). Qualified (tax-free) distributions assume
+the owner's five-year period is met. Hand-checked: $1,000,000 Roth at 5% → $1,628,894.63
+withdrawn (tests/calculations/legacy.test.ts).
+
 **How the app models it:** inheritance at the end of the last projection year. The
 inherited pre-tax IRA grows at the investment return and is withdrawn ratably: in
 year k it withdraws balance ÷ (11 − k), so it is empty after year 10. The ratable

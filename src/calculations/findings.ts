@@ -259,7 +259,7 @@ function heirsFinding(i: FindingsInput): Finding | null {
   const compare =
     Math.abs(st.pretax - b.pretax) < 0.5
       ? ''
-      : ` With the strategy they would inherit ${formatUsd(st.pretax)} pre-tax and ${formatUsd(st.roth)} Roth, and keep about ${formatUsd(Math.abs(keepDiff))} ${keepDiff >= 0 ? 'more' : 'less'} in present value.`;
+      : ` With the strategy they would inherit ${formatUsd(st.pretax)} pre-tax and ${formatUsd(st.roth)} Roth (${formatUsd(b.roth)} without it); the Roth IRA can grow tax-free to about ${formatUsd(st.rothAtWithdrawal)} by year 10. They keep about ${formatUsd(Math.abs(keepDiff))} ${keepDiff >= 0 ? 'more' : 'less'} in present value.`;
   if (b.pretax > 0.5 || st.pretax > 0.5) {
     return {
       id: 'heirs',

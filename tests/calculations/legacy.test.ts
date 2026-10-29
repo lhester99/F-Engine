@@ -44,6 +44,33 @@ describe('heirs under the 10-year rule', () => {
     expect(l.netToHeirsPv).toBeCloseTo((1_050_000 * 0.76) / 1.05, 4);
   });
 
+  it('lets the inherited Roth IRA grow tax-free and withdraws it in year 10', () => {
+    // $1,000,000 Roth at 5% → $1,050,000 at the end of 2026; nine more years of growth to the start of
+    // year 10 → 1,000,000 × 1.05^10 = 1,628,894.63, withdrawn tax-free.
+    const s = scenario({
+      dob: '1965-01-01',
+      endAge: 61,
+      rate: 0.05,
+      traditional: [0],
+      roth: 1_000_000,
+      analysis: { ...NONE, heirsTaxRate: 0.24 },
+      cashFlow: EMPTY_SIDE,
+    });
+    const r = runProjection(s);
+    const nominal = computeLegacy(r, s, 0);
+    expect(nominal.roth).toBeCloseTo(1_050_000, 6);
+    expect(nominal.schedule[0]!.rothBalanceStart).toBeCloseTo(1_050_000, 6);
+    expect(nominal.schedule[0]!.rothWithdrawal).toBe(0);
+    expect(nominal.schedule[9]!.rothWithdrawal).toBeCloseTo(1_628_894.63, 2);
+    expect(nominal.rothAtWithdrawal).toBeCloseTo(1_628_894.63, 2);
+    expect(nominal.heirsTax).toBe(0);
+    expect(nominal.netToHeirsPv).toBeCloseTo(1_628_894.63, 2);
+    // Discounted at the 5% return, it is worth what was converted: $1,000,000 today.
+    const pv = computeLegacy(r, s, 0.05);
+    expect(pv.rothAtWithdrawalPv).toBeCloseTo(1_000_000, 4);
+    expect(pv.netToHeirsPv).toBeCloseTo(1_000_000, 4);
+  });
+
   const incomeCase = (count: number) => {
     // $1,000,000 inherited, 0% return and inflation → $100,000 a year in total.
     // Each heir: $150,000 other income, married filing jointly → 150,000 − 32,200 = 117,800 taxable (22% bracket).

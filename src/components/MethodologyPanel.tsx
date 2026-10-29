@@ -9,6 +9,7 @@ export const KNOWN_LIMITATIONS = [
   'Only one first death is modeled; the survivor lives to the end of the projection. The projection ends when the client would reach the ending age.',
   'Traditional and Roth IRAs only. 401(k), 403(b), SEP and SIMPLE IRAs, Roth 401(k)s, and the still-working exception are not yet modeled.',
   'Heirs inherit everything at the end of the projection (the last death is assumed then). Each heir is a non-spouse designated beneficiary under the 10-year rule and withdraws the inherited IRA evenly over 10 years. Eligible designated beneficiaries (minor children, disabled or chronically ill heirs, heirs not more than 10 years younger), trusts as beneficiaries, accounts the client has already inherited, and estate tax are out of scope.',
+  'During the 10-year window the inherited IRAs grow at the investment return, while the taxable account and cash are counted at their value at inheritance. With the default discount rate (the investment return) this makes no difference to present values; with a lower discount rate it slightly favors the IRAs, and with a higher one the taxable account.',
   'Even 10-year withdrawals meet the annual RMDs required in years 1–9 for heirs who are 81 or younger in the first year after the death (single life expectancy at 81 is 10.5 years, Treas. Reg. §1.401(a)(9)-9(b)). Heirs could instead bunch or time withdrawals; that is not modeled.',
   'Heirs’ tax from income uses current federal brackets indexed at inflation, the standard deduction, no other deductions or credits, and a flat state rate. Heirs’ income is entered in today’s dollars and grows with inflation. Heirs are assumed to share equally, file the same way, and have the same income.',
   'Assumes none of the current year’s RMD has been taken yet. If the first RMD year was last year and that RMD was deferred to April 1 of this year, the deferred amount is not modeled.',
@@ -297,11 +298,16 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
                 Inherited pre-tax IRA: grows at the investment return; in year k of 10 heirs withdraw the balance ÷ (11 − k),
                 so it is empty after year 10. Each withdrawal is taxable to the heirs.
               </li>
-              <li>Inherited Roth IRA: passes tax-free (it must also be emptied within 10 years).</li>
+              <li>
+                Inherited Roth IRA: no yearly withdrawals are required (the owner is treated as dying before the required
+                beginning date), but it must also be emptied within 10 years. Heirs leave it invested: it grows tax-free at
+                the investment return and is withdrawn tax-free in year 10, at the same point as the last pre-tax
+                withdrawal. Assumes the five-year rule for tax-free Roth withdrawals is met.
+              </li>
               <li>Taxable account and cash: basis steps up at death (IRC §1014), so earlier gains are not taxed.</li>
               <li>
-                What heirs keep, present value = Roth + taxable + cash + inherited IRA withdrawals − heirs’ tax, each
-                discounted to the start of the projection. The heirs’ average rate is heirs’ tax ÷ withdrawals, both in present
+                What heirs keep = the Roth IRA after its growth + taxable + cash + inherited IRA withdrawals − heirs’ tax.
+                The present value discounts each amount from the year it is received to the start of the projection. The heirs’ average rate is heirs’ tax ÷ withdrawals, both in present
                 value.
               </li>
             </ul>

@@ -20,6 +20,10 @@ export interface LegacyYear {
   bracketRate: number;
   /** Tax on this year's withdrawals, all heirs. */
   tax: number;
+  /** Inherited Roth IRA balance at the start of this year (grows tax-free until withdrawn). */
+  rothBalanceStart: number;
+  /** Inherited Roth IRA withdrawn this year (all of it in year 10; tax-free). */
+  rothWithdrawal: number;
 }
 
 export interface Legacy {
@@ -40,7 +44,14 @@ export interface Legacy {
   effectiveRate: number;
   /** Highest federal bracket an heir reaches (income mode). */
   highestBracket: number;
-  /** Roth + taxable + cash + after-tax inherited IRA withdrawals, in present value. */
+  /** Inherited Roth IRA after growing tax-free until it is withdrawn in year 10. */
+  rothAtWithdrawal: number;
+  rothAtWithdrawalPv: number;
+  /**
+   * Roth (after its growth) + taxable + cash + inherited IRA withdrawals − heirs' tax,
+   * each discounted from the year received. A nominal total is not given: it would add
+   * year-10 Roth dollars to taxable and cash counted at inheritance, without their growth.
+   */
   netToHeirsPv: number;
 }
 
@@ -51,8 +62,13 @@ export interface Legacy {
  * 10 years. (This meets the annual RMDs required in years 1–9 when the owner
  * had begun RMDs, as long as each heir's single-life factor exceeds the years
  * left, which holds for heirs 81 or younger in the first year: the Single
- * Life Table gives 10.5 at 81 and 9.9 at 82, Treas. Reg. §1.401(a)(9)-9(b).) The Roth IRA passes tax-free; the
- * taxable account receives a step-up in basis.
+ * Life Table gives 10.5 at 81 and 9.9 at 82, Treas. Reg. §1.401(a)(9)-9(b).)
+ *
+ * The inherited Roth IRA has no annual RMDs (the owner is treated as dying before
+ * the required beginning date) but must also be emptied within 10 years. Heirs
+ * leave it invested: it grows tax-free at the investment return and is withdrawn,
+ * tax-free, at the same point as the last pre-tax withdrawal (start of year 10).
+ * The taxable account receives a step-up in basis; its later growth is not modeled.
  *
  * Heirs' tax: in 'rate' mode, withdrawals × the heirs' tax rate. In 'income'
  * mode, each heir's extra federal tax (brackets, standard deduction, under 65)
@@ -82,6 +98,7 @@ export function computeLegacy(result: ProjectionResult, scenario: Scenario, disc
     inflationRate: infl,
   });
 
+  const roth = t?.endBalanceRoth ?? 0;
   const schedule: LegacyYear[] = [];
   let balance = pretax;
   for (let k = 1; k <= TEN_YEAR_RULE; k++) {
@@ -100,7 +117,19 @@ export function computeLegacy(result: ProjectionResult, scenario: Scenario, disc
       perHeirTaxableIncome = withIt.ordinaryTaxableIncome;
       bracketRate = withIt.bracketRate;
     }
-    schedule.push({ year, index: k, inheritedBalanceStart: balance, withdrawal, perHeirWithdrawal: perHeir, perHeirTaxableIncome, bracketRate, tax });
+    const rothBalanceStart = roth * Math.pow(1 + r, k - 1);
+    schedule.push({
+      year,
+      index: k,
+      inheritedBalanceStart: balance,
+      withdrawal,
+      perHeirWithdrawal: perHeir,
+      perHeirTaxableIncome,
+      bracketRate,
+      tax,
+      rothBalanceStart,
+      rothWithdrawal: k === TEN_YEAR_RULE ? rothBalanceStart : 0,
+    });
     balance = (balance - withdrawal) * (1 + r);
   }
 
@@ -109,7 +138,8 @@ export function computeLegacy(result: ProjectionResult, scenario: Scenario, disc
   // Withdrawals happen at the start of each year of the window; year k is k − 1 years after inheritance.
   const withdrawalsPv = schedule.reduce((s, y) => s + y.withdrawal * df(y.year), 0);
   const heirsTaxPv = schedule.reduce((s, y) => s + y.tax * df(y.year), 0);
-  const roth = t?.endBalanceRoth ?? 0;
+  const rothAtWithdrawal = schedule[TEN_YEAR_RULE - 1]!.rothWithdrawal;
+  const rothAtWithdrawalPv = rothAtWithdrawal * df(L + TEN_YEAR_RULE);
   const taxable = t?.endBalanceTaxable ?? 0;
   const cash = t?.endBalanceCash ?? 0;
   return {
@@ -125,6 +155,8 @@ export function computeLegacy(result: ProjectionResult, scenario: Scenario, disc
     heirsTaxPv,
     effectiveRate: withdrawalsPv > 0 ? heirsTaxPv / withdrawalsPv : h.mode === 'rate' ? scenario.analysis.heirsTaxRate : 0,
     highestBracket: Math.max(0, ...schedule.map((y) => y.bracketRate)),
-    netToHeirsPv: (roth + taxable + cash) * df(L + 1) + withdrawalsPv - heirsTaxPv,
+    rothAtWithdrawal,
+    rothAtWithdrawalPv,
+    netToHeirsPv: (taxable + cash) * df(L + 1) + rothAtWithdrawalPv + withdrawalsPv - heirsTaxPv,
   };
 }

@@ -88,10 +88,14 @@ the heirs' tax rate), strategy against no strategy, with the breakeven age marke
 account balances (Traditional, Roth, taxable, cash, total).
 
 **Tab 5, Heirs:** what heirs inherit with and without the strategy (pre-tax IRA,
-Roth IRA, taxable and cash), the inherited IRA withdrawn over 10 years, heirs' tax and
-average rate, the highest bracket an heir reaches (when estimated from their income),
-and what heirs keep in present value. The chart shows each year of the 10-year window,
-against the heirs' bracket lines when estimated from their income.
+Roth IRA, taxable and cash); the Roth IRA after 10 years of tax-free growth; the
+inherited pre-tax IRA withdrawn over 10 years, heirs' tax and average rate, and the
+highest bracket an heir reaches (when estimated from their income); and what heirs keep
+in present value (and how much of it comes from the Roth). Present value puts the Roth
+taken in year 10 and the accounts received at inheritance on the same footing. One chart
+shows the inherited pre-tax and Roth balances through the 10 years; the other shows
+each year's pre-tax withdrawal, against the heirs' bracket lines when estimated from
+their income.
 
 **Tax trade-off:** federal, state, and IRMAA costs with and without the strategy;
 tax paid earlier versus avoided later (including heirs' tax on the pre-tax balance
@@ -142,8 +146,9 @@ inherited pre-tax IRA keeps growing at the investment return and is withdrawn ev
 (year k takes the balance ÷ (11 − k)), so it is empty after 10 years; this meets the
 annual RMDs required in years 1–9 for heirs 81 or younger in the first year after the death. Heirs' tax is
 either the rate entered, or each heir's extra federal tax on their share stacked on
-their own income (current brackets, indexed), plus a flat state rate. The Roth IRA
-passes tax-free; the taxable account gets a step-up in basis.
+their own income (current brackets, indexed), plus a flat state rate. The inherited
+Roth IRA has no yearly withdrawals, so heirs let it grow tax-free and take it, tax-free,
+in year 10. The taxable account gets a step-up in basis.
 
 **Spouses and the first death:** each spouse's RMDs use their own IRAs and age;
 the couple files jointly. Conversions are sized after both spouses' RMDs are known.
@@ -219,7 +224,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 192 calculation and component tests, including IRS boundary cases,
+- `npm test`: 194 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

@@ -328,7 +328,9 @@ describe('findings', () => {
     expect(by('brackets')).toMatch(/^In conversion years \(ages 70–72\), income reaches the \d+% federal bracket\./);
     expect(by('tax')).toMatch(/^The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
     expect(by('tax')).toContain('it does not count the gifts themselves');
-    expect(by('heirs')).toMatch(/With the strategy they would inherit \$[\d,]+ pre-tax and \$[\d,]+ Roth, and keep about \$[\d,]+ (more|less) in present value\.$/);
+    expect(by('heirs')).toMatch(
+      /With the strategy they would inherit \$[\d,]+ pre-tax and \$[\d,]+ Roth \(\$[\d,]+ without it\); the Roth IRA can grow tax-free to about \$[\d,]+ by year 10\. They keep about \$[\d,]+ (more|less) in present value\.$/,
+    );
     expect(by('wealth')).toMatch(/^At age 95, after-tax value is \$[\d,]+ with the strategy and \$[\d,]+ without it/);
     const all = f.map((x) => x.text).join(' ').toLowerCase();
     expect(all).not.toMatch(/sav(e|ed|ing)/);
