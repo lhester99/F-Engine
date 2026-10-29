@@ -7,6 +7,14 @@ async function openInputs(page: Page) {
     const toggle = page.getByRole('button', { name: 'Inputs & planning levers' });
     if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   }
+  // Open every collapsed sidebar group so all inputs are reachable.
+  for (const name of [/^Client & household/, /^More details/, /^Qualified charitable distributions/, /^Investment returns/, /^Assumptions/]) {
+    const button = page.getByRole('button', { name });
+    if ((await button.getAttribute('aria-expanded')) !== 'true') {
+      await button.scrollIntoViewIfNeeded();
+      await button.click();
+    }
+  }
 }
 
 async function expectNoHorizontalScroll(page: Page) {

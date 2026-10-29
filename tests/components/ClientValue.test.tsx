@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
+import { expandInputs } from './expandInputs';
 
 async function addStrategy(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Apply to range' }));
@@ -12,6 +13,7 @@ describe('client-value features', () => {
   it('shows plain-English findings that update with the strategy', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.getByTestId('finding-size')).toHaveTextContent(/Without a strategy, required RMDs start at/);
     expect(screen.getByTestId('finding-strategy')).toHaveTextContent(/No Roth conversions or QCDs/);
     await addStrategy(user);
@@ -25,6 +27,7 @@ describe('client-value features', () => {
   it('recalculates the tax trade-off when assumptions change', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await addStrategy(user);
     const summary = screen.getByTestId('tax-summary');
     const before = summary.textContent;
@@ -41,6 +44,7 @@ describe('client-value features', () => {
   it('lets you enter your own discount rate', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.queryByLabelText('Discount rate (present value)')).not.toBeInTheDocument();
     await user.click(screen.getByRole('checkbox', { name: /Discount at the investment return/ }));
     expect(screen.getByLabelText('Discount rate (present value)')).toHaveValue('4%');
@@ -49,6 +53,7 @@ describe('client-value features', () => {
   it('adds a spouse, files jointly, and models the first death', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.getByTestId('filing-status')).toHaveTextContent('single');
     await user.click(screen.getByRole('button', { name: 'Add spouse' }));
     expect(screen.getByLabelText('Spouse date of birth')).toHaveValue('1958-06-15');
@@ -71,6 +76,7 @@ describe('client-value features', () => {
   it('lets conversions come from either spouse', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Add spouse' }));
     await user.click(within(screen.getByRole('group', { name: 'Convert from' })).getByRole('button', { name: 'Spouse’s IRAs' }));
     await user.click(screen.getByRole('button', { name: 'Apply to range' }));
@@ -81,6 +87,7 @@ describe('client-value features', () => {
   it('shows the Tax Brackets tab with the year-by-year plan', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await addStrategy(user);
     await user.click(screen.getByRole('tab', { name: 'Tax Brackets' }));
     expect(screen.getByTestId('bracket-chart')).toBeInTheDocument();
@@ -91,6 +98,7 @@ describe('client-value features', () => {
   it('sets up a fill-to-bracket rule', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Fill to a bracket' }));
     await user.selectOptions(screen.getByLabelText('Fill to top of'), '0.22');
     await user.selectOptions(screen.getByLabelText('Also stay within'), '0');
@@ -104,6 +112,7 @@ describe('client-value features', () => {
   it('shows the IRMAA tab', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('tab', { name: 'IRMAA' }));
     expect(screen.getByTestId('income-chart')).toBeInTheDocument();
     expect(screen.getByTestId('chart-caption')).toHaveTextContent(/Estimated MAGI by income year/);
@@ -112,6 +121,7 @@ describe('client-value features', () => {
   it('saves, loads, and deletes strategies for side-by-side comparison', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await addStrategy(user);
     await user.type(screen.getByLabelText('Strategy name'), 'Convert and give');
     await user.click(screen.getByRole('button', { name: 'Save current' }));
@@ -131,6 +141,7 @@ describe('client-value features', () => {
   it('presentation mode hides the inputs and editing controls, then restores them', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Present' }));
     expect(screen.getByRole('complementary', { hidden: true })).toHaveClass('hidden');
     expect(screen.queryByRole('button', { name: 'Save current' })).not.toBeInTheDocument();
@@ -143,6 +154,7 @@ describe('client-value features', () => {
   it('accepts pre-tax Traditional IRA contributions', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     const field = screen.getByLabelText('Annual pre-tax contribution');
     await user.clear(field);
     await user.type(field, '7000');
@@ -156,6 +168,7 @@ describe('step 2: taxable account, cash, spending, and wealth', () => {
   it('changing how the conversion tax is paid changes the Roth balance', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Apply to range' }));
     await user.click(screen.getByRole('tab', { name: 'Wealth' }));
     await user.click(screen.getByRole('button', { name: 'Open year detail' }));
@@ -171,6 +184,7 @@ describe('step 2: taxable account, cash, spending, and wealth', () => {
   it('spending reduces what is invested from RMDs', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.getByTestId('finding-excess')).toHaveTextContent(/left after taxes over the projection/);
     const spend = screen.getByLabelText('Spending from IRA withdrawals, per year');
     await user.clear(spend);
@@ -181,6 +195,7 @@ describe('step 2: taxable account, cash, spending, and wealth', () => {
   it('shows after-tax value and the breakeven age', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Apply to range' }));
     expect(screen.getByTestId('finding-wealth')).toHaveTextContent(/after-tax value is \$[\d,]+ with the strategy/);
     expect(within(screen.getByTestId('summary-stats')).getByText('After-tax value at end')).toBeInTheDocument();
@@ -191,7 +206,8 @@ describe('step 2: taxable account, cash, spending, and wealth', () => {
   it('validates the new inputs instantly', async () => {
     const user = userEvent.setup();
     render(<App />);
-    const yieldField = screen.getByLabelText('Dividend yield on the taxable account');
+    await expandInputs(user);
+    const yieldField = screen.getByLabelText('Dividend yield');
     await user.clear(yieldField);
     await user.type(yieldField, '30');
     expect(screen.getByText('Must be at most 20%.')).toBeInTheDocument();

@@ -19,6 +19,8 @@ import { LegacyView } from './components/LegacyView';
 import { MessageList } from './components/MessageList';
 import { MethodologyPanel } from './components/MethodologyPanel';
 import { Section } from './components/Section';
+import { MoreDetails } from './components/MoreDetails';
+import { AssumptionsSummary, HouseholdSummary } from './components/InputSummaries';
 import { SummaryStats } from './components/SummaryStats';
 import { YearDetail } from './components/YearDetail';
 import { YearTable } from './components/YearTable';
@@ -47,6 +49,19 @@ const TABS: { id: Tab; label: string; short: string }[] = [
 const CAN_PRINT = import.meta.env.VITE_NO_PRINT !== '1';
 
 let savedCounter = 0;
+
+/** Input fields in each collapsible sidebar group, so a group with an error opens itself. */
+const HOUSEHOLD_FIELDS: ReadonlySet<string> = new Set([
+  'dateOfBirth', 'socialSecurityBenefit', 'socialSecurityStartAge', 'endAge', 'accounts',
+  'otherOrdinaryIncome', 'qualifiedInvestmentIncome', 'taxableBalance', 'cashBalance', 'spendingFromIra',
+]);
+const DETAIL_FIELDS: ReadonlySet<string> = new Set([
+  'taxExemptInterest', 'itemizedDeductions', 'extraWithdrawals', 'contribution', 'deathAge', 'survivorship',
+]);
+const ASSUMPTION_FIELDS: ReadonlySet<string> = new Set([
+  'stateTaxRate', 'inflationRate', 'discountRate', 'heirsTaxRate', 'heirsCount', 'heirsIncome', 'heirsStateRate',
+  'taxableBasis', 'taxableYield', 'cashRate',
+]);
 
 export default function App() {
   const [scenario, setScenario] = useState<Scenario>(() => defaultScenario());
@@ -97,6 +112,7 @@ export default function App() {
       : formatPercent(scenario.analysis.heirsTaxRate, 0);
 
   const allMessages = strategy.messages;
+  const hasError = (fields: ReadonlySet<string>) => allMessages.some((m) => m.severity === 'error' && m.field !== undefined && fields.has(m.field));
   const years = useMemo(() => strategy.years.map((y) => y.year), [strategy.years]);
   const selected = selectedYear !== null ? strategy.years.find((y) => y.year === selectedYear) : undefined;
   const selectedBaseline = selected ? baseline.years.find((y) => y.year === selected.year) : undefined;
@@ -260,32 +276,58 @@ export default function App() {
             key={resetKey}
             className={`${mobileInputsOpen ? 'block' : 'hidden'} panel lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}
           >
-            <Section title="Client & accounts">
-              <ClientPanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
-            <Section title="Spouse & survivor" badge={scenario.people.length > 1 ? 'Joint' : undefined}>
-              <SpousePanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
-            <Section title="Household income & taxes">
-              <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
-            <Section title="Taxable account, cash & spending">
-              <CashFlowPanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
-            <Section title="Heirs" badge={scenario.heirs.mode === 'income' ? 'Brackets' : formatPercent(scenario.analysis.heirsTaxRate, 0)}>
-              <HeirsPanel scenario={scenario} update={update} messages={allMessages} />
+            <Section
+              title="Client & household"
+              defaultOpen={false}
+              editToggle
+              summary={<HouseholdSummary scenario={scenario} />}
+              forceOpen={hasError(HOUSEHOLD_FIELDS) || hasError(DETAIL_FIELDS)}
+              testId="section-household"
+            >
+              <h3 className="subsection-title">Client</h3>
+              <ClientPanel scenario={scenario} update={update} messages={allMessages} part="facts" />
+              <h3 className="subsection-title">Spouse</h3>
+              <SpousePanel scenario={scenario} update={update} messages={allMessages} part="facts" />
+              <h3 className="subsection-title">Income &amp; outside accounts</h3>
+              <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} part="income" />
+              <CashFlowPanel scenario={scenario} update={update} messages={allMessages} part="facts" />
+              <MoreDetails
+                label="More details: deductions, contributions, withdrawals, first death"
+                forceOpen={hasError(DETAIL_FIELDS) || scenario.survivorship.enabled}
+              >
+                <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} part="details" />
+                <ClientPanel scenario={scenario} update={update} messages={allMessages} part="details" />
+                <SpousePanel scenario={scenario} update={update} messages={allMessages} part="details" />
+              </MoreDetails>
             </Section>
             <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
               Planning levers
             </p>
-            <Section title="Investment returns" badge={Number.isFinite(rate) ? formatPercent(rate) : undefined}>
-              <ReturnsPanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
             <Section title="Roth conversions" badge={conversionYears ? `${conversionYears} yr` : undefined}>
               <ConversionPanel scenario={scenario} update={update} result={strategy} messages={allMessages} />
             </Section>
-            <Section title="Qualified charitable distributions" badge={qcdCount ? `${qcdCount}` : undefined}>
+            <Section title="Qualified charitable distributions" defaultOpen={false} badge={qcdCount ? `${qcdCount}` : 'None'}>
               <QcdPanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
+            <Section title="Investment returns" defaultOpen={false} badge={Number.isFinite(rate) ? formatPercent(rate) : undefined}>
+              <ReturnsPanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
+            <Section
+              title="Assumptions"
+              defaultOpen={false}
+              summary={<AssumptionsSummary scenario={scenario} />}
+              forceOpen={hasError(ASSUMPTION_FIELDS)}
+              testId="section-assumptions"
+            >
+              <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} part="assumptions" />
+              <h3 className="subsection-title">Heirs</h3>
+              <HeirsPanel scenario={scenario} update={update} messages={allMessages} />
+              <h3 className="subsection-title">Taxable account &amp; cash</h3>
+              <CashFlowPanel scenario={scenario} update={update} messages={allMessages} part="assumptions" />
+              <p className="field-hint -mt-1">
+                Dividends are paid out and taxed each year as qualified dividends; the account's total return is the investment
+                return.
+              </p>
             </Section>
           </div>
         </aside>

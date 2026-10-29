@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
+import { expandInputs } from './expandInputs';
 
 const stat = (label: string) => within(screen.getByTestId('summary-stats')).getByText(label).parentElement!;
 
@@ -17,6 +18,7 @@ describe('App', () => {
   it('keeps inputs and strategies when switching tabs', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     const balance = screen.getByLabelText('Traditional IRA 1 — prior December 31 balance');
     await user.clear(balance);
     await user.type(balance, '2000000');
@@ -37,6 +39,7 @@ describe('App', () => {
   it('recalculates the summary when the return changes', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     const before = stat('Peak annual RMD').textContent;
     const rate = screen.getByLabelText('Annual expected return');
     await user.clear(rate);
@@ -47,6 +50,7 @@ describe('App', () => {
   it('computes a weighted return from a stock/bond mix', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Stock / bond mix' }));
     // Defaults: 60% × 7.5% + 40% × 4% = 6.10%
     expect(screen.getByTestId('weighted-return')).toHaveTextContent('6.10%');
@@ -55,6 +59,7 @@ describe('App', () => {
   it('switches the chart series and caption', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.getByTestId('chart-caption')).toHaveTextContent(/^Required RMDs/);
     await user.click(screen.getByRole('button', { name: 'Taxable IRA Distributions' }));
     expect(screen.getByRole('button', { name: 'Taxable IRA Distributions' })).toHaveAttribute('aria-pressed', 'true');
@@ -64,6 +69,7 @@ describe('App', () => {
   it('shows QCDs reducing taxable distributions but not the required RMD', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     // Default recurring QCD: $20,000/yr from the first eligible age.
     await user.click(screen.getByRole('button', { name: 'Add recurring QCD' }));
     await user.click(screen.getByRole('button', { name: 'Open year detail' }));
@@ -83,6 +89,7 @@ describe('App', () => {
   it('opens a year detail panel and steps between years', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Open year detail' }));
     const detail = screen.getByTestId('year-detail');
     expect(within(detail).getByRole('heading')).toHaveTextContent('age 73');
@@ -96,6 +103,7 @@ describe('App', () => {
   it('opens and closes the methodology panel', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getAllByRole('button', { name: 'Methodology' })[0]!);
     const dialog = screen.getByRole('dialog', { name: 'Methodology' });
     expect(within(dialog).getByText('Annual calculation order')).toBeInTheDocument();
@@ -107,6 +115,7 @@ describe('App', () => {
   it('reset restores the default scenario', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     const balance = screen.getByLabelText('Traditional IRA 1 — prior December 31 balance');
     await user.clear(balance);
     await user.type(balance, '5');
@@ -117,6 +126,7 @@ describe('App', () => {
   it('shows a clear message for an invalid ending age', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     const end = screen.getByLabelText("Projection ending age (client's age)");
     await user.clear(end);
     await user.type(end, '60');
@@ -126,6 +136,7 @@ describe('App', () => {
   it('adds and removes Traditional IRAs', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     await user.click(screen.getByRole('button', { name: 'Add Traditional IRA' }));
     expect(screen.getByLabelText('Traditional IRA 3 — prior December 31 balance')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove Traditional IRA 3' }));

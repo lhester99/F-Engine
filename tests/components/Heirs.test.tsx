@@ -2,11 +2,13 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
+import { expandInputs } from './expandInputs';
 
 describe('heirs and the 10-year rule', () => {
   it('shows what heirs inherit and keep, and switches to bracket-based heirs tax', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await expandInputs(user);
     expect(screen.getByTestId('finding-heirs')).toHaveTextContent(/heirs would inherit \$[\d,]+ of pre-tax IRA/);
 
     await user.click(screen.getByRole('tab', { name: 'Heirs' }));

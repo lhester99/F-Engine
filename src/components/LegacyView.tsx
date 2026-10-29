@@ -115,7 +115,7 @@ export function LegacyView({ baseline, strategy, scenario, discountRate }: Props
       <p className="text-xs text-ink-2" data-testid="chart-caption">
         {income
           ? "Each heir's taxable income in each year of the 10-year window: their own income after the standard deduction plus their share of the inherited IRA withdrawal."
-          : "Each year's inherited IRA withdrawal. Choose “From heirs' income” under Heirs to see the brackets heirs reach."}
+          : "Each year's inherited IRA withdrawal. Choose “From heirs' income” under Assumptions › Heirs to see the brackets heirs reach."}
       </p>
 
       <div className="overflow-x-auto">

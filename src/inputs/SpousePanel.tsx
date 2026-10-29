@@ -11,14 +11,18 @@ interface Props {
   scenario: Scenario;
   update: (fn: (s: Scenario) => Scenario) => void;
   messages: EngineMessage[];
+  /** Which fields to show: the spouse's facts, the rarely changed details (first RMD deferral, first death), or (default) all. */
+  part?: 'facts' | 'details';
 }
 
 /** Adds or removes a spouse; the spouse's own IRAs and Social Security; and the first-death settings. */
-export function SpousePanel({ scenario, update, messages }: Props) {
+export function SpousePanel({ scenario, update, messages, part }: Props) {
+  const show = (p: 'facts' | 'details') => !part || part === p;
   const dobId = useId();
   const spouse = scenario.people[1];
 
   if (!spouse) {
+    if (!show('facts')) return null;
     return (
       <div className="space-y-2">
         <p className="text-xs text-ink-2">Add a spouse to file jointly, model each spouse’s IRAs and RMDs, and show what changes for the survivor.</p>
@@ -110,6 +114,8 @@ export function SpousePanel({ scenario, update, messages }: Props) {
 
   return (
     <div className="space-y-3">
+      {show('facts') && (
+      <>
       <div>
         <label htmlFor={dobId} className="field-label">Spouse date of birth</label>
         <input
@@ -208,7 +214,11 @@ export function SpousePanel({ scenario, update, messages }: Props) {
           />
         )}
       </fieldset>
+      </>
+      )}
 
+      {show('details') && (
+      <>
       <label className="flex items-start gap-2 text-sm text-ink-2">
         <input
           type="checkbox"
@@ -293,10 +303,14 @@ export function SpousePanel({ scenario, update, messages }: Props) {
       </fieldset>
 
       <MessageList messages={messages.filter((m) => m.code === 'after-death-ignored')} />
+      </>
+      )}
 
-      <button type="button" className="btn w-full" onClick={removeSpouse}>
-        Remove spouse
-      </button>
+      {show('facts') && (
+        <button type="button" className="btn w-full" onClick={removeSpouse}>
+          Remove spouse
+        </button>
+      )}
     </div>
   );
 }

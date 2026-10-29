@@ -10,12 +10,15 @@ interface Props {
   scenario: Scenario;
   update: (fn: (s: Scenario) => Scenario) => void;
   messages: EngineMessage[];
+  /** Which fields to show: the client's facts, the rarely changed details, or (default) all. */
+  part?: 'facts' | 'details';
 }
 
 const fieldError = (messages: EngineMessage[], field: string) =>
   messages.find((m) => m.severity === 'error' && m.field === field)?.text;
 
-export function ClientPanel({ scenario, update, messages }: Props) {
+export function ClientPanel({ scenario, update, messages, part }: Props) {
+  const show = (p: 'facts' | 'details') => !part || part === p;
   const dobId = useId();
   const person = scenario.people[0]!;
   const birth = parseIsoDate(person.dateOfBirth);
@@ -65,6 +68,8 @@ export function ClientPanel({ scenario, update, messages }: Props) {
 
   return (
     <div className="space-y-3">
+      {show('facts') && (
+      <>
       <div>
         <label htmlFor={dobId} className="field-label">
           Date of birth
@@ -153,6 +158,21 @@ export function ClientPanel({ scenario, update, messages }: Props) {
         </button>
       </fieldset>
 
+      {roth && (
+        <NumberField
+          label="Roth IRA — prior December 31 balance"
+          kind="currency"
+          min={0}
+          value={roth.priorYearEndBalance}
+          onCommit={(v) => setAccount(roth.id, { priorYearEndBalance: v })}
+          testId="balance-roth"
+        />
+      )}
+      </>
+      )}
+
+      {show('details') && (
+      <>
       {firstTrad && (
         <fieldset className="space-y-2">
           <legend className="field-label">Pre-tax contributions to {firstTrad.label}</legend>
@@ -193,15 +213,7 @@ export function ClientPanel({ scenario, update, messages }: Props) {
 
       {roth && (
         <fieldset className="space-y-2">
-          <legend className="sr-only">Roth IRA</legend>
-          <NumberField
-            label="Roth IRA — prior December 31 balance"
-            kind="currency"
-            min={0}
-            value={roth.priorYearEndBalance}
-            onCommit={(v) => setAccount(roth.id, { priorYearEndBalance: v })}
-            testId="balance-roth"
-          />
+          <legend className="field-label">Roth IRA contributions</legend>
           <div className="grid grid-cols-2 gap-2">
             <NumberField
               label="Annual Roth contribution"
@@ -289,6 +301,8 @@ export function ClientPanel({ scenario, update, messages }: Props) {
         </label>
         <MessageList messages={deferralNotes} />
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -34,35 +34,21 @@ and refreshing the page resets to the default hypothetical client.
 
 ## What the app does
 
-**Inputs:** date of birth; each account's prior December 31 balance (more than one
-Traditional IRA allowed, plus a Roth IRA); projection ending age (default 95);
-annual return, entered as one rate or as a stock/bond mix; optional Roth IRA
-contributions; optional pre-tax Traditional IRA contributions (with a "deductible"
-checkbox); optional extra pre-tax withdrawals; and an option to delay the first RMD
-to April 1 of the next year.
+The side panel (on a phone, the "Inputs & planning levers" button) has three parts:
 
-**Household income & taxes:** filing status (single or married filing jointly, with
-the spouse's date of birth), Social Security benefits and the age they start,
-pensions/wages/interest, qualified dividends and gains, tax-exempt interest, itemized
-deductions, a flat state tax rate, inflation, and a discount rate
-(by default the investment return). All amounts are entered in today's dollars.
+**Client & household** (set once; shows a short summary until you click **Edit**):
+each person's date of birth, Social Security and the age it starts, Traditional IRA
+balances (more than one allowed) and Roth IRA balance as of the prior December 31; the
+projection ending age; pensions, wages, and interest; qualified dividends and gains;
+taxable account and cash balances; and how much of the IRA withdrawals the client
+spends each year (the rest, after tax, is invested in the taxable account). With a
+spouse more than 10 years younger, a "sole beneficiary" box appears. **More details**
+holds the rarely used inputs: tax-exempt interest, itemized deductions, pre-tax and
+Roth contributions, extra pre-tax withdrawals, delaying the first RMD to April 1, and
+modeling the first death (who dies first, at what age, and how much income and
+spending continue for the survivor). All amounts are in today's dollars.
 
-**Spouse & survivor:** add a spouse with their own date of birth, Social Security,
-whether they are the sole beneficiary (shown when they are more than 10 years younger),
-Traditional IRAs, and Roth IRA. Optionally model the first death: who dies first and
-at what age, and how much other income and spending continue for the survivor.
-
-**Heirs:** either one tax rate for heirs, or estimate it from the heirs themselves:
-how many heirs share equally, each heir's own income, their filing status, and their
-state tax rate.
-
-**Taxable account, cash & spending:** taxable brokerage balance, its cost basis, and
-dividend yield; cash and its interest rate; and how much of the IRA withdrawals the
-client spends each year. RMD money left after tax and spending is invested in the
-taxable account.
-
-**Planning levers** (side panel on desktop, "Inputs & planning levers" button on a phone):
-- **Investment returns.** Everything updates immediately.
+**Planning levers** (everything updates immediately):
 - **Roth conversions.** Either a fixed amount for a range of ages (then edit or
   delete single years), or **fill to a bracket**: each year converts as much as fits
   under the top of the chosen bracket, optionally also staying within an IRMAA tier.
@@ -71,6 +57,13 @@ taxable account.
   reduced, with a message explaining why.
 - **QCDs.** Recurring (amount, from age, through age) and one-time gifts. Age 70½
   eligibility and the annual limit are enforced. QCDs count toward the RMD first.
+- **Investment returns.** One rate, or a stock/bond mix.
+
+**Assumptions** (one section with a summary line): inflation, a flat state tax rate,
+the discount rate for present values (by default the investment return), heirs (one
+tax rate, or estimated from the heirs' own income, number, filing status, and state
+rate), and the taxable account's cost basis and dividend yield and the cash interest
+rate. A group with an input error opens by itself.
 
 **Key findings:** three to five plain-English sentences at the top: how large RMDs
 get and how fast, what the strategy changes, when income is taxed, the estimated tax
@@ -226,7 +219,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 190 calculation and component tests, including IRS boundary cases,
+- `npm test`: 192 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

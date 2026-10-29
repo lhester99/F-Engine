@@ -81,6 +81,9 @@
   .section-title {
     @apply text-sm font-semibold tracking-tight text-ink;
   }
+  .subsection-title {
+    @apply border-t border-line-soft pt-3 text-xs font-semibold tracking-wider text-ink uppercase first:border-t-0 first:pt-0;
+  }
   .seg {
     @apply inline-flex rounded-md border border-line bg-canvas p-0.5;
   }
