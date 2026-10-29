@@ -85,21 +85,23 @@ describe('Roth conversions', () => {
     expect(year(r, 2027).totals.taxableDistribution).toBe(0);
   });
 
-  it('single conversion with withholding deposits the net amount', () => {
-    // $100,000 conversion, 20% withheld → $80,000 to the Roth IRA. Return 0%.
+  it('single conversion with the tax withheld deposits the net amount', () => {
+    // $100,000 conversion, single, under 65, no other income, return 0%.
+    // Tax = 13,170 (see federalTax tests), withheld → $86,830 reaches the Roth IRA.
     const r = runProjection(
       scenario({
         dob: '1962-01-01',
         endAge: 64,
         traditional: [400_000],
-        strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 100_000 }], conversionWithholdingRate: 0.2 },
+        analysis: { socialSecurityBenefit: 0, otherOrdinaryIncome: 0, qualifiedInvestmentIncome: 0, taxExemptInterest: 0 },
+        strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 100_000 }], conversionTaxSource: 'withhold' },
       }),
     );
     const y = year(r, 2026);
     expect(y.totals.conversionGross).toBe(100_000);
-    expect(y.totals.conversionWithheld).toBeCloseTo(20_000, 8);
+    expect(y.totals.conversionWithheld).toBeCloseTo(13_170, 6);
     expect(y.totals.endBalancePretax).toBe(300_000);
-    expect(y.totals.endBalanceRoth).toBeCloseTo(80_000, 8);
+    expect(y.totals.endBalanceRoth).toBeCloseTo(86_830, 6);
   });
 
   it('in an RMD year, satisfies the RMD first and blocks the excess', () => {
@@ -387,15 +389,16 @@ describe('invalid inputs', () => {
     const r = runProjection(scenario({ dob, endAge: 95 }));
     expect(r.ok).toBe(false);
   });
-  it('rejects negative conversion amounts and bad withholding', () => {
+  it('rejects negative conversion amounts and bad cash-flow inputs', () => {
     const r = runProjection(
       scenario({
         dob: '1955-01-01',
         endAge: 95,
-        strategy: { conversions: [{ personId: 'p1', year: 2027, amount: -1 }], conversionWithholdingRate: 1.5 },
+        strategy: { conversions: [{ personId: 'p1', year: 2027, amount: -1 }] },
+        cashFlow: { taxableBalance: -5, taxableYield: 2 },
       }),
     );
-    expect(r.errors.map((e) => e.code)).toEqual(expect.arrayContaining(['conversion-amount', 'withholding']));
+    expect(r.errors.map((e) => e.code)).toEqual(expect.arrayContaining(['conversion-amount', 'taxableBalance', 'yield']));
   });
   it('rejects an ending age below the current age', () => {
     const r = runProjection(scenario({ dob: '1950-01-01', endAge: 70 }));

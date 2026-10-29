@@ -3,6 +3,7 @@ import type {
   Account,
   AccountYear,
   EngineMessage,
+  HouseholdCashFlow,
   PersonYear,
   ProjectionResult,
   Scenario,
@@ -11,7 +12,8 @@ import type {
 } from '../types';
 import { emptyStrategy, requestedConversion, requestedQcd } from '../strategies/schedule';
 import { allocateProRata } from './allocate';
-import { computeTax, householdIncomeForYear, peopleAge65, taxParametersForYear } from './federalTax';
+import { settleHouseholdYear } from './cashFlow';
+import { computeTax, householdIncomeForYear, NO_SIDE_INCOME, peopleAge65, taxParametersForYear, type SideIncome } from './federalTax';
 import { irmaaScheduleForYear, IRMAA_LOOKBACK_YEARS } from './irmaa';
 import { ageAttainedInYear, dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from './dates';
 import { qcdLimitForYear } from './qcd';
@@ -55,6 +57,11 @@ export function runProjection(scenario: Scenario): ProjectionResult {
   // Deductible IRA contributions for years on or after age 70½ not yet used to
   // reduce a QCD exclusion (IRC §408(d)(8)(A)), keyed by person.
   const qcdOffsetPool = new Map<string, number>();
+  // Taxable account and cash, and IRMAA costs scheduled for future premium years.
+  const cf = scenario.cashFlow;
+  let side = { taxable: cf.taxableBalance, basis: cf.taxableBasis, cash: cf.cashBalance };
+  const irmaaDue = new Map<number, number>();
+  const primaryRoth = scenario.accounts.find((a) => a.ownerId === primary.id && a.type === 'roth_ira');
 
   const years: YearResult[] = [];
   for (let year = scenario.startYear; year <= lastYear; year++) {
@@ -70,6 +77,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         qcd: 0,
         rmdTaxableWithdrawal: 0,
         extraWithdrawal: 0,
+        withdrawal: 0,
         conversionOut: 0,
         conversionIn: 0,
         contribution: 0,
@@ -94,6 +102,8 @@ export function runProjection(scenario: Scenario): ProjectionResult {
 
     const nextDeferred = new Map<string, number>();
     const personYears: PersonYear[] = [];
+    // Side-account income known at the start of the year (used when filling a bracket).
+    const sideStart: SideIncome = { qualified: side.taxable * cf.taxableYield, ordinary: side.cash * cf.cashRate };
 
     for (const person of scenario.people) {
       const birth = parseIsoDate(person.dateOfBirth)!;
@@ -256,10 +266,14 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       }
       if (!hasFixed && fillRule && rothIra && rmdDeferredToNextYear <= 0 && rmdShortfall <= 0.005) {
         conversionMethod = 'fill';
-        conversionRequested = bracketFillAmount(scenario, year, fillRule, sumAvail(pretaxIras), {
-          taxableIra: rmdTaxable + extra + qcdNotExcluded,
-          deductibleContributions,
-        });
+        conversionRequested = bracketFillAmount(
+          scenario,
+          year,
+          fillRule,
+          sumAvail(pretaxIras),
+          { taxableIra: rmdTaxable + extra + qcdNotExcluded, deductibleContributions },
+          sideStart,
+        );
         if (conversionRequested <= 0) {
           msg('info', 'fill-no-room', `Age ${age} (${year}): income is already at or above the ${Math.round(fillRule.bracketRate * 100)}% bracket${fillRule.irmaaMaxTier !== null ? ' or IRMAA limit' : ''}, so nothing is converted.`, 'conversion');
         }
@@ -292,8 +306,8 @@ export function runProjection(scenario: Scenario): ProjectionResult {
             amount = available;
           }
           conversionGross = take(pretaxIras, amount, 'conversionOut');
-          conversionWithheld = conversionGross * strategy.conversionWithholdingRate;
-          conversionToRoth = conversionGross - conversionWithheld;
+          // Any tax withheld is settled with the household's taxes below.
+          conversionToRoth = conversionGross;
           avail.set(rothIra.id, avail.get(rothIra.id)! + conversionToRoth);
           accountYears.get(rothIra.id)!.conversionIn += conversionToRoth;
         }
@@ -336,6 +350,54 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       });
     }
 
+    // Household taxes and cash flows outside the IRAs (see cashFlow.ts for the order).
+    const sumP = (f: (p: PersonYear) => number) => personYears.reduce((x, p) => x + f(p), 0);
+    const settled = settleHouseholdYear({
+      scenario,
+      year,
+      ira: {
+        taxableIra: sumP((p) => p.taxableDistribution),
+        conversion: sumP((p) => p.conversionGross),
+        deductibleContributions: sumP((p) => p.deductibleContributions),
+      },
+      iraCash: sumP((p) => p.rmdTaxableWithdrawal + p.extraWithdrawal),
+      start: side,
+      rothAvailable: primaryRoth ? avail.get(primaryRoth.id)! : 0,
+      irmaaDue: irmaaDue.get(year) ?? 0,
+      spendingTarget: cf.spendingFromIra * Math.pow(1 + scenario.analysis.inflationRate, year - scenario.startYear),
+      source: strategy.conversionTaxSource,
+    });
+    const hmsg = (severity: EngineMessage['severity'], code: string, text: string, field?: string) =>
+      yearMessages.push({ severity, code, text, year, personId: primary.id, field });
+    const primaryAge = ageAttainedInYear(primaryBirth, year);
+    if (settled.conversionTaxWithheld > 0 && primaryRoth) {
+      // Withheld tax never reaches the Roth IRA.
+      const withheld = Math.min(settled.conversionTaxWithheld, avail.get(primaryRoth.id)!);
+      avail.set(primaryRoth.id, avail.get(primaryRoth.id)! - withheld);
+      accountYears.get(primaryRoth.id)!.conversionIn -= withheld;
+      const converter = personYears.find((p) => p.conversionGross > 0);
+      if (converter) {
+        converter.conversionWithheld = withheld;
+        converter.conversionToRoth = converter.conversionGross - withheld;
+      }
+      if (settled.conversionTaxFellBack) {
+        hmsg(
+          'warning',
+          'conversion-tax-fallback',
+          `Age ${primaryAge} (${year}): the ${strategy.conversionTaxSource === 'cash' ? 'cash' : 'taxable'} account and the other account could not cover the ${usd(settled.conversionTax)} conversion tax; ${usd(withheld)} is withheld from the conversion instead.`,
+          'conversion',
+        );
+      }
+    }
+    if (settled.withdrawnRoth > 0 && primaryRoth) {
+      avail.set(primaryRoth.id, avail.get(primaryRoth.id)! - settled.withdrawnRoth);
+      accountYears.get(primaryRoth.id)!.withdrawal += settled.withdrawnRoth;
+    }
+    if (settled.spendingShortfall > 0.5) {
+      hmsg('warning', 'spending-shortfall', `Age ${primaryAge} (${year}): ${usd(settled.spendingShortfall)} of the spending could not be covered by the accounts modeled.`, 'spending');
+    }
+    if (settled.irmaaScheduled > 0) irmaaDue.set(year + 2, settled.irmaaScheduled);
+
     // Steps 8–9: growth on the remaining balance, then record December 31.
     for (const a of scenario.accounts) {
       const ay = accountYears.get(a.id)!;
@@ -346,6 +408,38 @@ export function runProjection(scenario: Scenario): ProjectionResult {
     }
     deferred = nextDeferred;
 
+    // Taxable account and cash grow after the year's flows, like the IRAs.
+    // Reinvested dividends add to cost basis.
+    const taxableGrowth = settled.after.taxable * rate;
+    const cashGrowth = settled.after.cash * cf.cashRate;
+    const household = {
+      taxableStart: side.taxable,
+      taxableBasisStart: side.basis,
+      cashStart: side.cash,
+      dividends: settled.dividends,
+      cashInterest: settled.cashInterest,
+      realizedGain: settled.realizedGain,
+      taxOnModeledIncome: settled.taxOnModeledIncome,
+      conversionTax: settled.conversionTax,
+      conversionTaxWithheld: settled.conversionTaxWithheld,
+      conversionTaxFromTaxable: settled.conversionTaxFromTaxable,
+      conversionTaxFromCash: settled.conversionTaxFromCash,
+      irmaaPaid: settled.irmaaPaid,
+      iraCashReceived: sumP((p) => p.rmdTaxableWithdrawal + p.extraWithdrawal),
+      spending: settled.spending,
+      spendingShortfall: settled.spendingShortfall,
+      invested: settled.invested,
+      withdrawnTaxable: settled.withdrawnTaxable,
+      withdrawnCash: settled.withdrawnCash,
+      withdrawnRoth: settled.withdrawnRoth,
+      taxableGrowth,
+      cashGrowth,
+      taxableEnd: settled.after.taxable + taxableGrowth,
+      taxableBasisEnd: settled.after.basis + settled.dividends,
+      cashEnd: settled.after.cash + cashGrowth,
+    };
+    side = { taxable: household.taxableEnd, basis: household.taxableBasisEnd, cash: household.cashEnd };
+
     const accounts = scenario.accounts.map((a) => accountYears.get(a.id)!);
     years.push({
       year,
@@ -353,7 +447,8 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       returnRate: rate,
       people: personYears,
       accounts,
-      totals: sumTotals(accounts, personYears),
+      totals: sumTotals(accounts, personYears, household, scenario.analysis.heirsTaxRate),
+      household,
       messages: yearMessages,
     });
     messages.push(...yearMessages);
@@ -362,7 +457,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
   return { ok: true, errors: [], years, messages };
 }
 
-function sumTotals(accounts: AccountYear[], people: PersonYear[]): YearTotals {
+function sumTotals(accounts: AccountYear[], people: PersonYear[], h: HouseholdCashFlow, heirsTaxRate: number): YearTotals {
   const isRoth = (a: AccountYear) => ACCOUNT_RULES[a.type].taxTreatment === 'roth';
   const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
   const pretax = accounts.filter((a) => !isRoth(a));
@@ -386,9 +481,15 @@ function sumTotals(accounts: AccountYear[], people: PersonYear[]): YearTotals {
     conversionWithheld: sum(people, (p) => p.conversionWithheld),
     contributions: sum(accounts, (a) => a.contribution),
     growth: sum(accounts, (a) => a.growth),
+    sideQualifiedIncome: h.dividends + h.realizedGain,
+    sideOrdinaryIncome: h.cashInterest,
+    endBalanceTaxable: h.taxableEnd,
+    endBalanceCash: h.cashEnd,
+    afterTaxValue: endRoth + h.taxableEnd + h.cashEnd + endPretax * (1 - heirsTaxRate),
     endBalancePretax: endPretax,
     endBalanceRoth: endRoth,
-    endBalanceTotal: endPretax + endRoth,
+    // All modeled accounts: IRAs, taxable account, and cash.
+    endBalanceTotal: endPretax + endRoth + h.taxableEnd + h.cashEnd,
   };
 }
 
@@ -404,6 +505,7 @@ export function bracketFillAmount(
   rule: { bracketRate: number; irmaaMaxTier: number | null },
   available: number,
   ira: { taxableIra: number; deductibleContributions: number },
+  side: SideIncome = NO_SIDE_INCOME,
 ): number {
   if (available <= 0) return 0;
   const a = scenario.analysis;
@@ -423,7 +525,7 @@ export function bracketFillAmount(
   }
 
   const fits = (c: number) => {
-    const t = computeTax(householdIncomeForYear(scenario, year, { ...ira, conversion: c }));
+    const t = computeTax(householdIncomeForYear(scenario, year, { ...ira, conversion: c }, side));
     return t.ordinaryTaxableIncome <= top + 1e-6 && t.irmaaMagi <= magiCap + 1e-6;
   };
   if (fits(available)) return available;
@@ -442,7 +544,7 @@ export function bracketFillAmount(
 
 /** Same inputs with no conversions and no QCDs: the "No strategy" baseline. */
 export function toBaseline(scenario: Scenario): Scenario {
-  return { ...scenario, strategy: emptyStrategy(scenario.strategy.conversionWithholdingRate) };
+  return { ...scenario, strategy: emptyStrategy(scenario.strategy.conversionTaxSource) };
 }
 
 export interface Comparison {

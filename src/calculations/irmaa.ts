@@ -109,7 +109,7 @@ export function incomeByYear(result: ProjectionResult, scenario: Scenario): Inco
   return result.years.map((y) => {
     const t = y.totals;
     const ira = { taxableIra: t.taxableDistribution, conversion: t.conversionGross, deductibleContributions: t.deductibleContributions };
-    const income = householdIncomeForYear(scenario, y.year, ira);
+    const income = householdIncomeForYear(scenario, y.year, ira, { qualified: t.sideQualifiedIncome, ordinary: t.sideOrdinaryIncome });
     const tax = computeTax(income);
     const premiumYear = y.year + IRMAA_LOOKBACK_YEARS;
     const enrollees = peopleAge65(scenario, premiumYear);
@@ -134,6 +134,19 @@ export function incomeByYear(result: ProjectionResult, scenario: Scenario): Inco
       thresholdsProjected: found?.projected ?? true,
     };
   });
+}
+
+/**
+ * Annual IRMAA surcharge for the premium year two years after `incomeYear`, for a
+ * given MAGI. Zero when nobody on the return will be 65 or older then.
+ */
+export function surchargeForIncome(scenario: Scenario, incomeYear: number, magi: number): number {
+  const a = scenario.analysis;
+  const premiumYear = incomeYear + IRMAA_LOOKBACK_YEARS;
+  const enrollees = peopleAge65(scenario, premiumYear);
+  const schedule = irmaaScheduleForYear(premiumYear, a.inflationRate)?.schedule;
+  if (!schedule || enrollees === 0) return 0;
+  return annualIrmaaSurcharge(irmaaTier(magi, a.filingStatus, schedule), schedule, enrollees);
 }
 
 export interface IrmaaSummary {

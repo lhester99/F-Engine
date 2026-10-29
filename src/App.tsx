@@ -3,6 +3,8 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'reac
 import { BalanceChart, BALANCE_SERIES } from './charts/BalanceChart';
 import { ChartLegend, HatchSwatch, LineSwatch, SolidSwatch } from './charts/Legend';
 import { BracketChart } from './charts/BracketChart';
+import { WealthChart } from './charts/WealthChart';
+import { CashFlowPanel } from './inputs/CashFlowPanel';
 import { IncomeChart } from './charts/IncomeChart';
 import { ConversionPlanTable } from './components/ConversionPlanTable';
 import { RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/RmdChart';
@@ -28,12 +30,12 @@ import { defaultScenario } from './utils/defaultScenario';
 import { formatPercent } from './utils/format';
 import { effectiveAnnualReturn } from './calculations/returns';
 
-type Tab = 'rmd' | 'brackets' | 'income' | 'balances';
+type Tab = 'rmd' | 'brackets' | 'income' | 'wealth';
 const TABS: { id: Tab; label: string; short: string }[] = [
   { id: 'rmd', label: 'RMD Projections', short: 'RMDs' },
   { id: 'brackets', label: 'Tax Brackets', short: 'Brackets' },
   { id: 'income', label: 'IRMAA', short: 'IRMAA' },
-  { id: 'balances', label: 'Account Balances', short: 'Balances' },
+  { id: 'wealth', label: 'Wealth', short: 'Wealth' },
 ];
 
 /** The claude.ai preview build cannot open the print dialog, so it hides the print button. */
@@ -50,13 +52,14 @@ export default function App() {
   const [axis, setAxis] = useState<AxisMode>('age');
   const [showConversions, setShowConversions] = useState(true);
   const [showBaselineBalances, setShowBaselineBalances] = useState(true);
+  const [wealthView, setWealthView] = useState<'aftertax' | 'balances'>('aftertax');
   const [showTable, setShowTable] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<SavedStrategy[]>([]);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, balances: null });
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, wealth: null });
 
   const update = useCallback((fn: (s: Scenario) => Scenario) => setScenario(fn), []);
   const {
@@ -69,6 +72,7 @@ export default function App() {
     baselineIrmaa,
     strategyIrmaa,
     tax,
+    wealth,
     findings,
   } = useProjection(scenario);
   const closeMethodology = useCallback(() => setMethodologyOpen(false), []);
@@ -149,7 +153,17 @@ export default function App() {
           Show Roth conversions
         </label>
       )}
-      {tab === 'balances' && (
+      {tab === 'wealth' && (
+        <div className="seg" role="group" aria-label="Wealth view">
+          <button type="button" className="seg-btn" aria-pressed={wealthView === 'aftertax'} onClick={() => setWealthView('aftertax')}>
+            After-tax value
+          </button>
+          <button type="button" className="seg-btn" aria-pressed={wealthView === 'balances'} onClick={() => setWealthView('balances')}>
+            Account balances
+          </button>
+        </div>
+      )}
+      {tab === 'wealth' && wealthView === 'balances' && (
         <label className="flex min-h-9 items-center gap-2 text-sm text-ink-2">
           <input type="checkbox" className="h-4 w-4 accent-accent" checked={showBaselineBalances} onChange={(e) => setShowBaselineBalances(e.target.checked)} />
           Show no-strategy lines
@@ -225,6 +239,9 @@ export default function App() {
             <Section title="Household income & taxes">
               <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
+            <Section title="Taxable account, cash & spending">
+              <CashFlowPanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
             <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
               Planning levers
             </p>
@@ -249,7 +266,7 @@ export default function App() {
           ) : (
             <>
               <Findings findings={findings} large={presenting} />
-              <SummaryStats baseline={baselineSummary} strategy={strategySummary} />
+              <SummaryStats baseline={baselineSummary} strategy={strategySummary} wealth={wealth} />
 
               <div className="panel print:break-inside-avoid">
                 <div role="tablist" aria-label="Views" className="flex overflow-x-auto border-b border-line px-2 sm:px-3 print:hidden">
@@ -362,7 +379,26 @@ export default function App() {
                     </>
                   )}
 
-                  {tab === 'balances' && (
+                  {tab === 'wealth' && wealthView === 'aftertax' && wealth && (
+                    <>
+                      <WealthChart wealth={wealth} axis={axis} selectedYear={selectedYear} onSelectYear={setSelectedYear} />
+                      <ChartLegend
+                        label="Chart legend"
+                        items={[
+                          { label: 'After-tax value, current strategy', swatch: <LineSwatch color={SERIES_COLORS.strategy} /> },
+                          { label: 'After-tax value, no strategy', swatch: <LineSwatch color={SERIES_COLORS.baseline} dashed /> },
+                        ]}
+                      />
+                      <p className="text-xs text-ink-2" data-testid="chart-caption">
+                        After-tax value on December 31 of each year: Roth IRA + taxable account + cash + pre-tax IRAs after the
+                        heirs' {formatPercent(scenario.analysis.heirsTaxRate, 0)} tax rate. Taxes on IRA income and conversions are
+                        already paid from these accounts. Gains in the taxable account are not taxed here, because heirs receive a
+                        step-up in basis.
+                      </p>
+                    </>
+                  )}
+
+                  {tab === 'wealth' && wealthView === 'balances' && (
                     <>
                       <BalanceChart
                         baseline={baseline.years}
@@ -380,9 +416,9 @@ export default function App() {
                         ])}
                       />
                       <p className="text-xs text-ink-2" data-testid="chart-caption">
-                        December 31 balances by year. Solid lines show the current strategy; dashed lines show no strategy. Shown
-                        to explain why RMDs change. Distributions leave the accounts once withdrawn, and income tax on conversions is
-                        not deducted (except any withholding entered), so totals are not a measure of after-tax wealth.
+                        December 31 balances by year. Solid lines show the current strategy; dashed lines show no strategy. The
+                        taxable account holds RMD money left after taxes and spending, and pays the tax on conversions. Pre-tax
+                        balances still owe income tax, so see After-tax value for a like-for-like comparison.
                       </p>
                     </>
                   )}

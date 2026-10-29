@@ -16,8 +16,8 @@ neutrally and does not make recommendations.
 
 **Build plan:** 1) tax engine, bracket view, fill-to-bracket conversions (done);
 2) taxable account for unneeded RMDs, how conversion taxes are paid (withheld, taxable
-account, or cash), after-tax wealth and breakeven age; 3) spouses and the survivor's
-switch to single filing; 4) heirs under the 10-year rule.
+account, or cash), after-tax wealth and breakeven age (done); 3) spouses and the
+survivor's switch to single filing; 4) heirs under the 10-year rule.
 
 > Hypothetical illustration only. Not a recommendation, forecast, or tax advice.
 
@@ -45,12 +45,18 @@ pensions/wages/interest, qualified dividends and gains, tax-exempt interest, ite
 deductions, a flat state tax rate, inflation, the heirs' tax rate, and a discount rate
 (by default the investment return). All amounts are entered in today's dollars.
 
+**Taxable account, cash & spending:** taxable brokerage balance, its cost basis, and
+dividend yield; cash and its interest rate; and how much of the IRA withdrawals the
+client spends each year. RMD money left after tax and spending is invested in the
+taxable account.
+
 **Planning levers** (side panel on desktop, "Inputs & planning levers" button on a phone):
 - **Investment returns.** Everything updates immediately.
 - **Roth conversions.** Either a fixed amount for a range of ages (then edit or
   delete single years), or **fill to a bracket**: each year converts as much as fits
   under the top of the chosen bracket, optionally also staying within an IRMAA tier.
-  Optional tax withholding. Any conversion that would use RMD dollars is blocked or
+  Choose how the conversion tax is paid: from the taxable account, from cash, or
+  withheld from the conversion (falls back to the next source if one runs short). Any conversion that would use RMD dollars is blocked or
   reduced, with a message explaining why.
 - **QCDs.** Recurring (amount, from age, through age) and one-time gifts. Age 70½
   eligibility and the annual limit are enforced. QCDs count toward the RMD first.
@@ -73,8 +79,9 @@ and the change from no strategy.
 **Tab 3, IRMAA:** estimated MAGI each year, strategy against no strategy, with the
 IRMAA tier thresholds that apply two years later.
 
-**Tab 4, Account Balances:** Traditional, Roth, and total December 31 balances,
-strategy (solid lines) versus no strategy (dashed lines).
+**Tab 4, Wealth:** after-tax value each year (Roth + taxable + cash + pre-tax after
+the heirs' tax rate), strategy against no strategy, with the breakeven age marked; or
+account balances (Traditional, Roth, taxable, cash, total).
 
 **Tax trade-off:** federal, state, and IRMAA costs with and without the strategy;
 tax paid earlier versus avoided later (including heirs' tax on the pre-tax balance
@@ -116,6 +123,17 @@ indexed at the inflation rate entered.
 heirs' rate times the pre-tax balance left at the end. The breakeven is the heirs'
 rate at which the present-value totals are equal.
 
+**Cash flows:** each year the tax caused by IRA income, conversions, and the taxable
+and cash accounts (total tax minus tax on the entered income alone) is paid from RMD
+cash first; the conversion's share is paid from the source chosen. Leftover RMD cash
+is invested. Spending RMDs don't cover comes from the taxable account, then cash, then
+the Roth IRA. Taxable-account dividends are taxed yearly; selling realizes gains,
+which are taxed in the same year.
+
+**After-tax value and breakeven age:** after-tax value = Roth + taxable + cash +
+pre-tax × (1 − heirs' rate). The breakeven age is the first age from which the
+strategy stays at or above no strategy.
+
 **IRMAA:** MAGI = AGI + tax-exempt interest; it sets premiums two years later for each
 person 65 or older. 2026 thresholds and surcharges are published figures; later years
 are projected at the inflation rate entered.
@@ -138,8 +156,11 @@ verification notes are in [`docs/research.md`](docs/research.md).
   IRAs, the first death, and single filing for the survivor come in build step 3.
   The Joint and Last Survivor Table is not used.
 - Heirs are one tax rate on the pre-tax balance left; the 10-year rule comes in step 4.
-- Conversion taxes are assumed paid from outside money unless withheld; the taxable
-  and cash accounts come in step 2.
+- Other entered income pays its own tax and isn't spent from the modeled accounts.
+  The taxable account earns the IRA return; dividends are all qualified; Roth
+  withdrawals for spending are assumed tax-free.
+- After-tax value is a legacy view (pre-tax at the heirs' rate, taxable gains
+  stepped up), not what the client would net by cashing out in one year.
 - Traditional and Roth IRAs only. The still-working exception is not modeled.
 - Out of scope: inherited accounts, non-spouse beneficiaries, the 10-year rule,
   death of a spouse during the projection, spousal rollovers.
@@ -165,11 +186,13 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 129 calculation and component tests, including IRS boundary cases,
+- `npm test`: 144 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
-  conversions, the QCD contribution offset, IRMAA tiers and indexing, and a
-  hand-calculated tax comparison.
+  conversions, the QCD contribution offset, IRMAA tiers and indexing, a
+  hand-calculated tax comparison, and hand-calculated cash flows (paying conversion
+  tax from each source, realized gains settling, unneeded RMDs invested, Roth covering
+  spending, IRMAA paid two years later, after-tax value and breakeven age).
 - `npm run test:e2e`: browser tests on desktop Chrome and an emulated iPhone 13
   viewport (iPhone screen size, touch, and user agent, but running in Chromium, not
   real Safari). Set `PW_WEBKIT=1` to add a real WebKit run where WebKit is installed,

@@ -1,11 +1,12 @@
 import { formatPercent, formatUsd } from '../utils/format';
 import type { ProjectionResult, Scenario } from '../types';
 import type { IncomeYear, IrmaaSummary } from './irmaa';
+import type { WealthComparison } from './wealth';
 import type { ProjectionSummary } from './summary';
 import type { TaxComparison } from './taxComparison';
 
 export interface Finding {
-  id: 'size' | 'strategy' | 'shift' | 'brackets' | 'tax' | 'irmaa';
+  id: 'size' | 'excess' | 'strategy' | 'shift' | 'brackets' | 'tax' | 'wealth' | 'irmaa';
   /** Short label for the finding. */
   title: string;
   text: string;
@@ -22,6 +23,7 @@ export interface FindingsInput {
   strategyIrmaa: IrmaaSummary | null;
   baselineIncome?: IncomeYear[];
   strategyIncome?: IncomeYear[];
+  wealth?: WealthComparison | null;
 }
 
 const pct = (part: number, whole: number) => (whole > 0 ? formatPercent(part / whole, 0) : '0%');
@@ -61,6 +63,16 @@ export function buildFindings(i: FindingsInput): Finding[] {
       id: 'size',
       title: 'How large RMDs get',
       text: 'No RMDs fall within the projection period with these inputs.',
+    });
+  }
+
+  const leftover = i.baseline.years.reduce((x, y) => x + y.household.invested, 0);
+  const spentFromIra = i.baseline.years.reduce((x, y) => x + y.household.spending, 0);
+  if (leftover > 0.5) {
+    out.push({
+      id: 'excess',
+      title: 'RMDs not needed',
+      text: `Without a strategy, ${formatUsd(leftover)} of IRA withdrawals is left after taxes${spentFromIra > 0.5 ? ' and spending' : ''} over the projection and goes into the taxable account, where its growth is taxed each year.`,
     });
   }
 
@@ -145,6 +157,24 @@ export function buildFindings(i: FindingsInput): Finding[] {
       id: 'tax',
       title: 'Estimated tax trade-off',
       text: `The strategy adds about ${formatUsd(t.taxPaidEarlier)} of federal, state, and IRMAA costs in the years it raises income, and avoids about ${formatUsd(t.taxAvoidedLater)} in later years and for heirs (at the ${formatPercent(a.heirsTaxRate, 0)} rate entered). In present value, its estimated total is ${verdict}.${breakeven}${qcdNote}`,
+    });
+  }
+
+  if (i.wealth) {
+    const w = i.wealth;
+    const diff = w.endStrategy - w.endBaseline;
+    const lastAge = i.strategy.years[i.strategy.years.length - 1]?.age;
+    const heirs = formatPercent(i.scenario.analysis.heirsTaxRate, 0);
+    const when =
+      w.breakevenAge === null
+        ? ' It stays behind through the end of the projection at these assumptions.'
+        : w.crossesOver
+          ? ` It pulls ahead at age ${w.breakevenAge} and stays ahead.`
+          : ' It is ahead from the first year.';
+    out.push({
+      id: 'wealth',
+      title: 'After-tax wealth',
+      text: `At age ${lastAge}, after-tax value is ${formatUsd(w.endStrategy)} with the strategy and ${formatUsd(w.endBaseline)} without it (${diff >= 0 ? '+' : '−'}${formatUsd(Math.abs(diff))}), counting pre-tax money after a ${heirs} tax.${when}`,
     });
   }
 

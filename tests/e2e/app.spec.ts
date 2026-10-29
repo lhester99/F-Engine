@@ -101,7 +101,7 @@ test('Roth conversion schedule: fill, edit, delete, block, clear', async ({ page
   await page.getByRole('button', { name: 'Delete conversion for age 72 (2028)' }).click();
   await expect(table.locator('tbody tr')).toHaveCount(4);
 
-  await page.getByTestId('conv-withholding').fill('20');
+  await page.getByLabel('Pay the conversion tax from').selectOption('withhold');
 
   // An oversized conversion in an RMD year is limited with a message.
   await page.getByTestId('conv-start').fill('80');
@@ -180,11 +180,14 @@ test('account balances tab keeps inputs and toggles the baseline', async ({ page
   await openInputs(page);
   await page.getByTestId('conv-amount').fill('75000');
   await page.getByRole('button', { name: 'Apply to range' }).click();
-  await page.getByRole('tab', { name: 'Account Balances' }).click();
+  await page.getByRole('tab', { name: 'Wealth' }).click();
+  await expect(page.getByTestId('wealth-chart').locator('.recharts-line').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Account balances' }).click();
   await expect(page.getByTestId('balance-chart').locator('.recharts-line').first()).toBeVisible();
   await expect(page.getByText('Roth IRA, no strategy')).toBeVisible();
   // Tap/click a point on the balance chart opens that year.
   const chart = page.getByTestId('balance-chart');
+  await chart.scrollIntoViewIfNeeded();
   const box = (await chart.boundingBox())!;
   const n = 2051 - new Date().getFullYear() + 1; // years in the default projection
   const x = box.x + 56 + ((box.width - 56 - 12) * 5) / (n - 1);
@@ -257,6 +260,7 @@ test('IRMAA tab: chart and tap/click year detail with MAGI', async ({ page }) =>
   await page.getByRole('tab', { name: 'IRMAA' }).click();
   const chart = page.getByTestId('income-chart');
   await expect(chart.locator('.recharts-bar-rectangle').first()).toBeVisible();
+  await chart.scrollIntoViewIfNeeded();
   const box = (await chart.boundingBox())!;
   const n = 2051 - new Date().getFullYear() + 1;
   // Centre of the 4th band (index 3).
@@ -321,5 +325,27 @@ test('fill-to-bracket conversions and the Tax Brackets tab', async ({ page }) =>
   await expect(page.getByTestId('finding-brackets')).toContainText('federal bracket');
   await page.getByRole('button', { name: /Remove fill to 24% rule/ }).click();
   await expect(page.getByTestId('fill-rules')).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+});
+
+test('taxable account, cash, spending, tax source, and the Wealth tab', async ({ page }) => {
+  await openInputs(page);
+  await page.getByTestId('spending').fill('30000');
+  await page.getByTestId('taxable-balance').fill('400000');
+  await page.getByTestId('taxable-basis').fill('300000');
+  await page.getByTestId('taxable-yield').fill('1.5');
+  await page.getByTestId('cash-balance').fill('20000');
+  await page.getByTestId('cash-rate').fill('4');
+  await page.getByRole('button', { name: 'Apply to range' }).click();
+  for (const source of ['cash', 'withhold', 'taxable']) {
+    await page.getByLabel('Pay the conversion tax from').selectOption(source);
+    await expect(page.getByTestId('finding-wealth')).toContainText('after-tax value is');
+  }
+  await page.getByRole('tab', { name: 'Wealth' }).click();
+  await expect(page.getByTestId('wealth-chart').locator('.recharts-line').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Account balances' }).click();
+  await expect(page.getByText('Taxable account, strategy')).toBeVisible();
+  await page.getByRole('button', { name: 'After-tax value' }).click();
+  await expect(page.getByTestId('wealth-chart')).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

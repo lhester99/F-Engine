@@ -56,6 +56,16 @@ const ROWS: RowDef[] = [
       return be === 0 ? 'Any' : formatPercent(be);
     },
   },
+  { label: 'After-tax value at end', value: (c) => formatUsd(c.m.afterTaxEnd) },
+  {
+    label: 'Breakeven age (after-tax value)',
+    value: (c) => {
+      if (c.kind === 'baseline' || !c.m.wealth) return '—';
+      const w = c.m.wealth;
+      if (w.identical) return '—';
+      return w.breakevenAge === null ? 'Not reached' : w.crossesOver ? `Age ${w.breakevenAge}` : 'From the start';
+    },
+  },
   { label: 'Ending pre-tax balance', value: (c) => formatUsd(c.m.summary.endingPretax) },
   { label: 'Ending Roth balance', value: (c) => formatUsd(c.m.summary.endingRoth) },
 ];

@@ -64,6 +64,6 @@ export function removeConversionYear(
 }
 
 /** Strategy with no levers: the "No strategy" baseline. */
-export function emptyStrategy(withholdingRate = 0): Strategy {
-  return { conversions: [], bracketFills: [], conversionWithholdingRate: withholdingRate, recurringQcds: [], oneTimeQcds: [] };
+export function emptyStrategy(conversionTaxSource: Strategy['conversionTaxSource'] = 'taxable'): Strategy {
+  return { conversions: [], bracketFills: [], conversionTaxSource, recurringQcds: [], oneTimeQcds: [] };
 }

@@ -4,7 +4,7 @@ import { parseIsoDate } from '../calculations/dates';
 import { MessageList } from '../components/MessageList';
 import { BRACKET_RATES } from '../calculations/validate';
 import { fillConversionRange, removeConversionYear, setConversionYear } from '../strategies/schedule';
-import type { BracketFillRule, EngineMessage, ProjectionResult, Scenario } from '../types';
+import type { BracketFillRule, ConversionTaxSource, EngineMessage, ProjectionResult, Scenario } from '../types';
 import { formatUsd } from '../utils/format';
 import { NumberField } from './NumberField';
 
@@ -34,7 +34,6 @@ export function ConversionPanel({ scenario, update, result, messages }: Props) {
   const rows = scenario.strategy.conversions.filter((c) => c.personId === person.id);
   const byYear = new Map(result.years.map((y) => [y.year, y]));
   const conversionMessages = messages.filter((m) => m.field === 'conversion');
-  const withholdingErr = messages.find((m) => m.field === 'conversionWithholding')?.text;
 
   const setConversions = (fn: (c: Scenario['strategy']['conversions']) => Scenario['strategy']['conversions']) =>
     update((s) => ({ ...s, strategy: { ...s.strategy, conversions: fn(s.strategy.conversions) } }));
@@ -165,17 +164,25 @@ export function ConversionPanel({ scenario, update, result, messages }: Props) {
         </ul>
       )}
 
-      <NumberField
-        label="Tax withholding on conversions"
-        kind="percent"
-        min={0}
-        max={100}
-        value={scenario.strategy.conversionWithholdingRate}
-        externalError={withholdingErr}
-        onCommit={(v) => update((s) => ({ ...s, strategy: { ...s.strategy, conversionWithholdingRate: v } }))}
-        hint="Withheld amounts leave the IRA but are not deposited to the Roth IRA."
-        testId="conv-withholding"
-      />
+      <div>
+        <label htmlFor="conv-tax-source" className="field-label">Pay the conversion tax from</label>
+        <select
+          id="conv-tax-source"
+          className="field-input"
+          value={scenario.strategy.conversionTaxSource}
+          onChange={(e) =>
+            update((s) => ({ ...s, strategy: { ...s.strategy, conversionTaxSource: e.target.value as ConversionTaxSource } }))
+          }
+        >
+          <option value="taxable">Taxable account</option>
+          <option value="cash">Cash</option>
+          <option value="withhold">Withhold from the conversion</option>
+        </select>
+        <p className="field-hint">
+          Withholding sends less to the Roth IRA. If the chosen account runs short, the other account is used, then
+          withholding.
+        </p>
+      </div>
 
       {tableYears.length > 0 ? (
         <div className="max-h-72 overflow-y-auto rounded-md border border-line">

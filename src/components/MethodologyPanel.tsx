@@ -16,7 +16,10 @@ export const KNOWN_LIMITATIONS = [
   'Federal tax is an estimate from the brackets, standard or itemized deduction, age-65 additions, the 2025–2028 senior deduction, Social Security taxation, capital-gains rates, and the 3.8% NIIT. Credits, AMT, the qualified business income deduction, and the 10% early-distribution penalty before 59½ are not modeled. State tax is one flat rate on income other than Social Security.',
   'Tax brackets and deductions after 2026 are projected at the inflation rate entered. Tax law can change.',
   'Entered income (Social Security, pensions, interest, dividends, itemized deductions) is held in today’s dollars and grows with inflation every year. Pensions without cost-of-living increases are overstated in later years.',
-  'Conversion taxes are assumed to be paid from money outside these accounts unless withholding is set. The taxable account for unneeded RMDs, and the choice of how conversion taxes are paid, are not modeled yet.',
+  'Other entered income is assumed to pay its own tax and is not spent from the modeled accounts. Only the tax caused by IRA income, conversions, the taxable account, and cash is paid from the modeled accounts.',
+  'The taxable account is invested at the same return as the IRAs. Its dividends are all treated as qualified and are reinvested; gains are realized only when money is withdrawn, in proportion to the unrealized gain. Short-term gains and tax-loss harvesting are not modeled.',
+  'Withdrawing from the Roth IRA for spending assumes the five-year and age 59½ conditions for tax-free withdrawals are met.',
+  'After-tax value treats the pre-tax balance as worth (1 − the heirs’ rate) and taxes no gains in the taxable account (heirs’ step-up). It is a legacy view, not what the client would net by cashing out everything in one year.',
   'The tax comparison treats QCD dollars as income avoided. It assumes the client would not otherwise make the same gifts; if they would give cash anyway, the real benefit of a QCD depends on whether they itemize.',
   'IRMAA uses estimated MAGI (AGI plus tax-exempt interest). Married filing separately and IRMAA appeals for life-changing events are not modeled; people on the return are assumed to be on Medicare from 65. Income in the last two projection years affects premiums after the projection and is not counted.',
   'IRMAA thresholds and surcharges after 2026 are projections at the inflation rate entered, not published figures.',
@@ -223,6 +226,49 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
               <li>
                 QCD gifts count as income not taxed. The comparison covers taxes only and does not treat the gifts
                 themselves as a cost.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Taxable account, cash, and spending</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Each year, the tax caused by IRA income, conversions, and these accounts is the household’s total estimated tax
+                minus the tax on the entered income alone. The client’s other income pays its own tax.
+              </li>
+              <li>
+                Cash from RMDs and extra withdrawals first pays that tax (except the conversion’s share), any IRMAA increase
+                due that year, and the spending amount entered. Whatever is left is invested in the taxable account.
+              </li>
+              <li>
+                The conversion’s share of tax is paid from the source chosen: withheld from the conversion (so less reaches
+                the Roth IRA), the taxable account, or cash. If that runs short, the other account is used, then withholding,
+                with a message.
+              </li>
+              <li>
+                Spending that RMDs do not cover comes from the taxable account, then cash, then the Roth IRA. Spending is the
+                same with and without the strategy, so the comparison is like for like.
+              </li>
+              <li>
+                Selling from the taxable account realizes gains in proportion to its unrealized gain; those gains are taxed in
+                the same year, so the year is recalculated until the amounts settle. Dividends (the yield entered) are taxed
+                each year as qualified dividends and reinvested, adding to cost basis. Cash interest is ordinary income.
+              </li>
+              <li>The IRMAA increase caused by modeled income is paid in the premium year, two years after the income.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>After-tax value and breakeven age</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                After-tax value each December 31 = Roth IRA + taxable account + cash + pre-tax IRAs × (1 − heirs’ tax rate).
+                Taxable-account gains are not taxed because heirs receive a step-up in basis.
+              </li>
+              <li>
+                Breakeven age: the first age from which the strategy’s after-tax value is at least the no-strategy value in
+                every remaining year. If the strategy is ahead from the first year, that is shown instead.
               </li>
             </ul>
           </section>

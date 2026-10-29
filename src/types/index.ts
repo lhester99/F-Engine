@@ -94,11 +94,18 @@ export interface BracketFillRule {
   irmaaMaxTier: number | null;
 }
 
+/** How the income tax caused by a Roth conversion is paid. */
+export type ConversionTaxSource = 'withhold' | 'taxable' | 'cash';
+
 export interface Strategy {
   conversions: ConversionEntry[];
   bracketFills: BracketFillRule[];
-  /** Fraction (0–1) of each conversion withheld for taxes rather than deposited to the Roth IRA. */
-  conversionWithholdingRate: number;
+  /**
+   * Withheld from the conversion (less reaches the Roth IRA), or paid from the
+   * taxable account or cash. If the chosen account runs short, the other account
+   * is used, then withholding.
+   */
+  conversionTaxSource: ConversionTaxSource;
   recurringQcds: RecurringQcdRule[];
   oneTimeQcds: OneTimeQcd[];
 }
@@ -141,6 +148,24 @@ export interface AnalysisSettings {
   discountMatchesReturn: boolean;
 }
 
+/**
+ * Accounts outside the IRAs that hold unneeded RMD money and pay taxes, plus
+ * how much of the IRA withdrawals the client spends.
+ */
+export interface CashFlowSettings {
+  /** Taxable brokerage account balance at the start of the projection. */
+  taxableBalance: number;
+  /** Cost basis of that account. */
+  taxableBasis: number;
+  /** Share of the taxable account paid out each year as qualified dividends (taxed each year). Its total return is the investment return. */
+  taxableYield: number;
+  cashBalance: number;
+  /** Interest rate on cash, taxed as ordinary income. */
+  cashRate: number;
+  /** Amount of IRA withdrawals the client spends each year, in today's dollars (grows with inflation). */
+  spendingFromIra: number;
+}
+
 export interface Scenario {
   /** First projection year. Balances are as of December 31 of the prior year. */
   startYear: number;
@@ -153,6 +178,7 @@ export interface Scenario {
   qcdLimits: QcdLimitSettings;
   strategy: Strategy;
   analysis: AnalysisSettings;
+  cashFlow: CashFlowSettings;
 }
 
 export type MessageSeverity = 'error' | 'warning' | 'info';
@@ -177,6 +203,8 @@ export interface AccountYear {
   /** Taxable RMD (including any deferred prior-year RMD) taken from this account. */
   rmdTaxableWithdrawal: number;
   extraWithdrawal: number;
+  /** Tax-free withdrawals (Roth IRA) used to cover spending. */
+  withdrawal: number;
   conversionOut: number;
   /** Conversion proceeds deposited (Roth accounts only). */
   conversionIn: number;
@@ -242,10 +270,55 @@ export interface YearTotals {
   conversionGross: number;
   conversionWithheld: number;
   contributions: number;
+  /** Qualified dividends and realized gains from the taxable account (taxed this year). */
+  sideQualifiedIncome: number;
+  /** Interest on cash (ordinary income). */
+  sideOrdinaryIncome: number;
+  endBalanceTaxable: number;
+  endBalanceCash: number;
+  /**
+   * Roth + taxable account + cash + pre-tax balance after the heirs' tax rate.
+   * Taxable gains are not taxed here (heirs receive a step-up in basis).
+   */
+  afterTaxValue: number;
   growth: number;
   endBalancePretax: number;
   endBalanceRoth: number;
+  /** IRAs + taxable account + cash. */
   endBalanceTotal: number;
+}
+
+/** Household money flows outside the IRAs for one year. */
+export interface HouseholdCashFlow {
+  taxableStart: number;
+  taxableBasisStart: number;
+  cashStart: number;
+  dividends: number;
+  cashInterest: number;
+  realizedGain: number;
+  /** Federal + state tax caused by IRA income, conversions, and these accounts (total minus tax on entered income alone). */
+  taxOnModeledIncome: number;
+  /** The part of that tax caused by the Roth conversion. */
+  conversionTax: number;
+  conversionTaxWithheld: number;
+  conversionTaxFromTaxable: number;
+  conversionTaxFromCash: number;
+  /** IRMAA surcharge caused by modeled income two years earlier, paid this year. */
+  irmaaPaid: number;
+  /** Cash received from taxable IRA withdrawals (RMDs and extra withdrawals). */
+  iraCashReceived: number;
+  spending: number;
+  spendingShortfall: number;
+  /** Left-over IRA withdrawals invested in the taxable account. */
+  invested: number;
+  withdrawnTaxable: number;
+  withdrawnCash: number;
+  withdrawnRoth: number;
+  taxableGrowth: number;
+  cashGrowth: number;
+  taxableEnd: number;
+  taxableBasisEnd: number;
+  cashEnd: number;
 }
 
 export interface YearResult {
@@ -257,6 +330,7 @@ export interface YearResult {
   people: PersonYear[];
   accounts: AccountYear[];
   totals: YearTotals;
+  household: HouseholdCashFlow;
   messages: EngineMessage[];
 }
 

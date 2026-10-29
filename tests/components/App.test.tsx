@@ -24,7 +24,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Apply to range' }));
     expect(screen.getByTestId('conversion-table')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('tab', { name: 'Account Balances' }));
+    await user.click(screen.getByRole('tab', { name: 'Wealth' }));
+    expect(screen.getByTestId('wealth-chart')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Account balances' }));
     expect(screen.getByTestId('balance-chart')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'RMD Projections' }));
 

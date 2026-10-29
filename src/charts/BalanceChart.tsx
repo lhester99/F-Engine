@@ -16,6 +16,8 @@ interface Props {
 export const BALANCE_SERIES = [
   { key: 'pretax', label: 'Traditional IRAs', color: 'var(--color-strategy)' },
   { key: 'roth', label: 'Roth IRA', color: 'var(--color-roth)' },
+  { key: 'taxable', label: 'Taxable account', color: 'var(--color-taxable)' },
+  { key: 'cash', label: 'Cash', color: 'var(--color-cash)' },
   { key: 'total', label: 'Total', color: 'var(--color-total)' },
 ] as const;
 
@@ -28,9 +30,13 @@ interface Row {
   x: number;
   pretax: number;
   roth: number;
+  taxable: number;
+  cash: number;
   total: number;
   pretaxBase: number;
   rothBase: number;
+  taxableBase: number;
+  cashBase: number;
   totalBase: number;
 }
 
@@ -73,9 +79,13 @@ export function BalanceChart({ baseline, strategy, axis, showBaseline, selectedY
       x: axis === 'age' ? s.age : s.year,
       pretax: s.totals.endBalancePretax,
       roth: s.totals.endBalanceRoth,
+      taxable: s.totals.endBalanceTaxable,
+      cash: s.totals.endBalanceCash,
       total: s.totals.endBalanceTotal,
       pretaxBase: b?.totals.endBalancePretax ?? 0,
       rothBase: b?.totals.endBalanceRoth ?? 0,
+      taxableBase: b?.totals.endBalanceTaxable ?? 0,
+      cashBase: b?.totals.endBalanceCash ?? 0,
       totalBase: b?.totals.endBalanceTotal ?? 0,
     };
   });

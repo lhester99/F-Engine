@@ -98,9 +98,20 @@ export function validateScenario(s: Scenario): EngineMessage[] {
   }
 
   const st = s.strategy;
-  if (!isNum(st.conversionWithholdingRate) || st.conversionWithholdingRate < 0 || st.conversionWithholdingRate > 1) {
-    err('withholding', 'Withholding must be between 0% and 100%.', 'conversionWithholding');
+  if (!['withhold', 'taxable', 'cash'].includes(st.conversionTaxSource)) {
+    err('tax-source', 'Choose how conversion taxes are paid.', 'conversionTaxSource');
   }
+  const cf = s.cashFlow;
+  for (const [key, label] of [
+    ['taxableBalance', 'Taxable account balance'],
+    ['taxableBasis', 'Taxable account cost basis'],
+    ['cashBalance', 'Cash balance'],
+    ['spendingFromIra', 'Spending from IRA withdrawals'],
+  ] as const) {
+    if (!isNum(cf[key]) || cf[key] < 0) err(key, `${label} must be zero or positive.`, key);
+  }
+  if (!isNum(cf.taxableYield) || cf.taxableYield < 0 || cf.taxableYield > 1) err('yield', 'Dividend yield must be between 0% and 100%.', 'taxableYield');
+  if (!isNum(cf.cashRate) || cf.cashRate <= -1) err('cash-rate', 'Cash interest rate must be greater than -100%.', 'cashRate');
   for (const c of st.conversions) {
     if (!isNum(c.amount) || c.amount < 0) err('conversion-amount', `Conversion for ${c.year} must be zero or positive.`, `conversion:${c.year}`, c.personId);
   }

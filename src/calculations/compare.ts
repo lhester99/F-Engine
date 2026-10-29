@@ -3,6 +3,7 @@ import { incomeByYear, summarizeIrmaa, type IrmaaSummary } from './irmaa';
 import { runComparison } from './projection';
 import { summarize, type ProjectionSummary } from './summary';
 import { compareTaxes, type TaxComparison, type TaxTotals } from './taxComparison';
+import { compareWealth, type WealthComparison } from './wealth';
 
 /** A saved set of planning levers. Client inputs always come from the current scenario. */
 export interface SavedStrategy {
@@ -20,6 +21,10 @@ export interface ScenarioMetrics {
   taxTotals: TaxTotals;
   /** Comparison against no strategy; null for the baseline column. */
   tax: TaxComparison | null;
+  /** After-tax value at the end of the projection. */
+  afterTaxEnd: number;
+  /** After-tax value comparison against no strategy; null for the baseline column. */
+  wealth: WealthComparison | null;
 }
 
 export interface ComparisonColumn {
@@ -42,18 +47,23 @@ export function metricsForStrategy(
   if (!baseline.ok || !strategy.ok) return null;
   const last = lastYearOf(strategy);
   const tax = compareTaxes(baseline, strategy, scenario);
+  const wealth = compareWealth(baseline, strategy);
   return {
     baseline: {
       summary: summarize(baseline),
       irmaa: summarizeIrmaa(incomeByYear(baseline, scenario), last),
       taxTotals: tax.baseline,
       tax: null,
+      afterTaxEnd: wealth.endBaseline,
+      wealth: null,
     },
     strategy: {
       summary: summarize(strategy),
       irmaa: summarizeIrmaa(incomeByYear(strategy, scenario), last),
       taxTotals: tax.strategy,
       tax,
+      afterTaxEnd: wealth.endStrategy,
+      wealth,
     },
   };
 }

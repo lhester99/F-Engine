@@ -4,6 +4,7 @@ import { incomeByYear, summarizeIrmaa } from '../calculations/irmaa';
 import { runComparison } from '../calculations/projection';
 import { summarize } from '../calculations/summary';
 import { compareTaxes } from '../calculations/taxComparison';
+import { compareWealth } from '../calculations/wealth';
 import type { Scenario } from '../types';
 
 /** Runs the baseline and strategy projections, and the tax analyses built on them, whenever the scenario changes. */
@@ -19,6 +20,7 @@ export function useProjection(scenario: Scenario) {
     const baselineIrmaa = ok ? summarizeIrmaa(baselineIncome, lastYear) : null;
     const strategyIrmaa = ok ? summarizeIrmaa(strategyIncome, lastYear) : null;
     const tax = ok ? compareTaxes(baseline, strategy, scenario) : null;
+    const wealth = ok ? compareWealth(baseline, strategy) : null;
     const findings = ok
       ? buildFindings({
           scenario,
@@ -31,8 +33,21 @@ export function useProjection(scenario: Scenario) {
           strategyIrmaa,
           baselineIncome,
           strategyIncome,
+          wealth,
         })
       : [];
-    return { baseline, strategy, baselineSummary, strategySummary, baselineIncome, strategyIncome, baselineIrmaa, strategyIrmaa, tax, findings };
+    return {
+      baseline,
+      strategy,
+      baselineSummary,
+      strategySummary,
+      baselineIncome,
+      strategyIncome,
+      baselineIrmaa,
+      strategyIrmaa,
+      tax,
+      wealth,
+      findings,
+    };
   }, [scenario]);
 }

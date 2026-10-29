@@ -208,6 +208,16 @@ export interface IraIncome {
   deductibleContributions: number;
 }
 
+/** Income from the taxable and cash accounts. */
+export interface SideIncome {
+  /** Qualified dividends and realized long-term gains. */
+  qualified: number;
+  /** Interest (ordinary income). */
+  ordinary: number;
+}
+
+export const NO_SIDE_INCOME: SideIncome = { qualified: 0, ordinary: 0 };
+
 /** Number of people on the return who are 65 or older at the end of `year`. */
 export function peopleAge65(scenario: Scenario, year: number): number {
   const primary = parseIsoDate(scenario.people[0]?.dateOfBirth ?? '');
@@ -220,7 +230,12 @@ export function peopleAge65(scenario: Scenario, year: number): number {
 }
 
 /** Builds the year's household income from the entered assumptions plus the projected IRA amounts. */
-export function householdIncomeForYear(scenario: Scenario, year: number, ira: IraIncome): HouseholdIncome {
+export function householdIncomeForYear(
+  scenario: Scenario,
+  year: number,
+  ira: IraIncome,
+  side: SideIncome = NO_SIDE_INCOME,
+): HouseholdIncome {
   const a = scenario.analysis;
   const g = Math.pow(1 + a.inflationRate, year - scenario.startYear);
   const primary = parseIsoDate(scenario.people[0]?.dateOfBirth ?? '');
@@ -228,8 +243,8 @@ export function householdIncomeForYear(scenario: Scenario, year: number, ira: Ir
   return {
     year,
     filingStatus: a.filingStatus,
-    ordinaryIncome: a.otherOrdinaryIncome * g + ira.taxableIra + ira.conversion - ira.deductibleContributions,
-    qualifiedIncome: a.qualifiedInvestmentIncome * g,
+    ordinaryIncome: a.otherOrdinaryIncome * g + ira.taxableIra + ira.conversion - ira.deductibleContributions + side.ordinary,
+    qualifiedIncome: a.qualifiedInvestmentIncome * g + side.qualified,
     taxExemptInterest: a.taxExemptInterest * g,
     socialSecurity: age >= a.socialSecurityStartAge ? a.socialSecurityBenefit * g : 0,
     peopleAge65: peopleAge65(scenario, year),

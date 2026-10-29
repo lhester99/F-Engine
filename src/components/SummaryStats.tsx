@@ -1,9 +1,11 @@
 import type { ProjectionSummary } from '../calculations/summary';
+import type { WealthComparison } from '../calculations/wealth';
 import { formatPercent, formatUsd } from '../utils/format';
 
 interface Props {
   baseline: ProjectionSummary;
   strategy: ProjectionSummary;
+  wealth?: WealthComparison | null;
 }
 
 interface Tile {
@@ -14,7 +16,7 @@ interface Tile {
 }
 
 /** Headline answers: how large, how fast, and the effect of the strategy. */
-export function SummaryStats({ baseline, strategy }: Props) {
+export function SummaryStats({ baseline, strategy, wealth }: Props) {
   const point = (p: ProjectionSummary['peakRmd']) => (p ? `age ${p.age} (${p.year})` : 'none in projection');
   const tiles: Tile[] = [
     {
@@ -30,18 +32,29 @@ export function SummaryStats({ baseline, strategy }: Props) {
       base: baseline.peakRmd ? `${formatUsd(baseline.peakRmd.amount)} at ${point(baseline.peakRmd)}` : '—',
     },
     {
-      label: 'RMD growth (annualized)',
-      value: strategy.rmdAnnualGrowth === null ? '—' : formatPercent(strategy.rmdAnnualGrowth),
-      sub: 'first to last RMD year',
-      base: baseline.rmdAnnualGrowth === null ? '—' : formatPercent(baseline.rmdAnnualGrowth),
-    },
-    {
       label: 'Total required RMDs',
       value: formatUsd(strategy.totalRequiredRmd),
-      sub: `Taxable distributions ${formatUsd(strategy.totalTaxableDistributions)}`,
+      sub:
+        strategy.rmdAnnualGrowth === null
+          ? `Taxable distributions ${formatUsd(strategy.totalTaxableDistributions)}`
+          : `Growing ${formatPercent(strategy.rmdAnnualGrowth)} a year`,
       base: formatUsd(baseline.totalRequiredRmd),
     },
   ];
+  if (wealth) {
+    tiles.push({
+      label: 'After-tax value at end',
+      value: formatUsd(wealth.endStrategy),
+      sub: wealth.identical
+        ? 'Same as no strategy'
+        : wealth.breakevenAge === null
+          ? 'Behind no strategy at the end'
+          : wealth.crossesOver
+            ? `Pulls ahead at age ${wealth.breakevenAge}`
+            : 'Ahead from the first year',
+      base: formatUsd(wealth.endBaseline),
+    });
+  }
   return (
     <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4" data-testid="summary-stats">
       {tiles.map((t) => (

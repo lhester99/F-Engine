@@ -10,6 +10,7 @@ import {
 import { runComparison, runProjection } from '../../src/calculations/projection';
 import { summarize } from '../../src/calculations/summary';
 import { compareTaxes } from '../../src/calculations/taxComparison';
+import { compareWealth } from '../../src/calculations/wealth';
 import { validateAnalysis } from '../../src/calculations/validate';
 import { IRMAA_2026 } from '../../src/data/irmaa';
 import { DEFAULT_ANALYSIS } from '../../src/utils/defaultScenario';
@@ -301,14 +302,17 @@ describe('findings', () => {
       strategyIrmaa: summarizeIrmaa(incomeByYear(st, s), 2051),
       baselineIncome: incomeByYear(baseline, s),
       strategyIncome: incomeByYear(st, s),
+      wealth: compareWealth(baseline, st),
     });
   };
 
   it('describes size and growth, and says when no strategy is entered', () => {
     const f = build();
-    expect(f.map((x) => x.id)).toEqual(['size', 'strategy']);
-    expect(f[0]!.text).toMatch(/^Without a strategy, required RMDs start at \$[\d,]+ at age 73 \(2029\)/);
-    expect(f[1]!.text).toMatch(/No Roth conversions or QCDs/);
+    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'strategy']);
+    const by = (id: string) => f.find((x) => x.id === id)!.text;
+    expect(by('size')).toMatch(/^Without a strategy, required RMDs start at \$[\d,]+ at age 73 \(2029\)/);
+    expect(by('excess')).toMatch(/^Without a strategy, \$[\d,]+ of IRA withdrawals is left after taxes over the projection and goes into the taxable account/);
+    expect(by('strategy')).toMatch(/No Roth conversions or QCDs/);
   });
 
   it('describes the strategy, income shift, tax trade-off, and IRMAA in neutral terms', () => {
@@ -316,12 +320,14 @@ describe('findings', () => {
       conversions: [70, 71, 72].map((a) => ({ personId: 'p1', year: 1956 + a, amount: 100_000 })),
       recurringQcds: [{ id: 'q', personId: 'p1', annualAmount: 20_000, startAge: 73, endAge: 95 }],
     });
-    expect(f.map((x) => x.id)).toEqual(['size', 'strategy', 'shift', 'brackets', 'tax', 'irmaa']);
-    expect(f[1]!.text).toMatch(/lowers the peak RMD by \$[\d,]+ \(\d+%\)/);
-    expect(f[2]!.text).toContain('Conversions move $300,000 of taxable income into ages 70–72.');
-    expect(f[3]!.text).toMatch(/^In conversion years \(ages 70–72\), income reaches the \d+% federal bracket\./);
-    expect(f[4]!.text).toMatch(/^The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
-    expect(f[4]!.text).toContain('it does not count the gifts themselves');
+    expect(f.map((x) => x.id)).toEqual(['size', 'excess', 'strategy', 'shift', 'brackets', 'tax', 'wealth', 'irmaa']);
+    const by = (id: string) => f.find((x) => x.id === id)!.text;
+    expect(by('strategy')).toMatch(/lowers the peak RMD by \$[\d,]+ \(\d+%\)/);
+    expect(by('shift')).toContain('Conversions move $300,000 of taxable income into ages 70–72.');
+    expect(by('brackets')).toMatch(/^In conversion years \(ages 70–72\), income reaches the \d+% federal bracket\./);
+    expect(by('tax')).toMatch(/^The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
+    expect(by('tax')).toContain('it does not count the gifts themselves');
+    expect(by('wealth')).toMatch(/^At age 95, after-tax value is \$[\d,]+ with the strategy and \$[\d,]+ without it/);
     const all = f.map((x) => x.text).join(' ').toLowerCase();
     expect(all).not.toMatch(/sav(e|ed|ing)/);
     expect(all).not.toMatch(/better|recommend/);

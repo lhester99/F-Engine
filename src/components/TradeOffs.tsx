@@ -103,8 +103,8 @@ export function TradeOffs({ tax, baselineIrmaa, strategyIrmaa, analysis }: Props
       <p className="mt-2 text-xs text-muted">
         IRMAA: {baselineIrmaa.yearsWithSurcharge} surcharge year{baselineIrmaa.yearsWithSurcharge === 1 ? '' : 's'} without the strategy,{' '}
         {strategyIrmaa.yearsWithSurcharge} with it. Present value at {formatPercent(tax.discountRate)} a year
-        {analysis.discountMatchesReturn ? ' (the investment return)' : ''}. Conversion taxes are assumed to be paid from money
-        outside these accounts unless withholding is set.
+        {analysis.discountMatchesReturn ? ' (the investment return)' : ''}. Taxes include the tax on taxable-account dividends,
+        realized gains, and cash interest.
         {tax.qcdExcludedIncome > 0.5
           ? ` QCD gifts (${formatUsd(tax.qcdExcludedIncome)}) count as income not taxed; the gifts themselves are not counted as a cost.`
           : ''}

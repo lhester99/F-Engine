@@ -127,3 +127,49 @@ describe('client-value features', () => {
     expect(screen.getByRole('checkbox', { name: 'Contributions are tax-deductible' })).toBeChecked();
   });
 });
+
+describe('step 2: taxable account, cash, spending, and wealth', () => {
+  it('changing how the conversion tax is paid changes the Roth balance', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Apply to range' }));
+    await user.click(screen.getByRole('tab', { name: 'Wealth' }));
+    await user.click(screen.getByRole('button', { name: 'Open year detail' }));
+    const rothEnd = () =>
+      within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'Ending Dec 31 balance (Roth IRA)' }).parentElement!
+        .querySelectorAll('td')[1]!.textContent;
+    const fromTaxable = rothEnd();
+    await user.selectOptions(screen.getByLabelText('Pay the conversion tax from'), 'withhold');
+    expect(rothEnd()).not.toBe(fromTaxable);
+    expect(within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'conversion tax withheld' })).toBeInTheDocument();
+  });
+
+  it('spending reduces what is invested from RMDs', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.getByTestId('finding-excess')).toHaveTextContent(/left after taxes over the projection/);
+    const spend = screen.getByLabelText('Spending from IRA withdrawals, per year');
+    await user.clear(spend);
+    await user.type(spend, '40000');
+    expect(screen.getByTestId('finding-excess')).toHaveTextContent(/left after taxes and spending/);
+  });
+
+  it('shows after-tax value and the breakeven age', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Apply to range' }));
+    expect(screen.getByTestId('finding-wealth')).toHaveTextContent(/after-tax value is \$[\d,]+ with the strategy/);
+    expect(within(screen.getByTestId('summary-stats')).getByText('After-tax value at end')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Wealth' }));
+    expect(screen.getByTestId('wealth-chart')).toBeInTheDocument();
+  });
+
+  it('validates the new inputs instantly', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const yieldField = screen.getByLabelText('Dividend yield on the taxable account');
+    await user.clear(yieldField);
+    await user.type(yieldField, '30');
+    expect(screen.getByText('Must be at most 20%.')).toBeInTheDocument();
+  });
+});

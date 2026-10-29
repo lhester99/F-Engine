@@ -1,8 +1,18 @@
 import { DEFAULT_QCD_LIMIT_SETTINGS } from '../data/qcdLimits';
 import { emptyStrategy } from '../strategies/schedule';
-import type { AnalysisSettings, Scenario } from '../types';
+import type { AnalysisSettings, CashFlowSettings, Scenario } from '../types';
 
 export const PRIMARY_ID = 'client';
+
+/** Default taxable account, cash, and spending for the hypothetical client. */
+export const DEFAULT_CASH_FLOW: CashFlowSettings = {
+  taxableBalance: 250_000,
+  taxableBasis: 200_000,
+  taxableYield: 0.02,
+  cashBalance: 50_000,
+  cashRate: 0.03,
+  spendingFromIra: 0,
+};
 
 /** Default household income and tax assumptions for the hypothetical client. */
 export const DEFAULT_ANALYSIS: AnalysisSettings = {
@@ -11,7 +21,7 @@ export const DEFAULT_ANALYSIS: AnalysisSettings = {
   socialSecurityBenefit: 36_000,
   socialSecurityStartAge: 67,
   otherOrdinaryIncome: 15_000,
-  qualifiedInvestmentIncome: 5_000,
+  qualifiedInvestmentIncome: 0,
   taxExemptInterest: 0,
   itemizedDeductions: 0,
   stateTaxRate: 0,
@@ -55,5 +65,6 @@ export function defaultScenario(startYear = new Date().getFullYear()): Scenario 
     qcdLimits: DEFAULT_QCD_LIMIT_SETTINGS,
     strategy: emptyStrategy(),
     analysis: { ...DEFAULT_ANALYSIS },
+    cashFlow: { ...DEFAULT_CASH_FLOW },
   };
 }
