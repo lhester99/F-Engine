@@ -32,6 +32,8 @@ type Row = {
   stratBracket: number;
   baseBracket: number;
   marginal: number;
+  /** Total taxable income, including qualified dividends and gains (matches the plan table). */
+  totalTaxable: number;
 } & Record<string, number>;
 
 function BracketTooltip({ active, payload }: { active?: boolean; payload?: { payload: Row }[] }) {
@@ -43,7 +45,7 @@ function BracketTooltip({ active, payload }: { active?: boolean; payload?: { pay
         Age {r.age} · {r.year}
       </p>
       <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 tabular-nums">
-        <dt className="text-ink-2">Taxable income, strategy</dt>
+        <dt className="text-ink-2">Ordinary taxable income, strategy</dt>
         <dd className="text-right font-semibold text-ink">{formatUsd(r.other + r.converted)}</dd>
         {r.converted > 0 && (
           <>
@@ -51,8 +53,14 @@ function BracketTooltip({ active, payload }: { active?: boolean; payload?: { pay
             <dd className="text-right text-ink">{formatUsd(r.converted)}</dd>
           </>
         )}
-        <dt className="text-ink-2">Taxable income, no strategy</dt>
+        <dt className="text-ink-2">Ordinary taxable income, no strategy</dt>
         <dd className="text-right text-ink">{formatUsd(r.baseline)}</dd>
+        {r.totalTaxable - (r.other + r.converted) > 0.5 && (
+          <>
+            <dt className="text-ink-2">Total taxable income with dividends and gains, strategy</dt>
+            <dd className="text-right text-ink">{formatUsd(r.totalTaxable)}</dd>
+          </>
+        )}
         <dt className="text-ink-2">Bracket, strategy / none</dt>
         <dd className="text-right text-ink">
           {formatPercent(r.stratBracket, 0)} / {formatPercent(r.baseBracket, 0)}
@@ -84,6 +92,7 @@ export function BracketChart({ baseline, strategy, axis, scenario, deathYear, se
       stratBracket: s.tax.bracketRate,
       baseBracket: b?.tax.bracketRate ?? 0,
       marginal: s.marginalRate,
+      totalTaxable: s.tax.taxableIncome,
       ...tops,
     } as Row;
   });
