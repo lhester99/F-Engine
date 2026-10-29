@@ -33,7 +33,8 @@ Allowed (approved by the owner October 28–29, 2026):
 
 4. USER AND DESIGN
 User: an advisor, possibly mid-conversation with a client holding $500K to several million in retirement accounts. The app must be fast, accurate, and uncluttered. One professional interface; no beginner/advanced modes. Desktop-first, fully usable in iPhone Safari.
-Look: institutional wealth-management software. Restrained colors, strong typography, clean spacing. No cartoonish elements, heavy gradients, decorative graphics, or gratuitous animation. The chart is always the centerpiece; controls never overwhelm it. Don't rely on color alone to convey differences. Use semantic, accessible HTML.
+Look: institutional wealth-management software. Restrained colors, strong typography, clean spacing. No cartoonish elements, heavy gradients, decorative graphics, or gratuitous animation.
+(Owner direction, October 29, 2026: lean into a Windows XP "Luna" feel with the blue and green palette: blue title bar and section headers, green primary buttons, orange tab highlight, XP-style buttons and inputs. Keep gradients to the frame; charts, tables, and numbers stay plain and legible.) The chart is always the centerpiece; controls never overwhelm it. Don't rely on color alone to convey differences. Use semantic, accessible HTML.
 
 5. STACK
 React + TypeScript + Vite + Tailwind CSS. Recharts for charts. Lucide React for icons. Vitest for calculation tests, React Testing Library for component tests, Playwright for browser tests (including a mobile Safari/WebKit viewport). Git + GitHub. Deploy to Vercel (or Netlify if Vercel fails).

@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('loads with the chart rendered and no horizontal scroll', async ({ page }) => {
-  await expect(page.getByText('Model future required distributions and evaluate smoothing strategies.')).toBeVisible();
+  await expect(page.getByText('Roth conversions, RMDs, taxes now and later, and what heirs keep.')).toBeVisible();
   await expect(page.getByTestId('rmd-chart').locator('.recharts-bar-rectangle').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
@@ -327,6 +327,19 @@ test('fill-to-bracket conversions and the Tax Brackets tab', async ({ page }) =>
   await expect(page.getByTestId('fill-rules')).toContainText('Fill to 24%, ages 70–74, IRMAA tier 2 or lower');
   await page.getByRole('tab', { name: 'Tax Brackets' }).click();
   await expect(page.getByTestId('bracket-chart').locator('.recharts-bar-rectangle').first()).toBeVisible();
+  // Fit to income (default) zooms the axis; All brackets widens it.
+  const topTick = async () => {
+    const labels = await page.getByTestId('bracket-chart').locator('.recharts-yAxis-tick-labels text').allTextContents();
+    const values = labels.map((t) => {
+      const n = Number(t.replace(/[$,KM]/g, ''));
+      return t.includes('M') ? n * 1_000_000 : t.includes('K') ? n * 1_000 : n;
+    });
+    return Math.max(0, ...values.filter(Number.isFinite));
+  };
+  const fitTop = await topTick();
+  await page.getByRole('button', { name: 'All brackets' }).click();
+  await expect.poll(topTick).toBeGreaterThan(fitTop);
+  await page.getByRole('button', { name: 'Fit to income' }).click();
   // The first year's conversion cell holds the amount the rule computed.
   const firstConversion = page.getByTestId('plan-table').locator('tbody tr').first().locator('td').first();
   await expect(firstConversion).toHaveText(/^\$[1-9][\d,]*$/);

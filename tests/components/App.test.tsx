@@ -10,7 +10,7 @@ describe('App', () => {
   it('renders the header, summary, and RMD tab by default', () => {
     render(<App />);
     expect(screen.getByRole('heading', { level: 1, name: 'RMD Smoothing Analyzer' })).toBeInTheDocument();
-    expect(screen.getByText('Model future required distributions and evaluate smoothing strategies.')).toBeInTheDocument();
+    expect(screen.getByText('Roth conversions, RMDs, taxes now and later, and what heirs keep.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'RMD Projections' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('rmd-chart')).toBeInTheDocument();
   });

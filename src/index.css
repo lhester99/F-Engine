@@ -2,20 +2,22 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --color-ink: #14213d;
-  --color-ink-2: #3d4a5c;
-  --color-muted: #667085;
-  --color-line: #d9dee5;
-  --color-line-soft: #eceff3;
+  /* Windows XP "Luna" inspired palette: blue chrome, green primary actions, orange highlights. */
+  --font-title: 'Trebuchet MS', 'Segoe UI', Tahoma, ui-sans-serif, sans-serif;
+  --color-ink: #10264f;
+  --color-ink-2: #34476b;
+  --color-muted: #5b6b86;
+  --color-line: #a9bcdc;
+  --color-line-soft: #dde6f4;
   --color-surface: #ffffff;
-  --color-canvas: #f5f6f8;
-  --color-accent: #1f4e8c;
-  --color-accent-soft: #e8eef7;
-  --color-strategy: #1f4e8c;
-  --color-baseline: #8a94a3;
-  --color-conversion: #c2571a;
-  --color-roth: #1a8a66;
-  --color-total: #14213d;
+  --color-canvas: #eaf0fa;
+  --color-accent: #1d5bd6;
+  --color-accent-soft: #e2ebfb;
+  --color-strategy: #1d5bd6;
+  --color-baseline: #8b97ab;
+  --color-conversion: #3a9a2c;
+  --color-roth: #11806a;
+  --color-total: #10264f;
   --color-threshold: #a3470f;
   --color-taxable: #6250d6;
   --color-cash: #8a7a00;
@@ -23,6 +25,8 @@
   --color-error-soft: #fef3f2;
   --color-warning: #8a5a00;
   --color-warning-soft: #fffaeb;
+  --color-xp-green: #2f8a2f;
+  --color-xp-orange: #f5a623;
 }
 
 @layer base {
@@ -70,7 +74,7 @@
     @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-3 text-sm font-medium text-ink-2 hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-white hover:bg-[#183f72];
+    @apply border-xp-green bg-xp-green text-white;
   }
   .btn-icon {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-canvas hover:text-ink;
@@ -96,6 +100,111 @@
   }
 }
 
+
+/* ---- Windows XP-inspired chrome. Kept to the frame (title bar, tabs, section
+   headers, buttons, inputs); charts and numbers stay plain for legibility. ---- */
+body {
+  background: linear-gradient(180deg, #dfe9f9 0, #eaf0fa 320px) fixed;
+}
+.xp-titlebar {
+  background: linear-gradient(180deg, #4a90f5 0%, #2466e0 9%, #1c58d4 55%, #1449be 100%);
+  border-bottom: 1px solid #0b3a9c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.xp-titlebar h1 {
+  color: #fff;
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-shadow: 1px 1px 1px rgba(10, 36, 106, 0.6);
+}
+.xp-titlebar p {
+  color: #dce8ff;
+}
+.xp-titlebar .btn:not(.btn-primary) {
+  border-color: #0b3a9c;
+}
+.panel {
+  border-color: #9fb5dc;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(16, 38, 79, 0.08);
+}
+.xp-section-header {
+  background: linear-gradient(90deg, #ffffff 0%, #ffffff 35%, #d3dff8 100%);
+}
+.xp-section-header .section-title {
+  color: #1748b8;
+  font-family: var(--font-title);
+  font-weight: 700;
+}
+.xp-section-header:hover .section-title {
+  color: #2d6be6;
+}
+.xp-group-label {
+  background: linear-gradient(180deg, #6f9be8, #4f7fd9);
+  color: #fff;
+  border-color: #3f6fcf;
+}
+.xp-tabs {
+  background: linear-gradient(180deg, #f6f9ff, #e4ecfa);
+}
+.xp-tab {
+  margin-right: 2px;
+  border-radius: 4px 4px 0 0;
+  border-bottom-width: 0;
+  border-top: 3px solid transparent;
+  border-left: 1px solid transparent;
+  border-right: 1px solid transparent;
+}
+.xp-tab[aria-selected='true'] {
+  background: #fff;
+  border-top-color: var(--color-xp-orange);
+  border-left-color: #a9bcdc;
+  border-right-color: #a9bcdc;
+  color: var(--color-ink);
+}
+.xp-tab[aria-selected='false']:hover {
+  border-top-color: #ffd27a;
+}
+.btn {
+  border-color: #7f9db9;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f6fb 60%, #e3e9f3 100%);
+  color: #10264f;
+}
+.btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 60%, #e9effa 100%);
+  box-shadow: inset 0 0 0 1px #f8c35a;
+}
+.btn-primary {
+  border-color: #1f6b1f;
+  background: linear-gradient(180deg, #6cc46c 0%, #3fa43f 45%, #2f8a2f 100%);
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 0 rgba(0, 60, 0, 0.35);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #7dd27d 0%, #4cb24c 45%, #359635 100%);
+  box-shadow: none;
+}
+.field-input {
+  border-color: #7f9db9;
+  border-radius: 3px;
+}
+.field-input:focus {
+  border-color: var(--color-accent);
+}
+.seg {
+  border-color: #7f9db9;
+  background: #e9eff9;
+}
+.seg-btn[aria-pressed='true'],
+.seg-btn[aria-selected='true'] {
+  background: linear-gradient(180deg, #ffffff, #dce7fb);
+  color: #1748b8;
+  box-shadow: inset 0 0 0 1px #7f9db9;
+}
+
 /* Printed client summary: inputs and controls are hidden in markup with print:hidden. */
 @media print {
   @page {
@@ -103,6 +212,17 @@
   }
   body {
     background: #fff;
+  }
+  .xp-titlebar {
+    background: none;
+    box-shadow: none;
+  }
+  .xp-titlebar h1 {
+    color: var(--color-ink);
+    text-shadow: none;
+  }
+  .xp-titlebar p {
+    color: var(--color-muted);
   }
   .panel {
     border-color: #c8ced6;

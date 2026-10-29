@@ -16,6 +16,8 @@ interface Props {
   deathYear: number | null;
   selectedYear: number | null;
   onSelectYear: (year: number) => void;
+  /** 'fit' (default) zooms to the income and the brackets near it; 'all' shows every bracket the income approaches. */
+  scale?: 'fit' | 'all';
 }
 
 const PLOT_INSETS = { left: 56, right: 40, scale: 'band' } as const;
@@ -73,7 +75,7 @@ function BracketTooltip({ active, payload }: { active?: boolean; payload?: { pay
 }
 
 /** Ordinary taxable income each year against the tops of the federal brackets. */
-export function BracketChart({ baseline, strategy, axis, scenario, deathYear, selectedYear, onSelectYear }: Props) {
+export function BracketChart({ baseline, strategy, axis, scenario, deathYear, selectedYear, onSelectYear, scale = 'fit' }: Props) {
   const rows: Row[] = strategy.map((s, i) => {
     const b = baseline[i];
     const taxable = s.tax.ordinaryTaxableIncome;
@@ -96,13 +98,35 @@ export function BracketChart({ baseline, strategy, axis, scenario, deathYear, se
       ...tops,
     } as Row;
   });
-  const maxIncome = Math.max(1, ...rows.map((r) => Math.max(r.baseline, r.other + r.converted)));
-  // Show bracket tops up to the first one above the highest income.
-  const visible: number[] = [];
-  for (const r of RATES) {
-    visible.push(r);
-    if (rows.every((row) => row[key(r)]! >= maxIncome)) break;
+  const income = (row: Row) => Math.max(row.baseline, row.other + row.converted);
+  const maxIncome = Math.max(1, ...rows.map(income));
+  // Highest bracket any year's income reaches, judged against that year's own (indexed) brackets.
+  const reached = Math.max(0, ...rows.map((row) => Math.max(0, RATES.findIndex((r) => row[key(r)]! >= income(row)))));
+  let visible: number[];
+  let yMax: number | undefined;
+  if (scale === 'all') {
+    // Every bracket up to the first one whose top is above the highest income in every year.
+    visible = [];
+    for (const r of RATES) {
+      visible.push(r);
+      if (rows.every((row) => row[key(r)]! >= maxIncome)) break;
+    }
+  } else {
+    // Zoom to the income: high enough to show the top of the highest bracket reached (where it is
+    // lowest, early in the projection); lines above that are cut off at the top of the chart.
+    const ceiling = Math.min(...rows.map((row) => row[key(RATES[reached]!)]!));
+    yMax = Math.max(maxIncome, ceiling) * 1.12;
+    // Brackets up to one above the highest reached, where they fall inside the chart.
+    visible = RATES.filter((r, i) => i <= reached + 1 && rows.some((row) => row[key(r)]! <= yMax!));
   }
+  // Label each line at its last point inside the chart.
+  const labelAt = new Map(
+    visible.map((r) => {
+      let idx = rows.length - 1;
+      if (yMax !== undefined) while (idx > 0 && rows[idx]![key(r)]! > yMax) idx--;
+      return [r, idx] as const;
+    }),
+  );
   const selected = rows.find((r) => r.year === selectedYear);
   const death = deathYear === null ? undefined : rows.find((r) => r.year === deathYear);
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
@@ -111,7 +135,7 @@ export function BracketChart({ baseline, strategy, axis, scenario, deathYear, se
   return (
     <div className="h-[320px] w-full sm:h-[400px] print:h-auto" data-testid="bracket-chart" {...selection}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 8, right: 40, bottom: 4, left: 0 }} barGap={2} barCategoryGap="18%" style={{ cursor: 'pointer' }}>
+        <ComposedChart data={rows} margin={{ top: 16, right: 40, bottom: 4, left: 0 }} barGap={2} barCategoryGap="18%" style={{ cursor: 'pointer' }}>
           <HatchDefs />
           <CartesianGrid vertical={false} stroke="#eceff3" />
           <XAxis
@@ -123,7 +147,15 @@ export function BracketChart({ baseline, strategy, axis, scenario, deathYear, se
             height={32}
             label={{ value: axis === 'age' ? 'Age' : 'Year', position: 'insideBottomRight', offset: -2, fontSize: 11, fill: '#667085' }}
           />
-          <YAxis tickFormatter={formatUsdCompact} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#667085' }} width={56} />
+          <YAxis
+            tickFormatter={formatUsdCompact}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 11, fill: '#667085' }}
+            width={56}
+            domain={yMax === undefined ? [0, 'auto'] : [0, yMax]}
+            allowDataOverflow={yMax !== undefined}
+          />
           {death && (
             <ReferenceLine
               x={death.x}
@@ -151,8 +183,12 @@ export function BracketChart({ baseline, strategy, axis, scenario, deathYear, se
               activeDot={false}
               isAnimationActive={false}
               label={(p: { index?: number; x?: number | string; y?: number | string }) =>
-                p.index === last ? (
-                  <text key={`l${r}`} x={Number(p.x) + 6} y={Number(p.y) + 4} fontSize={11} fill="var(--color-ink-2)">
+                p.index === labelAt.get(r) ? (
+                  <text
+                    key={`l${r}`}
+                    x={Number(p.x) + (p.index === last ? 6 : p.index === 0 ? 4 : 0)}
+                    y={Number(p.y) + (p.index === last ? 4 : -5)}
+                    textAnchor={p.index === last || p.index === 0 ? 'start' : 'end'} fontSize={11} fill="var(--color-ink-2)">
                     {Math.round(r * 100)}%
                   </text>
                 ) : (

@@ -28,7 +28,7 @@ export function Section({ title, children, defaultOpen = true, badge, summary, e
       <h2>
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+          className="xp-section-header flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
           aria-expanded={open}
           aria-controls={id}
           onClick={() => setOpen((o) => !o)}

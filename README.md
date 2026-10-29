@@ -76,7 +76,8 @@ pattern. Conversions can be shown as a separate line. Click or tap a year for a 
 breakdown, baseline versus strategy. A year-by-year table is available.
 
 **Tab 2, Tax Brackets:** taxable income each year with the conversion shown on top,
-against the top of each federal bracket, plus a year-by-year plan table: conversion,
+against the top of each federal bracket ("Fit to income" zooms to the client's income;
+"All brackets" shows the full range), plus a year-by-year plan table: conversion,
 taxable income, bracket, rate on the next dollar, federal and state tax, IRMAA tier,
 and the change from no strategy.
 

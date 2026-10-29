@@ -73,6 +73,7 @@ export default function App() {
   const [showConversions, setShowConversions] = useState(true);
   const [showBaselineBalances, setShowBaselineBalances] = useState(true);
   const [wealthView, setWealthView] = useState<'aftertax' | 'balances'>('aftertax');
+  const [bracketScale, setBracketScale] = useState<'fit' | 'all'>('fit');
   const [showTable, setShowTable] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   // Clicking the selected year on a chart again returns to the full view.
@@ -191,6 +192,16 @@ export default function App() {
           Show Roth conversions
         </label>
       )}
+      {tab === 'brackets' && (
+        <div className="seg" role="group" aria-label="Bracket chart scale">
+          <button type="button" className="seg-btn" aria-pressed={bracketScale === 'fit'} onClick={() => setBracketScale('fit')}>
+            Fit to income
+          </button>
+          <button type="button" className="seg-btn" aria-pressed={bracketScale === 'all'} onClick={() => setBracketScale('all')}>
+            All brackets
+          </button>
+        </div>
+      )}
       {tab === 'wealth' && (
         <div className="seg" role="group" aria-label="Wealth view">
           <button type="button" className="seg-btn" aria-pressed={wealthView === 'aftertax'} onClick={() => setWealthView('aftertax')}>
@@ -217,11 +228,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-line bg-surface print:border-b-2 print:border-ink">
+      <header className="xp-titlebar border-b border-line bg-surface print:border-b-2 print:border-ink">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">RMD Smoothing Analyzer</h1>
-            <p className="text-xs text-muted sm:text-sm">Model future required distributions and evaluate smoothing strategies.</p>
+            <p className="text-xs text-muted sm:text-sm">Roth conversions, RMDs, taxes now and later, and what heirs keep.</p>
             <p className="hidden text-xs text-muted print:block">
               Hypothetical illustration prepared {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
             </p>
@@ -300,7 +311,7 @@ export default function App() {
                 <SpousePanel scenario={scenario} update={update} messages={allMessages} part="details" />
               </MoreDetails>
             </Section>
-            <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
+            <p className="xp-group-label border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
               Planning levers
             </p>
             <Section title="Roth conversions" badge={conversionYears ? `${conversionYears} yr` : undefined}>
@@ -344,7 +355,7 @@ export default function App() {
               <SummaryStats baseline={baselineSummary} strategy={strategySummary} wealth={wealth} />
 
               <div className="panel print:break-inside-avoid">
-                <div role="tablist" aria-label="Views" className="flex overflow-x-auto border-b border-line px-2 sm:px-3 print:hidden">
+                <div role="tablist" aria-label="Views" className="xp-tabs flex overflow-x-auto border-b border-line px-2 pt-1.5 sm:px-3 print:hidden">
                   {TABS.map((t) => (
                     <button
                       key={t.id}
@@ -359,7 +370,7 @@ export default function App() {
                       tabIndex={tab === t.id ? 0 : -1}
                       onKeyDown={onTabKey}
                       onClick={() => setTab(t.id)}
-                      className={`-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                      className={`xp-tab -mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
                         tab === t.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
                       }`}
                     >
@@ -410,6 +421,7 @@ export default function App() {
                         deathYear={dYear}
                         selectedYear={selectedYear}
                         onSelectYear={toggleYear}
+                        scale={bracketScale}
                       />
                       <ChartLegend
                         label="Chart legend"
