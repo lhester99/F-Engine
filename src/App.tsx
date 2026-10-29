@@ -11,6 +11,7 @@ import { RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/R
 import type { SavedStrategy } from './calculations/compare';
 import { Disclosures } from './components/Disclosures';
 import { Findings } from './components/Findings';
+import { ImpactCharts } from './components/ImpactCharts';
 import { ScenarioCompare } from './components/ScenarioCompare';
 import { TradeOffs } from './components/TradeOffs';
 import { AssumptionsPanel } from './inputs/AssumptionsPanel';
@@ -104,6 +105,7 @@ export default function App() {
     strategyIrmaa,
     tax,
     wealth,
+    impact,
     findings,
   } = useProjection(scenario);
   const closeMethodology = useCallback(() => setMethodologyOpen(false), []);
@@ -351,6 +353,7 @@ export default function App() {
             </div>
           ) : (
             <>
+              {impact && <ImpactCharts impact={impact} large={presenting} />}
               <Findings findings={findings} large={presenting} />
               <SummaryStats baseline={baselineSummary} strategy={strategySummary} wealth={wealth} />
 

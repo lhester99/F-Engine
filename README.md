@@ -65,6 +65,13 @@ tax rate, or estimated from the heirs' own income, number, filing status, and st
 rate), and the taxable account's cost basis and dividend yield and the cash interest
 rate. A group with an input error opens by itself.
 
+**The plan's impact** (top of the page): three before/after bar charts, no strategy
+against the current strategy: pre-tax vs. Roth IRA balances at the end of the
+projection; after-tax wealth at the end (pre-tax counted after heirs' tax); and what
+heirs keep in present value. Each bar is split into pre-tax, Roth, and taxable account
+and cash, with a one-line headline. Switch between future dollars and today's dollars
+(divided by the entered inflation); what heirs keep is always a present value.
+
 **Key findings:** three to five plain-English sentences at the top: how large RMDs
 get and how fast, what the strategy changes, when income is taxed, the estimated tax
 trade-off with its breakeven rate, and IRMAA years.
@@ -225,7 +232,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 194 calculation and component tests, including IRS boundary cases,
+- `npm test`: 197 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

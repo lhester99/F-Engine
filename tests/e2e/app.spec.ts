@@ -464,3 +464,18 @@ test('a selected year can be cleared: same year again, Show all years, or Esc', 
     await expect(detail).toHaveCount(0);
   }
 });
+
+test('impact charts at the top compare no strategy with the strategy', async ({ page }) => {
+  const impact = page.getByTestId('impact');
+  await expect(impact).toBeVisible();
+  await openInputs(page);
+  const apply = page.getByRole('button', { name: 'Apply to range' });
+  await apply.scrollIntoViewIfNeeded();
+  await apply.click();
+  for (const id of ['impact-mix', 'impact-wealth', 'impact-heirs']) {
+    await expect(page.getByTestId(id).locator('.recharts-bar-rectangle').first()).toBeVisible();
+  }
+  await page.getByRole('button', { name: 'Today’s dollars' }).click();
+  await expect(page.getByRole('button', { name: 'Today’s dollars' })).toHaveAttribute('aria-pressed', 'true');
+  await expectNoHorizontalScroll(page);
+});
