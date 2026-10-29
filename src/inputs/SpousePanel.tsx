@@ -92,6 +92,19 @@ export function SpousePanel({ scenario, update, messages }: Props) {
       survivorship: { ...s.survivorship, enabled: false, firstDeathPersonId: s.people[0]!.id },
     }));
 
+  // Joint and Last Survivor Table: the older spouse's RMDs, when the younger spouse is more than
+  // 10 years younger and the sole beneficiary. Birth-year gaps equal age gaps in every year.
+  const clientBirth = parseIsoDate(scenario.people[0]!.dateOfBirth);
+  const olderSpouse =
+    clientBirth && birth && Math.abs(clientBirth.year - birth.year) > 10
+      ? clientBirth.year < birth.year
+        ? scenario.people[0]!
+        : spouse
+      : null;
+  const youngerSpouse = olderSpouse ? scenario.people.find((p) => p.id !== olderSpouse.id)! : null;
+  const setOlderSole = (v: boolean) =>
+    update((s) => ({ ...s, people: s.people.map((p) => (p.id === olderSpouse?.id ? { ...p, spouseIsSoleBeneficiary: v } : p)) }));
+
   const dying = scenario.people.find((p) => p.id === sv.firstDeathPersonId) ?? scenario.people[0]!;
   const dyingBirth = parseIsoDate(dying.dateOfBirth);
 
@@ -115,6 +128,27 @@ export function SpousePanel({ scenario, update, messages }: Props) {
               : '')}
         </p>
       </div>
+
+      {olderSpouse && youngerSpouse && (
+        <div className="rounded-md border border-line px-3 py-2" data-testid="joint-life-table">
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-accent"
+              checked={olderSpouse.spouseIsSoleBeneficiary !== false}
+              onChange={(e) => setOlderSole(e.target.checked)}
+            />
+            <span>
+              {youngerSpouse.label} is the sole beneficiary of all of {olderSpouse.label.toLowerCase() === 'client' ? 'the client' : 'the spouse'}’s IRAs
+            </span>
+          </label>
+          <p className="field-hint mt-1">
+            {youngerSpouse.label} is more than 10 years younger, so while this is checked the {olderSpouse.label.toLowerCase()}’s RMDs use the
+            IRS Joint and Last Survivor Table, which gives smaller RMDs than the Uniform Lifetime Table. Uncheck it if anyone else is
+            a beneficiary.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <NumberField
@@ -258,7 +292,7 @@ export function SpousePanel({ scenario, update, messages }: Props) {
         )}
       </fieldset>
 
-      <MessageList messages={messages.filter((m) => m.code === 'joint-life-table' || m.code === 'after-death-ignored')} />
+      <MessageList messages={messages.filter((m) => m.code === 'after-death-ignored')} />
 
       <button type="button" className="btn w-full" onClick={removeSpouse}>
         Remove spouse

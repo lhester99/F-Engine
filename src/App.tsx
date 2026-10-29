@@ -455,6 +455,7 @@ export default function App() {
                         years={years}
                         onSelectYear={setSelectedYear}
                         onClose={() => setSelectedYear(null)}
+                        personLabels={Object.fromEntries(scenario.people.map((p) => [p.id, p.label]))}
                       />
                     ) : (
                       <p className="text-xs text-muted">

@@ -4,7 +4,7 @@ import { PUBLISHED_QCD_LIMITS } from '../data/qcdLimits';
 import { formatUsd } from '../utils/format';
 
 export const KNOWN_LIMITATIONS = [
-  'The Joint and Last Survivor Table (spouse is the sole beneficiary and more than 10 years younger) is not supported; the Uniform Lifetime Table is used, which overstates RMDs for that couple. The app shows a note when it applies.',
+  'The Joint and Last Survivor Table is used when the spouse is more than 10 years younger (ages as of birthdays in the year) and the “sole beneficiary” box is checked; whether the spouse really is the sole beneficiary of every IRA for the whole year is not checked. Its values come from Treas. Reg. §1.401(a)(9)-9(d); Pub. 590-B prints four cells differently (apparent typos).',
   'First death: the death is assumed at the end of the death year (joint return, full RMD taken). The survivor always does a spousal rollover; remaining a beneficiary of an inherited IRA instead, and qualifying-surviving-spouse filing with a dependent child, are not modeled. The survivor keeps the larger of the two Social Security benefits as entered, a simplification of the survivor benefit rules.',
   'Only one first death is modeled; the survivor lives to the end of the projection. The projection ends when the client would reach the ending age.',
   'Traditional and Roth IRAs only. 401(k), 403(b), SEP and SIMPLE IRAs, Roth 401(k)s, and the still-working exception are not yet modeled.',
@@ -127,7 +127,10 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
               <li>The first RMD is for the year the applicable age is reached.</li>
               <li>
                 Distribution period: Uniform Lifetime Table (effective for 2022 and later), using the age reached on the
-                birthday in each distribution year.
+                birthday in each distribution year. When the spouse is the sole beneficiary for the whole year and more
+                than 10 years younger, the Joint and Last Survivor Table is used instead, at both spouses’ ages that year.
+                If either spouse dies during the year, that year still uses it; the next year switches to the Uniform
+                Lifetime Table (Treas. Reg. §1.401(a)(9)-5(c)(2)).
               </li>
               <li>
                 The first RMD may be delayed to April 1 of the following year. The second year’s RMD is still computed from

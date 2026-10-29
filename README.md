@@ -48,6 +48,7 @@ deductions, a flat state tax rate, inflation, and a discount rate
 (by default the investment return). All amounts are entered in today's dollars.
 
 **Spouse & survivor:** add a spouse with their own date of birth, Social Security,
+whether they are the sole beneficiary (shown when they are more than 10 years younger),
 Traditional IRAs, and Roth IRA. Optionally model the first death: who dies first and
 at what age, and how much other income and spending continue for the survivor.
 
@@ -115,7 +116,9 @@ Disclosures appear on every view and cannot be turned off.
 Each year, for every scenario:
 
 1. Start with the prior December 31 balance.
-2. Required RMD = prior December 31 balance ÷ Uniform Lifetime Table factor.
+2. Required RMD = prior December 31 balance ÷ Uniform Lifetime Table factor (or the Joint
+   and Last Survivor Table factor when the spouse is the sole beneficiary and more than 10
+   years younger).
 3. Apply QCDs (they count toward the RMD first).
 4. Take the rest of the RMD as a taxable distribution.
 5. Apply extra withdrawals.
@@ -184,9 +187,9 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Known limitations
 
-- The Joint and Last Survivor Table (spouse more than 10 years younger and sole
-  beneficiary) is not supported; the app notes when it applies and uses the Uniform
-  Lifetime Table, which overstates RMDs in that case.
+- The Joint and Last Survivor Table applies when the spouse is more than 10 years
+  younger and the "sole beneficiary" box (shown only for such couples) is checked. The
+  app can't check the actual beneficiary designations.
 - First death: always a spousal rollover; one death only; Social Security survivor
   benefit simplified to the larger of the two entered benefits.
 - Heirs: everyone is a non-spouse heir under the 10-year rule, inheriting at the end
@@ -223,7 +226,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 183 calculation and component tests, including IRS boundary cases,
+- `npm test`: 190 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a
@@ -259,7 +262,7 @@ verified by an automated test.
 
 ```
 src/calculations/  pure TypeScript math (projection engine, RMD rules, validation)
-src/data/          IRS tables and dated limits (Uniform Lifetime Table, QCD limits, account rules)
+src/data/          IRS tables and dated limits (Uniform Lifetime and Joint and Last Survivor tables, QCD limits, account rules)
 src/strategies/    conversion and QCD schedule helpers
 src/inputs/        input panels
 src/charts/        Recharts charts and legends

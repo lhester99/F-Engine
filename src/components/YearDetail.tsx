@@ -11,6 +11,8 @@ interface Props {
   years: number[];
   onSelectYear: (year: number) => void;
   onClose: () => void;
+  /** Person id → label ("Client", "Spouse"), for the distribution period rows. */
+  personLabels?: Record<string, string>;
 }
 
 interface RowDef {
@@ -25,7 +27,8 @@ interface RowDef {
 const ROWS: RowDef[] = [
   { label: 'Prior Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.priorBalancePretax },
   { label: 'Prior Dec 31 balance (Roth IRA)', value: (y) => y.totals.priorBalanceRoth },
-  { label: 'Distribution period (Uniform Lifetime Table)', value: (y) => y.people[0]?.distributionPeriod ?? null, format: 'period' },
+  { label: 'Distribution period', value: (y) => y.people[0]?.distributionPeriod ?? null, format: 'period' },
+  { label: 'Distribution period, second spouse', value: (y) => y.people[1]?.distributionPeriod ?? null, format: 'period' },
   { label: 'RMD calculated for this year', value: (y) => y.totals.rmdForYear },
   { label: 'Prior-year RMD deferred to April 1', value: (y) => y.totals.deferredRmdFromPriorYear },
   { label: 'RMD deferred to April 1 next year', value: (y) => y.totals.rmdDeferredToNextYear },
@@ -86,13 +89,21 @@ function fmt(v: number | null, kind: RowDef['format']) {
 }
 
 /** Year-level breakdown, baseline vs strategy. */
-export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome, years, onSelectYear, onClose }: Props) {
+export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome, years, onSelectYear, onClose, personLabels }: Props) {
   const idx = years.indexOf(strategy.year);
   const rows = ROWS.filter(
     (r) =>
       (!OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5)) &&
-      (!r.needsIncome || strategyIncome !== undefined),
+      (!r.needsIncome || strategyIncome !== undefined) &&
+      (r.label !== 'Distribution period, second spouse' || strategy.people.length > 1),
   );
+  const periodLabel = (label: string) => {
+    const p = label === 'Distribution period' ? strategy.people[0] : label === 'Distribution period, second spouse' ? strategy.people[1] : undefined;
+    if (!p) return label;
+    const who = strategy.people.length > 1 ? `, ${(personLabels?.[p.personId] ?? 'spouse').toLowerCase()}` : '';
+    const table = p.distributionTable === 'joint' ? ' (Joint and Last Survivor Table)' : p.distributionTable === 'uniform' ? ' (Uniform Lifetime Table)' : '';
+    return `Distribution period${who}${table}`;
+  };
   const tierLabel = (label: string) =>
     label === 'IRMAA tier' && strategyIncome
       ? strategyIncome.medicareApplies
@@ -161,7 +172,7 @@ export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome,
               return (
                 <tr key={r.label} className={`border-b border-line-soft ${emphasize ? 'font-semibold' : ''}`}>
                   <th scope="row" className={`py-1.5 pr-2 text-left font-normal text-ink-2 ${r.label.startsWith('  ') ? 'pl-4' : ''} ${emphasize ? 'font-semibold text-ink' : ''}`}>
-                    {tierLabel(r.label).trim()}
+                    {periodLabel(tierLabel(r.label)).trim()}
                   </th>
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(b, r.format)}</td>
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(s, r.format)}</td>

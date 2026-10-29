@@ -3,6 +3,11 @@ import {
   UNIFORM_LIFETIME_TABLE_MAX_AGE,
   UNIFORM_LIFETIME_TABLE_MIN_AGE,
 } from '../data/uniformLifetimeTable';
+import {
+  JOINT_LAST_SURVIVOR_MAX_OWNER_AGE,
+  JOINT_LAST_SURVIVOR_MIN_OWNER_AGE,
+  JOINT_LAST_SURVIVOR_TABLE,
+} from '../data/jointLastSurvivorTable';
 import { compareDates, dateAttaining70AndAHalf, type CalendarDate } from './dates';
 
 /** Applicable age for lifetime RMDs: 70.5, 72, 73, or 75. */
@@ -58,6 +63,44 @@ export function uniformLifetimeDivisor(age: number): number {
   const divisor = UNIFORM_LIFETIME_TABLE[key];
   if (divisor === undefined) throw new Error(`Missing Uniform Lifetime Table entry for age ${key}`);
   return divisor;
+}
+
+/**
+ * Joint and Last Survivor Table divisor for an owner whose spouse is more than
+ * 10 years younger, using both ages as of their birthdays in the distribution
+ * year. Owner ages above 120 use the 120-and-over row.
+ */
+export function jointLastSurvivorDivisor(ownerAge: number, spouseAge: number): number {
+  if (!Number.isInteger(ownerAge) || !Number.isInteger(spouseAge)) throw new Error('Ages must be whole numbers');
+  if (ownerAge < JOINT_LAST_SURVIVOR_MIN_OWNER_AGE) {
+    throw new Error(`The Joint and Last Survivor Table is not stored for owner age ${ownerAge}`);
+  }
+  if (ownerAge - spouseAge <= 10 || spouseAge < 0) {
+    throw new Error(`The Joint and Last Survivor Table applies only to a spouse more than 10 years younger (${ownerAge} and ${spouseAge})`);
+  }
+  const row = JOINT_LAST_SURVIVOR_TABLE[Math.min(ownerAge, JOINT_LAST_SURVIVOR_MAX_OWNER_AGE)]!;
+  const divisor = row[spouseAge];
+  if (divisor === undefined) throw new Error(`Missing Joint and Last Survivor entry for ${ownerAge} and ${spouseAge}`);
+  return divisor;
+}
+
+export type LifetimeTable = 'uniform' | 'joint';
+
+/**
+ * Lifetime distribution period (Treas. Reg. §1.401(a)(9)-5(c)). The Joint and
+ * Last Survivor Table applies when the spouse is the sole beneficiary for the
+ * whole year and is more than 10 years younger (ages as of their birthdays in
+ * the distribution year); otherwise the Uniform Lifetime Table. Pass
+ * soleBeneficiarySpouseAge = null when no spouse is the sole beneficiary.
+ */
+export function lifetimeDistributionPeriod(
+  ownerAge: number,
+  soleBeneficiarySpouseAge: number | null,
+): { period: number; table: LifetimeTable } {
+  if (soleBeneficiarySpouseAge !== null && ownerAge - soleBeneficiarySpouseAge > 10) {
+    return { period: jointLastSurvivorDivisor(ownerAge, soleBeneficiarySpouseAge), table: 'joint' };
+  }
+  return { period: uniformLifetimeDivisor(ownerAge), table: 'uniform' };
 }
 
 /** RMD = prior December 31 balance ÷ distribution period. Not rounded. */

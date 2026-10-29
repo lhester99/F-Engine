@@ -20,7 +20,7 @@ import { irmaaScheduleForYear, IRMAA_LOOKBACK_YEARS } from './irmaa';
 import { ageAttainedInYear, dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from './dates';
 import { qcdLimitForYear } from './qcd';
 import { effectiveAnnualReturn } from './returns';
-import { computeRmd, getRmdStart, uniformLifetimeDivisor } from './rmdRules';
+import { computeRmd, getRmdStart, lifetimeDistributionPeriod } from './rmdRules';
 import { validateScenario } from './validate';
 
 const usd = (n: number) =>
@@ -119,7 +119,14 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       // A first RMD cannot be deferred past the owner's death; the deceased's full RMD is taken in the death year.
       const diesThisYear = dYear === year && person.id === scenario.survivorship.firstDeathPersonId;
       const deferralThisYear = person.delayFirstRmd && isFirstRmdYear && !diesThisYear;
-      const distributionPeriod = isRmdYear ? uniformLifetimeDivisor(age) : null;
+      // The spouse counts as sole beneficiary for the whole year if they were married on
+      // January 1, even if either dies during the year (Treas. Reg. §1.401(a)(9)-5(c)(2)(iii)).
+      const spouse = alivePeople(scenario, year).find((p) => p.id !== person.id);
+      const spouseAge =
+        spouse && person.spouseIsSoleBeneficiary !== false ? ageAttainedInYear(parseIsoDate(spouse.dateOfBirth)!, year) : null;
+      const lifetime = isRmdYear ? lifetimeDistributionPeriod(age, spouseAge) : null;
+      const distributionPeriod = lifetime?.period ?? null;
+      const distributionTable = lifetime?.table ?? null;
       const msg = (severity: EngineMessage['severity'], code: string, text: string, field?: string) =>
         yearMessages.push({ severity, code, text, year, personId: person.id, field });
 
@@ -274,6 +281,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         isRmdYear,
         isFirstRmdYear,
         distributionPeriod,
+        distributionTable,
         rmdForYear,
         deferredIn,
         rmdDeferredToNextYear,
@@ -304,6 +312,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         isRmdYear,
         isFirstRmdYear,
         distributionPeriod,
+        distributionTable,
         rmdForYear,
         deferredIn,
         rmdDeferredToNextYear,
@@ -391,6 +400,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         isRmdYear,
         isFirstRmdYear,
         distributionPeriod,
+        distributionTable,
         rmdForYear,
         deferredRmdFromPriorYear: deferredIn,
         rmdDeferredToNextYear,
@@ -587,6 +597,7 @@ interface PersonContext {
   isRmdYear: boolean;
   isFirstRmdYear: boolean;
   distributionPeriod: number | null;
+  distributionTable: 'uniform' | 'joint' | null;
   rmdForYear: number;
   deferredIn: number;
   rmdDeferredToNextYear: number;

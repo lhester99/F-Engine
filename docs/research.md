@@ -85,9 +85,25 @@ Values confirmed against secondary sources on October 27, 2026: 72 → 27.4,
 117 → 2.7, 118 → 2.5, 119 → 2.3, 120+ → 2.0. The other ages come from the same
 regulation and were not individually cross-checked.
 
-**Joint and Last Survivor Table (Table II)** applies only when the sole beneficiary
-for the entire year is a spouse more than 10 years younger. It is not included
-yet (Phase 1 is single-person) and is listed as a known limitation.
+**Joint and Last Survivor Table (Table II)**, added October 29, 2026. Applies during the
+owner's lifetime only when the spouse is the sole beneficiary at all times during the
+year and is more than 10 years younger, using both ages as of their birthdays in the
+year (Treas. Reg. §1.401(a)(9)-5(c)(2)(i)–(ii)). A death or divorce during the year does
+not change that year's table; the change takes effect the next year (-5(c)(2)(iii)).
+
+- Values: extracted from Treas. Reg. §1.401(a)(9)-9(d), Table 3 (eCFR, Title 26, current
+  to October 27, 2026), 14,640 cells. The app stores the 4,214 cells it can use (owner
+  72–120+, spouse 0 through owner − 11) in `src/data/jointLastSurvivorTable.ts`.
+- Cross-check: IRS Pub. 590-B (2025), Appendix B, Table II prints 5,611 of the same cells.
+  All agree except four, where the publication appears to repeat a neighboring row:
+  (owner 112, spouse 102) Pub 3.2 / Reg 3.3; (112, 103) 3.1 / 3.2; (112, 107) 2.9 / 3.0;
+  (90, 76) 14.8 / 14.7. The regulation's values are symmetric and change smoothly from cell
+  to cell, so the app uses the regulation, which is the legal authority.
+- The regulation's own table is missing one cell (ages 19 and 35) and has one asymmetric
+  pair (ages 2 and 5); neither is in the range the app uses.
+- IRS example reproduced: owner 75, spouse 64 → 25.3; $100,000 → $3,953 (Pub. 590-B).
+- "More than 10 years younger" is applied to ages attained in the distribution year,
+  the ages the table is read at.
 
 ## 3. RMD computation
 
@@ -238,9 +254,7 @@ inherited IRA as one's own) and Pub. 501 (2025) (joint return for the year of de
 - Social Security survivor benefits: simplified to the larger of the two entered
   benefits. Actual survivor benefits depend on claiming ages and can be reduced.
 - Joint and Last Survivor Table (Table II): applies when the sole beneficiary is a
-  spouse more than 10 years younger. Not implemented yet; the app warns when it
-  applies. The official table is now available from Treas. Reg. §1.401(a)(9)-9(d)
-  (eCFR), so it can be added.
+  spouse more than 10 years younger. Implemented October 29, 2026; see section 2.
 
 ## 10. Heirs and the 10-year rule (added October 29, 2026)
 

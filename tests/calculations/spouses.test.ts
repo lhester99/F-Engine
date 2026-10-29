@@ -100,6 +100,8 @@ describe('first death and the survivor', () => {
 
   it('a younger survivor has no RMDs until their own RMD age', () => {
     // Spouse born 1962 (applicable age 73 → 2035). Client dies in 2026.
+    // The spouse is 11 years younger and the sole beneficiary, so the death-year RMD uses
+    // the Joint and Last Survivor Table: ages 75 and 64 → 25.3 (Pub. 590-B example).
     const r = runProjection(
       scenario({
         dob: '1951-01-15',
@@ -110,9 +112,10 @@ describe('first death and the survivor', () => {
         survivorship: { enabled: true, firstDeathPersonId: 'p1', deathAge: 75 },
       }),
     );
-    expect(year(r, 2026).totals.requiredRmd).toBeCloseTo(100_000, 6);
+    expect(year(r, 2026).totals.requiredRmd).toBeCloseTo(2_460_000 / 25.3, 6);
+    expect(year(r, 2026).people.find((p) => p.personId === 'p1')!.distributionTable).toBe('joint');
     expect(year(r, 2027).totals.requiredRmd).toBe(0);
-    expect(year(r, 2027).totals.endBalancePretax).toBeCloseTo(2_360_000, 6);
+    expect(year(r, 2027).totals.endBalancePretax).toBeCloseTo(2_460_000 - 2_460_000 / 25.3, 6);
   });
 
   it('keeps the larger Social Security benefit after the death', () => {
@@ -167,11 +170,6 @@ describe('first death and the survivor', () => {
     );
     expect(person(r, 2026, 'p1')!.requiredRmd).toBeCloseTo(1_000_000 / 26.5, 6);
     expect(person(r, 2026, 'p1')!.rmdDeferredToNextYear).toBe(0);
-  });
-
-  it('warns that the Joint and Last Survivor Table is not used for a much younger spouse', () => {
-    const r = runProjection(scenario({ dob: '1951-01-15', endAge: 80, analysis: NONE, spouse: { dob: '1965-01-01' } }));
-    expect(r.messages.some((m) => m.code === 'joint-life-table')).toBe(true);
   });
 
   it('rejects a death before the projection starts', () => {

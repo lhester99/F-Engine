@@ -22,6 +22,12 @@ export interface Person {
   socialSecurityBenefit: number;
   /** This person's age when that benefit begins (already claiming: current age or lower). */
   socialSecurityStartAge: number;
+  /**
+   * The other spouse is the sole beneficiary of all of this person's IRAs for the
+   * whole year. Default true. Matters only when that spouse is more than 10
+   * years younger (Joint and Last Survivor Table).
+   */
+  spouseIsSoleBeneficiary?: boolean;
 }
 
 /**
@@ -252,8 +258,10 @@ export interface PersonYear {
   age: number;
   isRmdYear: boolean;
   isFirstRmdYear: boolean;
-  /** Uniform Lifetime Table divisor used this year, or null if no RMD is due. */
+  /** Distribution period (divisor) used this year, or null if no RMD is due. */
   distributionPeriod: number | null;
+  /** Life expectancy table the divisor came from, or null if no RMD is due. */
+  distributionTable: 'uniform' | 'joint' | null;
   /** RMD for this distribution year, computed from the prior December 31 balance. */
   rmdForYear: number;
   /** Portion of last year's first RMD that was deferred to April 1 of this year. */

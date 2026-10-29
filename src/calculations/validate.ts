@@ -58,14 +58,6 @@ export function validateScenario(s: Scenario): EngineMessage[] {
 
   if (s.people.length > 2) err('people', 'At most two people (spouses) are supported.');
   if (s.people.length === 2) {
-    const [a, b] = s.people.map((p) => parseIsoDate(p.dateOfBirth));
-    if (a && b && Math.abs(a.year - b.year) > 10) {
-      warn(
-        'joint-life-table',
-        'One spouse is more than 10 years younger. If that spouse is the sole beneficiary, the IRS Joint and Last Survivor Table applies and gives smaller RMDs than shown. That table is not yet supported; the Uniform Lifetime Table is used.',
-        'dateOfBirth',
-      );
-    }
     const sv = s.survivorship;
     if (sv.enabled) {
       const dying = s.people.find((p) => p.id === sv.firstDeathPersonId);

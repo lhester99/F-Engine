@@ -394,3 +394,27 @@ test('Heirs tab: 10-year rule comparison and bracket-based heirs tax', async ({ 
   await expect(page.getByTestId('finding-heirs')).toContainText('bracket for each heir');
   await expectNoHorizontalScroll(page);
 });
+
+test('Joint and Last Survivor Table for a spouse more than 10 years younger', async ({ page }) => {
+  await openInputs(page);
+  await page.getByRole('button', { name: 'Add spouse' }).click();
+  await page.getByLabel('Spouse date of birth').fill('1966-02-02');
+  await expect(page.getByTestId('joint-life-table')).toHaveCount(0);
+  await page.getByLabel('Spouse date of birth').fill('1968-02-02');
+  const sole = page.getByRole('checkbox', { name: /Spouse is the sole beneficiary of all of the client’s IRAs/ });
+  await expect(sole).toBeChecked();
+  const detailFor = async (y: string) => {
+    const open = page.getByRole('button', { name: 'Open year detail' });
+    if (await open.count()) {
+      await open.scrollIntoViewIfNeeded();
+      await open.click();
+    }
+    await page.getByLabel('Select year').selectOption(y);
+    return page.getByTestId('year-detail');
+  };
+  await expect(await detailFor('2029')).toContainText('Distribution period, client (Joint and Last Survivor Table)');
+  await sole.scrollIntoViewIfNeeded();
+  await sole.uncheck();
+  await expect(page.getByTestId('year-detail')).toContainText('Distribution period, client (Uniform Lifetime Table)');
+  await expectNoHorizontalScroll(page);
+});

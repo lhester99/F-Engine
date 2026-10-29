@@ -24,6 +24,8 @@ export interface TestScenarioOptions {
   cashFlow?: Partial<CashFlowSettings>;
   /** Adds a spouse "p2" with these values (Traditional IRA "s0", Roth IRA "sroth"). */
   spouse?: { dob: string; traditional?: number; roth?: number; ss?: number; ssAge?: number };
+  /** Whether the spouse is the sole beneficiary of the client's IRAs (default true). */
+  spouseIsSoleBeneficiary?: boolean;
   survivorship?: Partial<SurvivorshipSettings>;
   heirs?: Partial<HeirSettings>;
 }
@@ -75,6 +77,7 @@ export function scenario(o: TestScenarioOptions): Scenario {
         delayFirstRmd: o.delayFirstRmd ?? false,
         socialSecurityBenefit: o.analysis?.socialSecurityBenefit ?? 36_000,
         socialSecurityStartAge: o.analysis?.socialSecurityStartAge ?? 67,
+        spouseIsSoleBeneficiary: o.spouseIsSoleBeneficiary,
       },
       ...(o.spouse
         ? [
