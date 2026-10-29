@@ -90,7 +90,7 @@ describe('Roth conversions', () => {
     // Tax = 13,170 (see federalTax tests), withheld → $86,830 reaches the Roth IRA.
     const r = runProjection(
       scenario({
-        dob: '1962-01-01',
+        dob: '1962-01-02',
         endAge: 64,
         traditional: [400_000],
         analysis: { socialSecurityBenefit: 0, otherOrdinaryIncome: 0, qualifiedInvestmentIncome: 0, taxExemptInterest: 0 },

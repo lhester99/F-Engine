@@ -1,27 +1,49 @@
 # Research log — IRS rules used by the RMD Smoothing Analyzer
 
-Last updated: October 27, 2026 (Phase 1).
+Last updated: October 29, 2026 (primary-source verification).
 
 ## How these were verified, and what wasn't
 
-The build environment's network policy **blocked direct access to IRS.gov, the
-Federal Register, eCFR, and investor.vcm.com** (connection refused by the proxy,
-October 27, 2026). Primary sources could not be opened from the build machine.
+**October 29, 2026: primary-source check.** IRS.gov and eCFR became reachable from
+the build environment. Every rule and figure the app uses was checked against these
+official documents, downloaded that day:
 
-What was done instead:
+| Document | What it confirmed |
+|---|---|
+| IRS Pub. 590-B (2025), Appendix B | Uniform Lifetime Table: all 49 ages (72–120+) match `src/data/uniformLifetimeTable.ts` exactly. Example: $100,000 at 75 → 24.6 → $4,065. Applicable ages 70½/72/73; April 1 required beginning date; IRAs aggregated, a separate RMD figured for each; QCD at 70½, not from ongoing SEP/SIMPLE, counts toward the RMD, $108,000 limit for 2025, deductible-contribution offset; year-of-death RMD; spouse may treat as own (Table III); 10-year rule; Roth owners treated as dying before the required beginning date; Notice 2024-35 relief. |
+| IRS Pub. 590-A (2025) | "You can't convert amounts that must be distributed from your traditional IRA for a particular year." |
+| Treas. Reg. §1.401(a)(9)-2(b)(2) (eCFR, current to Oct 27, 2026) | Born before 7/1/1949 → 70½; 7/1/1949–1950 → 72; 1951–1958 → 73; **1959 → "[Reserved]"**; 1960 or later → 75. |
+| Treas. Reg. §1.401(a)(9)-5(d), (e) | A non-eligible designated beneficiary must empty the account by the end of the year containing the 10th anniversary of death; when death is on or after the required beginning date, annual RMDs also apply (denominator: greater of beneficiary's and owner's remaining life expectancy). |
+| Treas. Reg. §1.401(a)(9)-9(b) | Single Life Table (heir life expectancy; 81 → 10.5, 82 → 9.9). The Joint and Last Survivor Table is in §1.401(a)(9)-9(d). |
+| IRS Announcement 2026-7 | Final regulations under the 2024 proposed rules will apply no earlier than 6 months after they are issued; until then a reasonable, good-faith interpretation of the statute applies. |
+| IRS Notices 2023-75, 2025-67 | QCD limit $105,000 (2024), $111,000 (2026). |
+| IRS Rev. Proc. 2025-32 | 2026 brackets (all 7, single and joint), standard deduction $16,100 / $32,200, additional $1,650 (married) / $2,050 (unmarried), capital-gains thresholds $49,450 / $98,900 and $545,500 / $613,700. All match `src/data/federalTax.ts`. |
+| IRS Pub. 915 (2025) | Social Security base amounts $25,000 / $32,000 and $34,000 / $44,000; Worksheet 1 steps are the same as the app's formula; worksheet example ($5,980 benefits → $2,990 taxable) reproduced. |
+| Schedule 1-A (Form 1040), 2025, Part V; IRS newsroom (OBBB) | Senior deduction $6,000 per person 65+, 2025–2028; each spouse's $6,000 is reduced by 6% of MAGI over $75,000 / $150,000. |
+| IRS Pub. 501 (2025) | A person is 65 on the day before their 65th birthday (born before January 2, 1961 → 65 for 2025). If a spouse died during the year, the survivor may file jointly for that year. |
+| IRS NIIT page | 3.8%; thresholds $200,000 single / $250,000 joint; net investment income includes interest, dividends, and capital gains. |
+| IRS Pub. 551 (12/2025) | Basis of inherited property is generally fair market value at the date of death. |
 
-1. Rules and table values were taken from the regulations and publications cited
-   below, as known to the engineer.
-2. Each figure was cross-checked against several independent secondary sources
-   found by web search on October 27, 2026 (custodian and practitioner reproductions
-   of the IRS tables). The figures checked are listed below. All sources agreed.
-3. The Victory Capital Future RMD Calculator (investor.vcm.com) could not be
-   reached, so it was not used for comparison.
+**Discrepancies found and fixed on October 29, 2026:**
 
-**Action item for the advisor:** before relying on the app with clients, spot-check
-the Uniform Lifetime Table and QCD limits against the current IRS Publication 590-B
-(https://www.irs.gov/publications/p590b). The values live in `src/data/` and are
-easy to change.
+1. *January 1 birthdays.* The app treated a person as 65 only from the calendar year of
+   their 65th birthday. Under Pub. 501, someone born on January 1 is 65 at the end of the
+   year before. Fixed (`peopleAge65ForTax`); affects the additional standard deduction
+   and the senior deduction for January 1 birthdays only.
+2. *NIIT on interest.* The NIIT was applied to qualified dividends and gains only. Interest
+   from the modeled cash account is now included. Interest entered in "other income"
+   cannot be separated from pensions and wages and is still excluded (stated limitation).
+
+**Still not verified from primary sources:** Medicare IRMAA thresholds and surcharges
+(cms.gov is not reachable from the build environment); SSA.gov (refuses automated
+requests) for Social Security figures; the text of the July 2024 proposed regulations
+(federalregister.gov blocks automated requests) for the 1959 resolution, which is taken
+from secondary sources and the reservation in the final regulation; the Victory Capital
+calculator (investor.vcm.com).
+
+**Earlier (October 27–29, 2026), before IRS.gov was reachable:** figures were taken from
+the engineer's knowledge of the rules and cross-checked against several secondary
+sources. Those notes are kept below for the record.
 
 ## 1. RMD applicable age by date of birth
 
@@ -200,9 +222,8 @@ identity net = avoided later − paid earlier.
 
 ## 9. Spouses and the first death (added October 29, 2026)
 
-From the engineer's knowledge of the rules; not separately verified online on this
-date (IRS.gov unreachable from the build environment). Please spot-check against
-Pub. 590-B, "Spouse as sole beneficiary".
+Verified October 29, 2026 against Pub. 590-B (2025) (year-of-death RMD, treating an
+inherited IRA as one's own) and Pub. 501 (2025) (joint return for the year of death).
 
 - Each IRA owner's RMD is computed on their own IRAs and age (Treas. Reg. §1.408-8).
 - Year of death: if the owner died on or after the required beginning date, the
@@ -217,15 +238,15 @@ Pub. 590-B, "Spouse as sole beneficiary".
 - Social Security survivor benefits: simplified to the larger of the two entered
   benefits. Actual survivor benefits depend on claiming ages and can be reduced.
 - Joint and Last Survivor Table (Table II): applies when the sole beneficiary is a
-  spouse more than 10 years younger. Not implemented, because the table values could
-  not be verified from the build environment; the app warns when it applies.
+  spouse more than 10 years younger. Not implemented yet; the app warns when it
+  applies. The official table is now available from Treas. Reg. §1.401(a)(9)-9(d)
+  (eCFR), so it can be added.
 
 ## 10. Heirs and the 10-year rule (added October 29, 2026)
 
-From the engineer's knowledge of the rules. These were not verified online on this
-date, because IRS.gov could not be reached from the build environment. Please
-spot-check them against Pub. 590-B ("Designated beneficiaries" and "10-year rule")
-and the July 2024 final regulations (T.D. 10001).
+Written from the engineer's knowledge on October 29, 2026, then verified the same day
+against Pub. 590-B (2025), Treas. Reg. §1.401(a)(9)-5 and -9, §1.408A-6, Notice
+2024-35, and Pub. 551 (see the verification table at the top).
 
 - SECURE Act §401 / IRC §401(a)(9)(H): for an owner dying after 2019, a designated
   beneficiary who is not an eligible designated beneficiary must empty the inherited
@@ -245,7 +266,8 @@ and the July 2024 final regulations (T.D. 10001).
 inherited pre-tax IRA grows at the investment return and is withdrawn ratably: in
 year k it withdraws balance ÷ (11 − k), so it is empty after year 10. The ratable
 withdrawal is at least the annual RMD when the heir's single-life divisor is larger
-than the years left in the window, which holds for heirs younger than about 80. In
+than the years left in the window, which holds for heirs 81 or younger in the first
+year after the death (Single Life Table: 10.5 at 81; 9.9 at 82; verified October 29, 2026). In
 rate mode, heirs' tax is the withdrawal times the entered rate. In income mode, each
 heir's federal tax (current brackets indexed at inflation, standard deduction, under
 65) with and without their share, plus a flat state rate. Hand-checked cases

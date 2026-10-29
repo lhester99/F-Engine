@@ -19,7 +19,7 @@ const year = (r: ProjectionResult, y: number) => r.years.find((x) => x.year === 
 const conversionCase = (cashFlow: object, source: 'withhold' | 'taxable' | 'cash') =>
   runProjection(
     scenario({
-      dob: '1962-01-01',
+      dob: '1962-01-02',
       endAge: 64,
       traditional: [400_000],
       analysis: NONE,

@@ -50,7 +50,8 @@ export interface Legacy {
  * evenly: each year takes the balance ÷ the years left, so it is empty after
  * 10 years. (This meets the annual RMDs required in years 1–9 when the owner
  * had begun RMDs, as long as each heir's single-life factor exceeds the years
- * left, which holds for heirs younger than about 80.) The Roth IRA passes tax-free; the
+ * left, which holds for heirs 81 or younger in the first year: the Single
+ * Life Table gives 10.5 at 81 and 9.9 at 82, Treas. Reg. §1.401(a)(9)-9(b).) The Roth IRA passes tax-free; the
  * taxable account receives a step-up in basis.
  *
  * Heirs' tax: in 'rate' mode, withdrawals × the heirs' tax rate. In 'income'

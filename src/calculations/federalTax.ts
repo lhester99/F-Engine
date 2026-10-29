@@ -9,7 +9,7 @@ import {
   type FederalTaxYear,
 } from '../data/federalTax';
 import type { FilingStatus, Scenario } from '../types';
-import { filingStatusForYear, otherIncomeFactor, peopleAge65, socialSecurityForYear } from './household';
+import { filingStatusForYear, otherIncomeFactor, peopleAge65ForTax, socialSecurityForYear } from './household';
 
 const floorTo = (v: number, step: number) => Math.floor(v / step) * step;
 
@@ -61,6 +61,12 @@ export interface HouseholdIncome {
    */
   ordinaryIncome: number;
   qualifiedIncome: number;
+  /**
+   * Investment income already counted in ordinaryIncome that is net investment
+   * income for the NIIT (interest from the modeled cash account). IRA
+   * distributions and conversions are never net investment income.
+   */
+  ordinaryInvestmentIncome?: number;
   taxExemptInterest: number;
   /** Gross Social Security benefits. */
   socialSecurity: number;
@@ -128,7 +134,8 @@ export function bracketTax(income: number, brackets: Bracket[]): number {
  * Security taxation, the larger of standard (+ age-65 additions) or itemized
  * deductions, the 2025–2028 senior deduction with its phase-out, ordinary
  * brackets, 0/15/20% rates on qualified income stacked on top of ordinary
- * income, and the 3.8% net investment income tax (on qualified income only).
+ * income, and the 3.8% net investment income tax (on qualified income and
+ * modeled cash interest).
  * State: a flat rate on AGI excluding Social Security. No credits, AMT, or
  * other items.
  */
@@ -163,7 +170,8 @@ export function computeTax(h: HouseholdIncome): TaxResult {
   const atTwenty = Math.max(0, qualifiedInTaxable - atZero - atFifteen);
   const qualifiedTax = atFifteen * 0.15 + atTwenty * 0.2;
 
-  const niit = NIIT.rate * Math.min(Math.max(0, h.qualifiedIncome), Math.max(0, agi - NIIT.threshold[status]));
+  const netInvestmentIncome = Math.max(0, h.qualifiedIncome) + Math.max(0, h.ordinaryInvestmentIncome ?? 0);
+  const niit = NIIT.rate * Math.min(netInvestmentIncome, Math.max(0, agi - NIIT.threshold[status]));
   const federalTax = ordinaryTax + qualifiedTax + niit;
   const stateTax = Math.max(0, h.stateTaxRate * (agi - ssTaxable));
 
@@ -233,9 +241,10 @@ export function householdIncomeForYear(
     ordinaryIncome:
       a.otherOrdinaryIncome * g * otherIncomeFactor(scenario, year) + ira.taxableIra + ira.conversion - ira.deductibleContributions + side.ordinary,
     qualifiedIncome: a.qualifiedInvestmentIncome * g * otherIncomeFactor(scenario, year) + side.qualified,
+    ordinaryInvestmentIncome: side.ordinary,
     taxExemptInterest: a.taxExemptInterest * g * otherIncomeFactor(scenario, year),
     socialSecurity: socialSecurityForYear(scenario, year),
-    peopleAge65: peopleAge65(scenario, year),
+    peopleAge65: peopleAge65ForTax(scenario, year),
     itemizedDeductions: a.itemizedDeductions * g,
     stateTaxRate: a.stateTaxRate,
     inflationRate: a.inflationRate,

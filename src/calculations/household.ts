@@ -45,7 +45,20 @@ export function filingStatusForYear(scenario: Scenario, year: number): FilingSta
   return alivePeople(scenario, year).length >= 2 ? 'joint' : 'single';
 }
 
-/** People alive in `year` who are 65 or older by the end of it. */
+/**
+ * People alive in `year` treated as 65 or older on the tax return. The IRS
+ * considers a person 65 on the day before their 65th birthday, so someone born
+ * on January 1 is 65 at the end of the year before (Pub. 501; Schedule 1-A:
+ * "born before January 2, 1961" for 2025).
+ */
+export function peopleAge65ForTax(scenario: Scenario, year: number): number {
+  return alivePeople(scenario, year).filter((p) => {
+    const b = parseIsoDate(p.dateOfBirth);
+    return b !== null && (year - b.year >= 65 || (year - b.year === 64 && b.month === 1 && b.day === 1));
+  }).length;
+}
+
+/** People alive in `year` who are 65 or older by the end of it (used for Medicare enrollment in IRMAA). */
 export function peopleAge65(scenario: Scenario, year: number): number {
   return alivePeople(scenario, year).filter((p) => {
     const b = parseIsoDate(p.dateOfBirth);

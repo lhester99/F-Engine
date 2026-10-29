@@ -132,7 +132,9 @@ later QCDs taxable (the QCD still counts toward the RMD).
 **Federal tax:** each year is estimated from the 2026 brackets (IRS Rev. Proc.
 2025-32): taxable Social Security, the larger of standard (plus age-65 additions) or
 itemized deductions, the 2025–2028 senior deduction and its phase-out, 0/15/20% rates
-on qualified income, and the 3.8% NIIT. State tax is a flat rate. Later years are
+on qualified income, and the 3.8% NIIT (on dividends, gains, and cash-account interest;
+IRA income is never subject to it). The age-65 additions follow the IRS rule that a
+person is 65 on the day before their 65th birthday. State tax is a flat rate. Later years are
 indexed at the inflation rate entered.
 
 **Tax trade-off:** taxes with and without the strategy, year by year, plus heirs'
@@ -142,7 +144,7 @@ which the present-value totals are equal.
 **Heirs and the 10-year rule:** heirs inherit at the end of the projection. The
 inherited pre-tax IRA keeps growing at the investment return and is withdrawn evenly
 (year k takes the balance ÷ (11 − k)), so it is empty after 10 years; this meets the
-annual RMDs required in years 1–9 for heirs younger than about 80. Heirs' tax is
+annual RMDs required in years 1–9 for heirs 81 or younger in the first year after the death. Heirs' tax is
 either the rate entered, or each heir's extra federal tax on their share stacked on
 their own income (current brackets, indexed), plus a flat state rate. The Roth IRA
 passes tax-free; the taxable account gets a step-up in basis.
@@ -221,7 +223,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 163 calculation and component tests, including IRS boundary cases,
+- `npm test`: 183 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a
