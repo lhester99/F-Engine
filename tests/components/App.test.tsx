@@ -9,7 +9,7 @@ const stat = (label: string) => within(screen.getByTestId('summary-stats')).getB
 describe('App', () => {
   it('renders the header, summary, and RMD tab by default', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { level: 1, name: 'RMD Smoothing Analyzer' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Retirement XP' })).toBeInTheDocument();
     expect(screen.getByText('Roth conversions, RMDs, taxes now and later, and what heirs keep.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'RMD Projections' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('rmd-chart')).toBeInTheDocument();

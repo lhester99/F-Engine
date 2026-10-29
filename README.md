@@ -1,4 +1,6 @@
-# RMD Smoothing Analyzer
+# Retirement XP
+
+(Formerly "RMD Smoothing Analyzer.")
 
 A web app for financial advisors that shows a client what a multi-year Roth
 conversion plan does to their taxes now, their taxes later, and what they and their

@@ -26,11 +26,15 @@ const stat = (page: Page, label: string) => page.getByTestId('summary-stats').lo
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'RMD Smoothing Analyzer' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Retirement XP' })).toBeVisible();
 });
 
 test('loads with the chart rendered and no horizontal scroll', async ({ page }) => {
-  await expect(page.getByText('Roth conversions, RMDs, taxes now and later, and what heirs keep.')).toBeVisible();
+  // The Retirement XP logo is embedded in the page, so it shows offline too, and stays compact.
+  const logo = page.getByRole('img', { name: 'Retirement XP' });
+  await expect(logo).toBeVisible();
+  expect(await logo.getAttribute('src')).toMatch(/^data:image\/webp/);
+  expect((await logo.boundingBox())!.height).toBeLessThanOrEqual(90);
   await expect(page.getByTestId('rmd-chart').locator('.recharts-bar-rectangle').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

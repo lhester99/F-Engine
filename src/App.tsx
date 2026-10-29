@@ -26,6 +26,7 @@ import { SummaryStats } from './components/SummaryStats';
 import { YearDetail } from './components/YearDetail';
 import { YearTable } from './components/YearTable';
 import { useProjection } from './hooks/useProjection';
+import logo from './assets/retirement-xp-logo.webp?inline';
 import { ClientPanel } from './inputs/ClientPanel';
 import { ConversionPanel } from './inputs/ConversionPanel';
 import { QcdPanel } from './inputs/QcdPanel';
@@ -230,16 +231,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="xp-titlebar border-b border-line bg-surface print:border-b-2 print:border-ink">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <header className="xp-header print:border-b-2 print:border-ink">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:px-6">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">RMD Smoothing Analyzer</h1>
-            <p className="text-xs text-muted sm:text-sm">Roth conversions, RMDs, taxes now and later, and what heirs keep.</p>
+            <h1 className="m-0">
+              <img src={logo} alt="Retirement XP" className="xp-logo print:hidden" />
+              <span aria-hidden className="hidden text-xl font-semibold text-ink print:inline">
+                Retirement XP
+              </span>
+            </h1>
+            <p className="hidden text-sm text-muted print:block">Roth conversions, RMDs, taxes now and later, and what heirs keep.</p>
             <p className="hidden text-xs text-muted print:block">
               Hypothetical illustration prepared {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 print:hidden">
+          <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-0 sm:pb-0 print:hidden">
             {presenting ? (
               <button type="button" className="btn btn-primary" onClick={() => setPresenting(false)}>
                 <X aria-hidden className="h-4 w-4" /> Exit presentation

@@ -1,4 +1,4 @@
-# Research log — IRS rules used by the RMD Smoothing Analyzer
+# Research log — IRS rules used by the Retirement XP
 
 Last updated: October 29, 2026 (primary-source verification).
 

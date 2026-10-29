@@ -106,23 +106,29 @@
 body {
   background: linear-gradient(180deg, #dfe9f9 0, #eaf0fa 320px) fixed;
 }
-.xp-titlebar {
-  background: linear-gradient(180deg, #4a90f5 0%, #2466e0 9%, #1c58d4 55%, #1449be 100%);
+/* Retirement XP header: a compact blue bar; the logo strip (wordmark, sun, hill) sits
+   on the left and fades into the bar, buttons on the right. */
+.xp-header {
+  background: linear-gradient(90deg, #014ab1 0%, #014ab1 30%, #0b5cc8 55%, #1a6cdc 80%, #1f72e2 100%);
   border-bottom: 1px solid #0b3a9c;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.18);
 }
-.xp-titlebar h1 {
-  color: #fff;
-  font-family: var(--font-title);
-  font-weight: 700;
-  letter-spacing: 0;
-  text-shadow: 1px 1px 1px rgba(10, 36, 106, 0.6);
+.xp-logo {
+  display: block;
+  height: 72px;
+  width: auto;
+  max-width: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 78%, transparent 100%);
 }
-.xp-titlebar p {
-  color: #dce8ff;
+@media (min-width: 640px) {
+  .xp-logo {
+    height: 88px;
+  }
 }
-.xp-titlebar .btn:not(.btn-primary) {
+.xp-header .btn:not(.btn-primary) {
   border-color: #0b3a9c;
+  box-shadow: 0 1px 2px rgba(10, 36, 106, 0.35);
 }
 .panel {
   border-color: #9fb5dc;
@@ -213,16 +219,13 @@ body {
   body {
     background: #fff;
   }
-  .xp-titlebar {
+  .xp-header {
     background: none;
     box-shadow: none;
+    border-bottom-color: var(--color-ink);
   }
-  .xp-titlebar h1 {
-    color: var(--color-ink);
-    text-shadow: none;
-  }
-  .xp-titlebar p {
-    color: var(--color-muted);
+  .xp-logo {
+    display: none;
   }
   .panel {
     border-color: #c8ced6;

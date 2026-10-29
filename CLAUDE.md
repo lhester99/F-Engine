@@ -9,7 +9,7 @@ You are the senior engineer, financial modeler, designer, and QA for this projec
 
 2. PRODUCT
 (Revised by the owner October 29, 2026.)
-RMD Smoothing Analyzer: a web app for financial advisors that shows a client what a multi-year Roth conversion plan does to their taxes now, their taxes later, and what they and their heirs end up with, compared with doing nothing. RMDs are one of the outputs, not the whole story.
+Retirement XP (renamed from "RMD Smoothing Analyzer" by the owner, October 29, 2026; the banner logo is the owner's): a web app for financial advisors that shows a client what a multi-year Roth conversion plan does to their taxes now, their taxes later, and what they and their heirs end up with, compared with doing nothing. RMDs are one of the outputs, not the whole story.
 It answers:
 - What does the conversion plan look like year by year: income, federal tax bracket, and tax paid?
 - What tax is paid now versus avoided later, and what is the breakeven (rate and age)?
