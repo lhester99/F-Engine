@@ -8,15 +8,27 @@ Before doing anything else, save this entire message as CLAUDE.md in the project
 You are the senior engineer, financial modeler, designer, and QA for this project. I am a CFP and financial advisor, not a developer. Do not ask me to write code, run terminal commands, or debug. Do that yourself. When something needs my login or approval (GitHub, Vercel), tell me exactly what to click in plain English, then continue.
 
 2. PRODUCT
-RMD Smoothing Analyzer: a web app for financial advisors that projects future Required Minimum Distributions and shows how investment assumptions, multi-year Roth conversions, and Qualified Charitable Distributions change the size and trajectory of those distributions.
-It answers three questions: How large could future RMDs get? How fast do they grow? How can conversions, QCDs, and return assumptions manage that trajectory?
-Philosophy: we are not trying to eliminate RMDs. Lower RMDs are not automatically better. Stay analytically neutral and show trade-offs.
+(Revised by the owner October 29, 2026.)
+RMD Smoothing Analyzer: a web app for financial advisors that shows a client what a multi-year Roth conversion plan does to their taxes now, their taxes later, and what they and their heirs end up with, compared with doing nothing. RMDs are one of the outputs, not the whole story.
+It answers:
+- What does the conversion plan look like year by year: income, federal tax bracket, and tax paid?
+- What tax is paid now versus avoided later, and what is the breakeven (rate and age)?
+- What happens to RMD money the client doesn't need (invested in a taxable account)?
+- How does the survivor's switch to single filing after a spouse's death change taxes?
+- What do heirs keep from a large pre-tax balance under the 10-year rule versus Roth and taxable assets?
+- What is after-tax wealth over time, with and without the plan?
+Philosophy: lower RMDs and conversions are not automatically better. Stay analytically neutral and show trade-offs.
+
+Build order (each step usable on its own): 1) federal tax engine, bracket view, fill-to-bracket conversions; 2) taxable account for unneeded RMDs, conversion-tax payment source (withhold, taxable account, or cash), after-tax wealth and breakeven age; 3) spouses and survivor impact; 4) heirs and legacy comparison.
 
 3. SCOPE FENCE (strict)
-Do NOT build: Social Security, pensions, budgeting, income gaps, Monte Carlo, full federal or state tax calculations (tax brackets, deductions, Social Security taxation, state tax), estate planning, insurance, portfolio management, or general financial planning. Every feature must directly improve RMD modeling or interpretation. If it doesn't, leave it out.
-Allowed, because they interpret RMD, conversion, and QCD decisions (approved by the owner October 28, 2026):
-- An estimated tax comparison using tax rates the advisor enters, with a breakeven rate. Never present it as "taxes saved"; label it an estimate at the entered rates.
-- IRMAA tier detection and estimated surcharges, using filing status and a single "other income" amount the advisor enters. Other income is entered, never calculated (no Social Security or pension modeling). IRMAA thresholds and surcharges are dated, editable values in data/.
+Do NOT build: Social Security claiming analysis, pension decisions, budgeting or spending plans, income-gap analysis, Monte Carlo, estate tax, trusts, insurance, portfolio management or asset allocation advice, or general financial planning. Every feature must directly serve the Roth conversion and RMD decision. If it doesn't, leave it out.
+Allowed (approved by the owner October 28–29, 2026):
+- Federal income tax calculated from current brackets: standard deduction, age-65 additions, the 2025–2028 senior deduction, taxation of Social Security benefits (benefit amounts are entered, never projected), qualified dividends and long-term gains, and the net investment income tax. State tax is one flat rate the advisor enters. Tax figures are labeled estimates; never present them as guaranteed "savings".
+- IRMAA tier detection and estimated surcharges. IRMAA thresholds, surcharges, tax brackets, and deductions are dated, editable values in data/; later years are projected at an entered inflation rate and labeled as projections.
+- A taxable brokerage account and a cash account, used only to hold unneeded RMDs and to pay conversion taxes, with simple entered growth and tax-drag assumptions. The advisor enters how much of each RMD is spent.
+- Spouses, an assumed age at the first death, spousal rollover to the survivor, and single filing for the survivor.
+- Heirs: the 10-year rule for non-spouse beneficiaries, a tax rate the advisor enters for heirs, and step-up in basis for taxable assets.
 
 4. USER AND DESIGN
 User: an advisor, possibly mid-conversation with a client holding $500K to several million in retirement accounts. The app must be fast, accurate, and uncluttered. One professional interface; no beginner/advanced modes. Desktop-first, fully usable in iPhone Safari.
@@ -47,7 +59,7 @@ The engine must support multiple accounts per person, each keeping its own accou
 - Still-working exception: applies to the current employer's plan only, not IRAs, and not to 5% owners.
 - Roth IRAs: no lifetime RMDs. Roth 401(k)s: no lifetime RMDs starting in 2024 under SECURE 2.0.
 - QCDs: age 70½ or older (which can be before RMDs begin), from IRAs only (not active SEP or SIMPLE IRAs, not employer plans). The annual per-person limit is inflation-indexed. Store it as a dated, editable value in data/, not hardcoded in logic.
-- Out of scope for now: inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse mid-projection, spousal rollovers. List these as known limitations in the app and README.
+- Spouse death, spousal rollover, and heirs under the 10-year rule are in scope (build steps 3 and 4) and must be verified like the rules above before implementing. Still out of scope: accounts the client has already inherited, eligible designated beneficiaries other than the spouse, trusts as beneficiaries. List these as known limitations in the app and README.
 
 9. ANNUAL CALCULATION ORDER
 Use one documented sequence for every year and every scenario. Default (change only with a written reason in the methodology notes):
