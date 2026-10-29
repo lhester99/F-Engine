@@ -1,5 +1,5 @@
 import { BookOpen, ChevronDown, MonitorPlay, Printer, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { BalanceChart, BALANCE_SERIES } from './charts/BalanceChart';
 import { ChartLegend, HatchSwatch, LineSwatch, SolidSwatch } from './charts/Legend';
 import { BracketChart } from './charts/BracketChart';
@@ -60,6 +60,16 @@ export default function App() {
   const [wealthView, setWealthView] = useState<'aftertax' | 'balances'>('aftertax');
   const [showTable, setShowTable] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  // Clicking the selected year on a chart again returns to the full view.
+  const toggleYear = useCallback((year: number) => setSelectedYear((cur) => (cur === year ? null : year)), []);
+  useEffect(() => {
+    if (selectedYear === null) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setSelectedYear(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedYear]);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
@@ -180,6 +190,11 @@ export default function App() {
           <input type="checkbox" className="h-4 w-4 accent-accent" checked={showBaselineBalances} onChange={(e) => setShowBaselineBalances(e.target.checked)} />
           Show no-strategy lines
         </label>
+      )}
+      {selectedYear !== null && tab !== 'heirs' && (
+        <button type="button" className="btn" onClick={() => setSelectedYear(null)} data-testid="show-all-years">
+          <X aria-hidden className="h-4 w-4" /> Show all years
+        </button>
       )}
     </div>
   );
@@ -327,7 +342,7 @@ export default function App() {
                         axis={axis}
                         showConversions={showConversions}
                         selectedYear={selectedYear}
-                        onSelectYear={setSelectedYear}
+                        onSelectYear={toggleYear}
                       />
                       <ChartLegend
                         label="Chart legend"
@@ -352,7 +367,7 @@ export default function App() {
                         scenario={scenario}
                         deathYear={dYear}
                         selectedYear={selectedYear}
-                        onSelectYear={setSelectedYear}
+                        onSelectYear={toggleYear}
                       />
                       <ChartLegend
                         label="Chart legend"
@@ -379,7 +394,7 @@ export default function App() {
                         strategy={strategyIncome}
                         axis={axis}
                         selectedYear={selectedYear}
-                        onSelectYear={setSelectedYear}
+                        onSelectYear={toggleYear}
                       />
                       <ChartLegend
                         label="Chart legend"
@@ -399,7 +414,7 @@ export default function App() {
 
                   {tab === 'wealth' && wealthView === 'aftertax' && wealth && (
                     <>
-                      <WealthChart wealth={wealth} axis={axis} deathYear={dYear} selectedYear={selectedYear} onSelectYear={setSelectedYear} />
+                      <WealthChart wealth={wealth} axis={axis} deathYear={dYear} selectedYear={selectedYear} onSelectYear={toggleYear} />
                       <ChartLegend
                         label="Chart legend"
                         items={[
@@ -424,7 +439,7 @@ export default function App() {
                         axis={axis}
                         showBaseline={showBaselineBalances}
                         selectedYear={selectedYear}
-                        onSelectYear={setSelectedYear}
+                        onSelectYear={toggleYear}
                       />
                       <ChartLegend
                         label="Chart legend"
@@ -459,7 +474,7 @@ export default function App() {
                       />
                     ) : (
                       <p className="text-xs text-muted">
-                        Click or tap any year in the chart for a full breakdown.{' '}
+                        Click or tap any year in the chart for a full breakdown; click it again to show all years.{' '}
                         <button type="button" className="font-medium text-accent underline" onClick={() => setSelectedYear(strategySummary.firstRmd?.year ?? years[0] ?? null)}>
                           Open year detail
                         </button>

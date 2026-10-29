@@ -23,6 +23,9 @@ export function useChartSelection<T extends { year: number }>(
   insets: PlotInsets,
 ) {
   const start = useRef<{ x: number; y: number } | null>(null);
+  // A tap is followed by a synthetic click; ignore it so a tap selects once (clicking the
+  // selected year again clears the selection).
+  const lastTap = useRef(0);
 
   const selectAt = (clientX: number, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -36,7 +39,10 @@ export function useChartSelection<T extends { year: number }>(
   };
 
   return {
-    onClick: (e: MouseEvent<HTMLDivElement>) => selectAt(e.clientX, e.currentTarget),
+    onClick: (e: MouseEvent<HTMLDivElement>) => {
+      if (Date.now() - lastTap.current < 800) return;
+      selectAt(e.clientX, e.currentTarget);
+    },
     onTouchStart: (e: TouchEvent<HTMLDivElement>) => {
       const t = e.touches[0];
       start.current = t ? { x: t.clientX, y: t.clientY } : null;
@@ -46,6 +52,7 @@ export function useChartSelection<T extends { year: number }>(
       const s = start.current;
       start.current = null;
       if (!t || !s || Math.hypot(t.clientX - s.x, t.clientY - s.y) > 10) return;
+      lastTap.current = Date.now();
       selectAt(t.clientX, e.currentTarget);
     },
   };

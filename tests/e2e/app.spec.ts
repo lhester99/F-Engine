@@ -418,3 +418,25 @@ test('Joint and Last Survivor Table for a spouse more than 10 years younger', as
   await expect(page.getByTestId('year-detail')).toContainText('Distribution period, client (Uniform Lifetime Table)');
   await expectNoHorizontalScroll(page);
 });
+
+test('a selected year can be cleared: same year again, Show all years, or Esc', async ({ page }) => {
+  const bar = page.getByTestId('rmd-chart').locator('.recharts-bar-rectangle').nth(12);
+  const select = async () => (isMobile(page) ? bar.tap() : bar.click());
+  const detail = page.getByTestId('year-detail');
+
+  await select();
+  await expect(detail).toBeVisible();
+  await select();
+  await expect(detail).toHaveCount(0);
+
+  await select();
+  await page.getByTestId('show-all-years').click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.getByTestId('show-all-years')).toHaveCount(0);
+
+  if (!isMobile(page)) {
+    await select();
+    await page.keyboard.press('Escape');
+    await expect(detail).toHaveCount(0);
+  }
+});
