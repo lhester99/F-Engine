@@ -17,23 +17,24 @@ describe('client-value features', () => {
     await addStrategy(user);
     expect(screen.getByTestId('finding-strategy')).toHaveTextContent(/This strategy lowers the peak RMD/);
     expect(screen.getByTestId('finding-shift')).toHaveTextContent(/Conversions move \$250,000 of taxable income into ages 70–74/);
-    expect(screen.getByTestId('finding-tax')).toHaveTextContent(/estimated income tax is about/);
+    expect(screen.getByTestId('finding-brackets')).toHaveTextContent(/In conversion years \(ages 70–74\), income reaches the \d+% federal bracket/);
+    expect(screen.getByTestId('finding-tax')).toHaveTextContent(/The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
     expect(screen.getByTestId('finding-irmaa')).toHaveTextContent(/Without a strategy:/);
   });
 
-  it('recalculates the tax trade-off when the assumed rates change', async () => {
+  it('recalculates the tax trade-off when assumptions change', async () => {
     const user = userEvent.setup();
     render(<App />);
     await addStrategy(user);
-    const breakeven = screen.getByTestId('breakeven');
-    const before = breakeven.textContent;
-    const added = screen.getByLabelText('On income added');
-    await user.clear(added);
-    await user.type(added, '12');
-    expect(screen.getByTestId('breakeven').textContent).not.toBe(before);
-    // Invalid rate shows an instant message and does not change the result.
-    await user.clear(added);
-    await user.type(added, '150');
+    const summary = screen.getByTestId('tax-summary');
+    const before = summary.textContent;
+    const state = screen.getByLabelText('State income tax rate');
+    await user.clear(state);
+    await user.type(state, '5');
+    expect(screen.getByTestId('tax-summary').textContent).not.toBe(before);
+    const heirs = screen.getByLabelText("Heirs' tax rate");
+    await user.clear(heirs);
+    await user.type(heirs, '150');
     expect(screen.getByText('Must be at most 100%.')).toBeInTheDocument();
   });
 
@@ -45,19 +46,41 @@ describe('client-value features', () => {
     expect(screen.getByLabelText('Discount rate (present value)')).toHaveValue('4%');
   });
 
-  it('switches filing status and Medicare enrollees', async () => {
+  it('asks for the spouse date of birth when filing jointly', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Joint' }));
-    await user.click(screen.getByRole('button', { name: '2 people' }));
-    expect(screen.getByRole('button', { name: 'Joint' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(screen.getByTestId('tradeoffs')).getByText(/two people on\s+Medicare \(joint thresholds\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Married filing jointly' }));
+    expect(screen.getByRole('button', { name: 'Married filing jointly' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Spouse date of birth')).toHaveValue('1956-06-15');
   });
 
-  it('shows the Income & IRMAA tab', async () => {
+  it('shows the Tax Brackets tab with the year-by-year plan', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('tab', { name: 'Income & IRMAA' }));
+    await addStrategy(user);
+    await user.click(screen.getByRole('tab', { name: 'Tax Brackets' }));
+    expect(screen.getByTestId('bracket-chart')).toBeInTheDocument();
+    const table = screen.getByTestId('plan-table');
+    expect(within(table).getByRole('rowheader', { name: '70 (2026)' })).toBeInTheDocument();
+  });
+
+  it('sets up a fill-to-bracket rule', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Fill to a bracket' }));
+    await user.selectOptions(screen.getByLabelText('Fill to top of'), '0.22');
+    await user.selectOptions(screen.getByLabelText('Also stay within'), '0');
+    await user.click(screen.getByRole('button', { name: 'Apply to range' }));
+    expect(screen.getByTestId('fill-rules')).toHaveTextContent('Fill to 22%, ages 70–74, no IRMAA surcharge');
+    expect(within(screen.getByTestId('conversion-table')).getAllByText('Fill to 22%').length).toBe(5);
+    await user.click(screen.getByRole('button', { name: /Remove fill to 22% rule/ }));
+    expect(screen.queryByTestId('fill-rules')).not.toBeInTheDocument();
+  });
+
+  it('shows the IRMAA tab', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'IRMAA' }));
     expect(screen.getByTestId('income-chart')).toBeInTheDocument();
     expect(screen.getByTestId('chart-caption')).toHaveTextContent(/Estimated MAGI by income year/);
   });

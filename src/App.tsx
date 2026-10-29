@@ -2,7 +2,9 @@ import { BookOpen, ChevronDown, MonitorPlay, Printer, RotateCcw, SlidersHorizont
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { BalanceChart, BALANCE_SERIES } from './charts/BalanceChart';
 import { ChartLegend, HatchSwatch, LineSwatch, SolidSwatch } from './charts/Legend';
+import { BracketChart } from './charts/BracketChart';
 import { IncomeChart } from './charts/IncomeChart';
+import { ConversionPlanTable } from './components/ConversionPlanTable';
 import { RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/RmdChart';
 import type { SavedStrategy } from './calculations/compare';
 import { Disclosures } from './components/Disclosures';
@@ -26,10 +28,11 @@ import { defaultScenario } from './utils/defaultScenario';
 import { formatPercent } from './utils/format';
 import { effectiveAnnualReturn } from './calculations/returns';
 
-type Tab = 'rmd' | 'income' | 'balances';
+type Tab = 'rmd' | 'brackets' | 'income' | 'balances';
 const TABS: { id: Tab; label: string; short: string }[] = [
   { id: 'rmd', label: 'RMD Projections', short: 'RMDs' },
-  { id: 'income', label: 'Income & IRMAA', short: 'Income & IRMAA' },
+  { id: 'brackets', label: 'Tax Brackets', short: 'Brackets' },
+  { id: 'income', label: 'IRMAA', short: 'IRMAA' },
   { id: 'balances', label: 'Account Balances', short: 'Balances' },
 ];
 
@@ -53,7 +56,7 @@ export default function App() {
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<SavedStrategy[]>([]);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, income: null, balances: null });
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, balances: null });
 
   const update = useCallback((fn: (s: Scenario) => Scenario) => setScenario(fn), []);
   const {
@@ -61,7 +64,6 @@ export default function App() {
     strategy,
     baselineSummary,
     strategySummary,
-    analysisErrors,
     baselineIncome,
     strategyIncome,
     baselineIrmaa,
@@ -220,6 +222,9 @@ export default function App() {
             <Section title="Client & accounts">
               <ClientPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
+            <Section title="Household income & taxes">
+              <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
             <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
               Planning levers
             </p>
@@ -231,12 +236,6 @@ export default function App() {
             </Section>
             <Section title="Qualified charitable distributions" badge={qcdCount ? `${qcdCount}` : undefined}>
               <QcdPanel scenario={scenario} update={update} messages={allMessages} />
-            </Section>
-            <p className="border-b border-line-soft bg-canvas px-4 py-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
-              Assumptions
-            </p>
-            <Section title="Tax & IRMAA assumptions">
-              <AssumptionsPanel scenario={scenario} update={update} errors={analysisErrors} />
             </Section>
           </div>
         </aside>
@@ -309,19 +308,44 @@ export default function App() {
                     </>
                   )}
 
+                  {tab === 'brackets' && (
+                    <>
+                      <BracketChart
+                        baseline={baselineIncome}
+                        strategy={strategyIncome}
+                        axis={axis}
+                        filingStatus={scenario.analysis.filingStatus}
+                        inflationRate={scenario.analysis.inflationRate}
+                        selectedYear={selectedYear}
+                        onSelectYear={setSelectedYear}
+                      />
+                      <ChartLegend
+                        label="Chart legend"
+                        items={[
+                          { label: 'No strategy', swatch: <HatchSwatch /> },
+                          { label: 'Strategy, before conversion', swatch: <SolidSwatch color={SERIES_COLORS.strategy} /> },
+                          { label: 'Roth conversion', swatch: <SolidSwatch color={SERIES_COLORS.conversion} /> },
+                          { label: 'Top of each federal bracket (labeled)', swatch: <LineSwatch color="var(--color-ink-2)" dashed /> },
+                        ]}
+                      />
+                      <p className="text-xs text-ink-2" data-testid="chart-caption">
+                        Ordinary taxable income after deductions (qualified dividends and gains are taxed separately and not
+                        shown). The conversion sits on top of everything else, so it is taxed at the highest rates reached.
+                        Brackets after 2026 are projected at the inflation rate entered.
+                      </p>
+                      <ConversionPlanTable baseline={baselineIncome} strategy={strategyIncome} />
+                    </>
+                  )}
+
                   {tab === 'income' && (
                     <>
-                      {analysisErrors.length > 0 ? (
-                        <MessageList messages={analysisErrors} />
-                      ) : (
-                        <IncomeChart
-                          baseline={baselineIncome}
-                          strategy={strategyIncome}
-                          axis={axis}
-                          selectedYear={selectedYear}
-                          onSelectYear={setSelectedYear}
-                        />
-                      )}
+                      <IncomeChart
+                        baseline={baselineIncome}
+                        strategy={strategyIncome}
+                        axis={axis}
+                        selectedYear={selectedYear}
+                        onSelectYear={setSelectedYear}
+                      />
                       <ChartLegend
                         label="Chart legend"
                         items={[
@@ -331,9 +355,9 @@ export default function App() {
                         ]}
                       />
                       <p className="text-xs text-ink-2" data-testid="chart-caption">
-                        Estimated MAGI by income year: other income entered, plus taxable IRA distributions and Roth conversions,
-                        minus deductible IRA contributions. QCDs are excluded. Each year's income sets Medicare premiums two years
-                        later; thresholds appear from the age the client is on Medicare in that premium year.
+                        Estimated MAGI by income year: adjusted gross income (including the taxable part of Social Security,
+                        IRA distributions, and conversions) plus tax-exempt interest. QCDs are excluded. Each year's income sets
+                        Medicare premiums two years later; thresholds appear once someone on the return is 65 in that premium year.
                       </p>
                     </>
                   )}
@@ -400,7 +424,7 @@ export default function App() {
               </div>
 
               <div className="print:break-inside-avoid">
-                <TradeOffs tax={tax} baselineIrmaa={baselineIrmaa} strategyIrmaa={strategyIrmaa} analysis={scenario.analysis} errors={analysisErrors} />
+                <TradeOffs tax={tax} baselineIrmaa={baselineIrmaa} strategyIrmaa={strategyIrmaa} analysis={scenario.analysis} />
               </div>
               <div className="print:break-inside-avoid">
                 <ScenarioCompare

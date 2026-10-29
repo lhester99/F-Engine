@@ -78,8 +78,25 @@ export interface OneTimeQcd {
 }
 
 /** Planning levers that differ between the baseline and a strategy. */
+/**
+ * Convert, each year in the age range, as much as keeps ordinary taxable income
+ * within the chosen federal bracket, optionally also keeping MAGI at or below an
+ * IRMAA tier. Amounts are recalculated whenever any input changes.
+ */
+export interface BracketFillRule {
+  id: string;
+  personId: string;
+  startAge: number;
+  endAge: number;
+  /** Fill to the top of the bracket with this rate, e.g. 0.24. */
+  bracketRate: number;
+  /** Highest IRMAA tier allowed for the premium year two years later (0 = no surcharge); null = no IRMAA limit. */
+  irmaaMaxTier: number | null;
+}
+
 export interface Strategy {
   conversions: ConversionEntry[];
+  bracketFills: BracketFillRule[];
   /** Fraction (0–1) of each conversion withheld for taxes rather than deposited to the Roth IRA. */
   conversionWithholdingRate: number;
   recurringQcds: RecurringQcdRule[];
@@ -88,23 +105,37 @@ export interface Strategy {
 
 export type FilingStatus = 'single' | 'joint';
 
-/** Inputs for the IRMAA check and the estimated tax comparison. Not used by the RMD projection itself. */
+/**
+ * Household income and tax assumptions. All dollar amounts are in
+ * first-projection-year dollars and grow at inflationRate; they are entered,
+ * never calculated.
+ */
 export interface AnalysisSettings {
   filingStatus: FilingStatus;
-  /** People on Medicare whose premiums IRMAA affects (1 or 2). */
-  medicareEnrollees: 1 | 2;
-  /** Other income counted in MAGI, in first-projection-year dollars (entered, never calculated). */
-  otherIncome: number;
-  /** Annual rate used to grow other income and to index IRMAA thresholds and surcharges after the latest published year. */
+  /** Spouse's date of birth (YYYY-MM-DD) when filing jointly; used for age-65 deductions and Medicare. */
+  spouseDateOfBirth: string;
+  /** Household Social Security benefits per year, before tax. */
+  socialSecurityBenefit: number;
+  /** Client's age when the Social Security benefits above begin (already-claimed clients: current age or lower). */
+  socialSecurityStartAge: number;
+  /** Pensions, wages, interest, and other ordinary income. */
+  otherOrdinaryIncome: number;
+  /** Qualified dividends and long-term capital gains. */
+  qualifiedInvestmentIncome: number;
+  /** Tax-exempt interest (counts toward Social Security taxation and IRMAA). */
+  taxExemptInterest: number;
+  /** Itemized deductions; the larger of these and the standard deduction is used. */
+  itemizedDeductions: number;
+  /** Flat state income tax rate, applied to income other than Social Security. */
+  stateTaxRate: number;
+  /** Grows entered income and deductions, and indexes tax brackets and IRMAA after the latest published year. */
   inflationRate: number;
-  /** Assumed marginal tax rate on taxable income the strategy adds (mostly conversion years). */
-  addedIncomeTaxRate: number;
-  /** Assumed marginal tax rate on taxable income the strategy avoids, including pre-tax money left at the end. */
-  avoidedIncomeTaxRate: number;
+  /** Tax rate assumed for whoever eventually withdraws the pre-tax balance left at the end (usually heirs). */
+  heirsTaxRate: number;
   /** Annual rate used to express future dollars in present value (ignored when discountMatchesReturn). */
   discountRate: number;
   /**
-   * Use the investment return as the discount rate. With equal tax rates this
+   * Use the investment return as the discount rate. With a flat tax rate this
    * makes a Roth conversion tax-neutral in present value, the standard result.
    */
   discountMatchesReturn: boolean;
@@ -186,6 +217,8 @@ export interface PersonYear {
   /** All distributions other than conversions (QCDs + taxable distributions). */
   totalDistributions: number;
   conversionRequested: number;
+  /** How the year's conversion was set: a fixed amount, a fill-to-bracket rule, or none. */
+  conversionMethod: 'none' | 'fixed' | 'fill';
   conversionGross: number;
   conversionWithheld: number;
   conversionToRoth: number;

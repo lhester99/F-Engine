@@ -3,38 +3,36 @@ import { buildFindings } from '../calculations/findings';
 import { incomeByYear, summarizeIrmaa } from '../calculations/irmaa';
 import { runComparison } from '../calculations/projection';
 import { summarize } from '../calculations/summary';
-import { compareTaxes, validateAnalysis } from '../calculations/taxComparison';
+import { compareTaxes } from '../calculations/taxComparison';
 import type { Scenario } from '../types';
 
-/** Runs the baseline and strategy projections, and the analyses built on them, whenever the scenario changes. */
+/** Runs the baseline and strategy projections, and the tax analyses built on them, whenever the scenario changes. */
 export function useProjection(scenario: Scenario) {
   return useMemo(() => {
     const { baseline, strategy } = runComparison(scenario);
     const baselineSummary = summarize(baseline);
     const strategySummary = summarize(strategy);
-    const analysisErrors = validateAnalysis(scenario.analysis);
-    const analysisOk = analysisErrors.length === 0 && strategy.ok && baseline.ok;
+    const ok = strategy.ok && baseline.ok;
     const lastYear = strategy.years[strategy.years.length - 1]?.year ?? scenario.startYear;
-    const baselineIncome = analysisOk ? incomeByYear(baseline, scenario) : [];
-    const strategyIncome = analysisOk ? incomeByYear(strategy, scenario) : [];
-    const baselineIrmaa = analysisOk ? summarizeIrmaa(baselineIncome, lastYear) : null;
-    const strategyIrmaa = analysisOk ? summarizeIrmaa(strategyIncome, lastYear) : null;
-    const tax = analysisOk ? compareTaxes(baseline, strategy, scenario) : null;
-    const findings = strategy.ok
-      ? buildFindings({ scenario, baseline, strategy, baselineSummary, strategySummary, tax, baselineIrmaa, strategyIrmaa })
+    const baselineIncome = ok ? incomeByYear(baseline, scenario) : [];
+    const strategyIncome = ok ? incomeByYear(strategy, scenario) : [];
+    const baselineIrmaa = ok ? summarizeIrmaa(baselineIncome, lastYear) : null;
+    const strategyIrmaa = ok ? summarizeIrmaa(strategyIncome, lastYear) : null;
+    const tax = ok ? compareTaxes(baseline, strategy, scenario) : null;
+    const findings = ok
+      ? buildFindings({
+          scenario,
+          baseline,
+          strategy,
+          baselineSummary,
+          strategySummary,
+          tax,
+          baselineIrmaa,
+          strategyIrmaa,
+          baselineIncome,
+          strategyIncome,
+        })
       : [];
-    return {
-      baseline,
-      strategy,
-      baselineSummary,
-      strategySummary,
-      analysisErrors,
-      baselineIncome,
-      strategyIncome,
-      baselineIrmaa,
-      strategyIrmaa,
-      tax,
-      findings,
-    };
+    return { baseline, strategy, baselineSummary, strategySummary, baselineIncome, strategyIncome, baselineIrmaa, strategyIrmaa, tax, findings };
   }, [scenario]);
 }

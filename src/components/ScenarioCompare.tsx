@@ -38,18 +38,23 @@ const ROWS: RowDef[] = [
     label: 'IRMAA surcharges',
     value: (c) => (c.m.irmaa.yearsWithSurcharge === 0 ? 'None' : `${formatUsd(c.m.irmaa.totalSurcharge)} (${c.m.irmaa.yearsWithSurcharge} yr)`),
   },
+  { label: 'Estimated taxes during projection', value: (c) => formatUsd(c.m.taxTotals.lifetime) },
+  { label: 'Taxes including heirs (present value)', value: (c) => formatUsd(c.m.taxTotals.totalPv) },
   {
-    label: 'Net estimated tax vs. no strategy (PV)',
+    label: 'Vs. no strategy (present value)',
     value: (c) => {
-      if (c.kind === 'baseline') return '—';
-      if (!c.m.tax) return 'n/a';
+      if (c.kind === 'baseline' || !c.m.tax) return '—';
       const v = c.m.tax.netTaxPv;
       return Math.abs(v) < 0.5 ? '$0' : v > 0 ? `${formatUsd(v)} lower` : `${formatUsd(-v)} higher`;
     },
   },
   {
-    label: 'Breakeven rate on avoided income',
-    value: (c) => (c.kind === 'baseline' || !c.m.tax || c.m.tax.breakevenAvoidedRate === null ? '—' : formatPercent(c.m.tax.breakevenAvoidedRate)),
+    label: 'Breakeven heirs’ tax rate',
+    value: (c) => {
+      const be = c.m.tax?.breakevenHeirsRate;
+      if (c.kind === 'baseline' || be === null || be === undefined) return '—';
+      return be === 0 ? 'Any' : formatPercent(be);
+    },
   },
   { label: 'Ending pre-tax balance', value: (c) => formatUsd(c.m.summary.endingPretax) },
   { label: 'Ending Roth balance', value: (c) => formatUsd(c.m.summary.endingRoth) },

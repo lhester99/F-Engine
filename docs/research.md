@@ -152,14 +152,52 @@ Standard 2026 Part B premium: $202.90.
   (default 2.5%), and labels these as projections.
 - Married filing separately uses a different schedule and is not supported.
 
-## 7. Tax comparison method
+## 7. Federal income tax (added October 29, 2026)
 
-Not a tax calculation, by design (see CLAUDE.md scope fence). Validated with a
-hand-calculated case and with the standard equivalence result: with equal tax rates
-and a discount rate equal to the investment return, a Roth conversion is
-tax-neutral in present value. The test suite checks this to within one cent.
+2026 figures from IRS Rev. Proc. 2025-32, as reported by several secondary sources
+that agreed with each other (Tax Foundation, ustax.tools, PennyCalc, Kiplinger and
+others), checked October 29, 2026. One source (TaxLumo) showed 2025 figures labeled as
+2026 and was disregarded. The IRS document itself could not be opened from the build
+environment. These reflect Pub. L. 119-21 (One Big Beautiful Bill Act, July 4, 2025).
 
-## 8. Out of scope (stated in the app and README)
+| | Single | Married filing jointly |
+|---|---|---|
+| 10% up to | $12,400 | $24,800 |
+| 12% up to | $50,400 | $100,800 |
+| 22% up to | $105,700 | $211,400 |
+| 24% up to | $201,775 | $403,550 |
+| 32% up to | $256,225 | $512,450 |
+| 35% up to | $640,600 | $768,700 |
+| 37% above | $640,600 | $768,700 |
+| Standard deduction | $16,100 | $32,200 |
+| Additional, age 65+ | $2,050 | $1,650 per spouse |
+| 0% capital gains up to | $49,450 | $98,900 |
+| 15% capital gains up to | $545,500 | $613,700 |
+
+- **Senior deduction** (IRC §151(d)(5), 2025–2028): $6,000 per person 65+, reduced by
+  6% of MAGI over $75,000 single / $150,000 joint (per person). IRS newsroom page
+  confirms the amount, years, and thresholds; the 6% rate is from secondary sources
+  citing the statute.
+- **Social Security taxation** (IRC §86): thresholds $25,000/$34,000 single and
+  $32,000/$44,000 joint, not indexed (engineer knowledge of the statute).
+- **NIIT** (IRC §1411): 3.8%, thresholds $200,000 single / $250,000 joint, not indexed.
+- **2027 figures were not published** as of October 29, 2026. Projections cluster
+  around a 3.2% adjustment (standard deduction about $16,600 / $33,200). The app
+  projects from 2026 at the entered inflation rate, rounding brackets down to $25 and
+  deductions down to $50 (IRC §1(f)(7), §63(c)(4)).
+
+Validated with hand-calculated cases in tests/calculations/federalTax.test.ts, including
+a Social Security "torpedo" case where the rate on the next dollar (18.5%) exceeds the
+bracket rate (10%).
+
+## 8. Tax comparison method
+
+Since October 29, 2026 the comparison uses the bracket-based estimate above for each
+year, IRMAA in its premium year, and the heirs' rate on the pre-tax balance left at the
+end. Validated with a hand-calculated case (tests/calculations/analysis.test.ts) and the
+identity net = avoided later − paid earlier.
+
+## 9. Out of scope (stated in the app and README)
 
 Inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse
 during the projection, and spousal rollovers.

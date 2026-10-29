@@ -1,18 +1,23 @@
 # RMD Smoothing Analyzer
 
-A web app for financial advisors that projects a client's future Required Minimum
-Distributions (RMDs). It shows how return assumptions, multi-year Roth conversions,
-and Qualified Charitable Distributions (QCDs) change the size and path of those
-distributions.
+A web app for financial advisors that shows a client what a multi-year Roth
+conversion plan does to their taxes now, their taxes later, and what they and their
+heirs end up with, compared with doing nothing. Future Required Minimum Distributions
+(RMDs) are one of the outputs.
 
-It answers three questions:
+It answers:
 
-1. How large could future RMDs get?
-2. How fast do they grow?
-3. How can conversions, QCDs, and return assumptions manage that path?
+- What does the conversion plan look like year by year: income, federal bracket, tax?
+- What tax is paid now versus avoided later, and what is the breakeven?
+- How large could future RMDs get, and how fast do they grow?
 
-Lower RMDs are not automatically better. The app compares results neutrally and
-does not make recommendations.
+Lower RMDs and conversions are not automatically better. The app compares results
+neutrally and does not make recommendations.
+
+**Build plan:** 1) tax engine, bracket view, fill-to-bracket conversions (done);
+2) taxable account for unneeded RMDs, how conversion taxes are paid (withheld, taxable
+account, or cash), after-tax wealth and breakeven age; 3) spouses and the survivor's
+switch to single filing; 4) heirs under the 10-year rule.
 
 > Hypothetical illustration only. Not a recommendation, forecast, or tax advice.
 
@@ -34,17 +39,19 @@ contributions; optional pre-tax Traditional IRA contributions (with a "deductibl
 checkbox); optional extra pre-tax withdrawals; and an option to delay the first RMD
 to April 1 of the next year.
 
-**Tax & IRMAA assumptions:** filing status (single or joint), how many people are on
-Medicare, one "other income" amount (pensions, taxable Social Security, interest,
-and so on, entered, never calculated), inflation, two assumed tax rates (on income
-the strategy adds and on income it avoids), and a discount rate (by default the
-investment return).
+**Household income & taxes:** filing status (single or married filing jointly, with
+the spouse's date of birth), Social Security benefits and the age they start,
+pensions/wages/interest, qualified dividends and gains, tax-exempt interest, itemized
+deductions, a flat state tax rate, inflation, the heirs' tax rate, and a discount rate
+(by default the investment return). All amounts are entered in today's dollars.
 
 **Planning levers** (side panel on desktop, "Inputs & planning levers" button on a phone):
 - **Investment returns.** Everything updates immediately.
-- **Roth conversions.** Fill a range of ages with an amount, then edit or delete
-  single years. Optional tax withholding. Any conversion that would use RMD dollars
-  is blocked or reduced, with a message explaining why.
+- **Roth conversions.** Either a fixed amount for a range of ages (then edit or
+  delete single years), or **fill to a bracket**: each year converts as much as fits
+  under the top of the chosen bracket, optionally also staying within an IRMAA tier.
+  Optional tax withholding. Any conversion that would use RMD dollars is blocked or
+  reduced, with a message explaining why.
 - **QCDs.** Recurring (amount, from age, through age) and one-time gifts. Age 70½
   eligibility and the annual limit are enforced. QCDs count toward the RMD first.
 
@@ -58,15 +65,20 @@ between *Required RMDs* and *Taxable IRA Distributions*. A "No strategy" baselin
 pattern. Conversions can be shown as a separate line. Click or tap a year for a full
 breakdown, baseline versus strategy. A year-by-year table is available.
 
-**Tab 2, Income & IRMAA:** estimated MAGI each year, strategy against no strategy,
-with the IRMAA tier thresholds that apply two years later.
+**Tab 2, Tax Brackets:** taxable income each year with the conversion shown on top,
+against the top of each federal bracket, plus a year-by-year plan table: conversion,
+taxable income, bracket, rate on the next dollar, federal and state tax, IRMAA tier,
+and the change from no strategy.
 
-**Tab 3, Account Balances:** Traditional, Roth, and total December 31 balances,
+**Tab 3, IRMAA:** estimated MAGI each year, strategy against no strategy, with the
+IRMAA tier thresholds that apply two years later.
+
+**Tab 4, Account Balances:** Traditional, Roth, and total December 31 balances,
 strategy (solid lines) versus no strategy (dashed lines).
 
-**Trade-offs:** estimated income tax on income added and avoided, in dollars and
-present value; the breakeven tax rate; and IRMAA surcharge years and totals for both.
-These are estimates at the rates you enter, not tax calculations.
+**Tax trade-off:** federal, state, and IRMAA costs with and without the strategy;
+tax paid earlier versus avoided later (including heirs' tax on the pre-tax balance
+left), in dollars and present value; and the breakeven heirs' tax rate.
 
 **Compare strategies:** save up to four named sets of levers and compare them side
 by side on the current client. Saved strategies live only in the open page.
@@ -94,16 +106,19 @@ Balances are never rounded mid-calculation; only displayed numbers are rounded.
 Deductible IRA contributions for years on or after age 70½ make an equal amount of
 later QCDs taxable (the QCD still counts toward the RMD).
 
-**Tax trade-off:** each year's change in taxable IRA income (taxable distributions
-plus conversions) is taxed at the "added" or "avoided" rate. The pre-tax balance
-left at the end counts too. The breakeven is the avoided rate at which the
-present-value difference is zero. With equal rates and the default discount rate,
-a conversion comes out tax-neutral, which is the standard result.
+**Federal tax:** each year is estimated from the 2026 brackets (IRS Rev. Proc.
+2025-32): taxable Social Security, the larger of standard (plus age-65 additions) or
+itemized deductions, the 2025–2028 senior deduction and its phase-out, 0/15/20% rates
+on qualified income, and the 3.8% NIIT. State tax is a flat rate. Later years are
+indexed at the inflation rate entered.
 
-**IRMAA:** estimated MAGI = other income (grown with inflation) + taxable IRA
-distributions + conversions − deductible IRA contributions; it sets premiums two
-years later, from age 65. 2026 thresholds and surcharges are published figures;
-later years are projected at the inflation rate entered.
+**Tax trade-off:** taxes with and without the strategy, year by year, plus the
+heirs' rate times the pre-tax balance left at the end. The breakeven is the heirs'
+rate at which the present-value totals are equal.
+
+**IRMAA:** MAGI = AGI + tax-exempt interest; it sets premiums two years later for each
+person 65 or older. 2026 thresholds and surcharges are published figures; later years
+are projected at the inflation rate entered.
 
 RMD start age: born before 7/1/1949 → 70½; 7/1/1949–1950 → 72; 1951–1959 → 73
 (1959 per the 2024 proposed regulations); 1960 or later → 75. Full sources and
@@ -119,8 +134,12 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Known limitations
 
-- One person only. Spouses and the Joint and Last Survivor Table are not modeled
-  yet; the Uniform Lifetime Table is always used.
+- One person's IRAs only. A spouse can be entered for joint filing, but the spouse's
+  IRAs, the first death, and single filing for the survivor come in build step 3.
+  The Joint and Last Survivor Table is not used.
+- Heirs are one tax rate on the pre-tax balance left; the 10-year rule comes in step 4.
+- Conversion taxes are assumed paid from outside money unless withheld; the taxable
+  and cash accounts come in step 2.
 - Traditional and Roth IRAs only. The still-working exception is not modeled.
 - Out of scope: inherited accounts, non-spouse beneficiaries, the 10-year rule,
   death of a spouse during the projection, spousal rollovers.
@@ -132,21 +151,25 @@ verification notes are in [`docs/research.md`](docs/research.md).
 - QCDs are annual. In the 70½ year they must be made on or after the 70½ date. The
   one-time split-interest QCD is not modeled. Limits after 2026 use an editable
   assumed value, held flat by default.
-- Taxes are estimates at two entered rates, not a tax calculation: no brackets,
-  deductions, Social Security taxation, or state rules. Balance totals are pre-tax.
+- Federal tax is a simplified estimate: no credits, AMT, QBI deduction, or the 10%
+  early-distribution penalty. State tax is one flat rate. Tax law after 2026 is
+  projected from current law. Balance totals are pre-tax.
+- Entered income grows with inflation every year (pensions without COLAs are
+  overstated later).
 - The tax comparison counts QCD gifts as income not taxed but not the gifts
   themselves as a cost.
-- IRMAA uses one entered other-income figure. Married filing separately, appeals, and
-  a spouse's separate Medicare timing are not modeled. Thresholds after 2026 are
-  projections.
+- IRMAA: married filing separately and appeals are not modeled; everyone on the
+  return is assumed on Medicare from 65. Thresholds after 2026 are projections.
 - Roth and Traditional contribution limits, deductibility, and five-year rules are
   not checked. Pre-tax contributions go to the first Traditional IRA.
 
 ## Testing
 
-- `npm test`: 113 calculation and component tests, including IRS boundary cases,
-  hand-calculated multi-year projections, the QCD contribution offset, IRMAA tiers
-  and indexing, a hand-calculated tax comparison, and the conversion-neutrality check.
+- `npm test`: 129 calculation and component tests, including IRS boundary cases,
+  hand-calculated multi-year projections, hand-calculated federal tax cases (Social
+  Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
+  conversions, the QCD contribution offset, IRMAA tiers and indexing, and a
+  hand-calculated tax comparison.
 - `npm run test:e2e`: browser tests on desktop Chrome and an emulated iPhone 13
   viewport (iPhone screen size, touch, and user agent, but running in Chromium, not
   real Safari). Set `PW_WEBKIT=1` to add a real WebKit run where WebKit is installed,

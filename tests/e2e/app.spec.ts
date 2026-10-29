@@ -229,15 +229,20 @@ test('findings, trade-offs, and assumptions respond to the strategy', async ({ p
   await expect(page.getByTestId('finding-strategy')).toContainText('No Roth conversions or QCDs');
   await page.getByRole('button', { name: 'Apply to range' }).click();
   await page.getByRole('button', { name: 'Add recurring QCD' }).click();
-  await expect(page.getByTestId('finding-tax')).toContainText('estimated income tax is about');
-  const breakeven = page.getByTestId('breakeven');
-  const before = await breakeven.textContent();
-  await page.getByTestId('rate-added').fill('15');
-  await expect(breakeven).not.toHaveText(before!);
-  await page.getByTestId('rate-avoided').fill('30');
-  await page.getByRole('button', { name: 'Joint' }).click();
-  await page.getByRole('button', { name: '2 people' }).click();
-  await page.getByTestId('other-income').fill('150000');
+  await expect(page.getByTestId('finding-tax')).toContainText('The strategy adds about');
+  const summary = page.getByTestId('tax-summary');
+  const before = await summary.textContent();
+  await page.getByTestId('state-rate').fill('5');
+  await expect(summary).not.toHaveText(before!);
+  await page.getByTestId('heirs-rate').fill('32');
+  await page.getByRole('button', { name: 'Married filing jointly' }).click();
+  await page.getByLabel('Spouse date of birth').fill('1958-02-02');
+  await page.getByTestId('ss-benefit').fill('48000');
+  await page.getByTestId('ss-age').fill('70');
+  await page.getByTestId('other-income').fill('30000');
+  await page.getByTestId('qualified-income').fill('8000');
+  await page.getByTestId('tax-exempt').fill('2000');
+  await page.getByTestId('itemized').fill('40000');
   await page.getByTestId('inflation').fill('3');
   await page.getByRole('checkbox', { name: /Discount at the investment return/ }).uncheck();
   await page.getByTestId('discount-rate').fill('5');
@@ -248,8 +253,8 @@ test('findings, trade-offs, and assumptions respond to the strategy', async ({ p
   await expectNoHorizontalScroll(page);
 });
 
-test('Income & IRMAA tab: chart and tap/click year detail with MAGI', async ({ page }) => {
-  await page.getByRole('tab', { name: 'Income & IRMAA' }).click();
+test('IRMAA tab: chart and tap/click year detail with MAGI', async ({ page }) => {
+  await page.getByRole('tab', { name: 'IRMAA' }).click();
   const chart = page.getByTestId('income-chart');
   await expect(chart.locator('.recharts-bar-rectangle').first()).toBeVisible();
   const box = (await chart.boundingBox())!;
@@ -261,7 +266,8 @@ test('Income & IRMAA tab: chart and tap/click year detail with MAGI', async ({ p
   else await page.mouse.click(x, y);
   const detail = page.getByTestId('year-detail');
   await expect(detail.getByRole('heading')).toContainText(String(new Date().getFullYear() + 3));
-  await expect(detail.getByRole('rowheader', { name: 'Estimated MAGI (including other income)' })).toBeVisible();
+  await expect(detail.getByRole('rowheader', { name: 'Estimated MAGI (for IRMAA)' })).toBeVisible();
+  await expect(detail.getByRole('rowheader', { name: 'Federal bracket' })).toBeVisible();
   await expect(detail.getByRole('rowheader', { name: /IRMAA tier for \d{4} premiums/ })).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
@@ -298,4 +304,22 @@ test('presentation mode and print summary', async ({ page }) => {
   await page.getByRole('button', { name: 'Exit presentation' }).click();
   await page.getByRole('button', { name: 'Print summary' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(1);
+});
+
+test('fill-to-bracket conversions and the Tax Brackets tab', async ({ page }) => {
+  await openInputs(page);
+  await page.getByRole('button', { name: 'Fill to a bracket' }).click();
+  await page.getByLabel('Fill to top of').selectOption('0.24');
+  await page.getByLabel('Also stay within').selectOption('2');
+  await page.getByRole('button', { name: 'Apply to range' }).click();
+  await expect(page.getByTestId('fill-rules')).toContainText('Fill to 24%, ages 70–74, IRMAA tier 2 or lower');
+  await page.getByRole('tab', { name: 'Tax Brackets' }).click();
+  await expect(page.getByTestId('bracket-chart').locator('.recharts-bar-rectangle').first()).toBeVisible();
+  // The first year's conversion cell holds the amount the rule computed.
+  const firstConversion = page.getByTestId('plan-table').locator('tbody tr').first().locator('td').first();
+  await expect(firstConversion).toHaveText(/^\$[1-9][\d,]*$/);
+  await expect(page.getByTestId('finding-brackets')).toContainText('federal bracket');
+  await page.getByRole('button', { name: /Remove fill to 24% rule/ }).click();
+  await expect(page.getByTestId('fill-rules')).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
 });

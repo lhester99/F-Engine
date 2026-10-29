@@ -1,6 +1,6 @@
 import { ACCOUNT_RULES } from '../data/accountRules';
 import { UNIFORM_LIFETIME_TABLE_EFFECTIVE_YEAR } from '../data/uniformLifetimeTable';
-import type { EngineMessage, Scenario } from '../types';
+import type { AnalysisSettings, EngineMessage, Scenario } from '../types';
 import { ageAttainedInYear, parseIsoDate } from './dates';
 import { effectiveAnnualReturn } from './returns';
 import { getRmdStart } from './rmdRules';
@@ -116,6 +116,44 @@ export function validateScenario(s: Scenario): EngineMessage[] {
   }
   if (!isNum(s.qcdLimits.assumedFutureLimit) || s.qcdLimits.assumedFutureLimit < 0) {
     err('qcd-limit', 'Assumed future QCD limit must be zero or positive.', 'qcdLimit');
+  }
+  for (const f of st.bracketFills ?? []) {
+    if (!isWholeAge(f.startAge) || !isWholeAge(f.endAge) || f.startAge > f.endAge) {
+      err('fill-ages', 'Fill-to-bracket start age must be on or before the end age.', `fill:${f.id}`, f.personId);
+    }
+    if (!BRACKET_RATES.includes(f.bracketRate)) err('fill-rate', 'Choose a federal bracket to fill.', `fill:${f.id}`, f.personId);
+  }
+  out.push(...validateAnalysis(s.analysis));
+  return out;
+}
+
+/** Rates that can be chosen for fill-to-bracket conversions (the top 37% bracket has no top). */
+export const BRACKET_RATES = [0.1, 0.12, 0.22, 0.24, 0.32, 0.35];
+
+/** Checks the household income and tax assumptions. */
+export function validateAnalysis(a: AnalysisSettings): EngineMessage[] {
+  const out: EngineMessage[] = [];
+  const bad = (code: string, text: string, field: string) => out.push({ severity: 'error', code, text, field });
+  const nonNeg = (v: number) => isNum(v) && v >= 0;
+  const isRate = (v: number) => isNum(v) && v >= 0 && v <= 1;
+  if (a.filingStatus === 'joint' && !parseIsoDate(a.spouseDateOfBirth)) {
+    bad('spouse-dob', "Enter the spouse's date of birth for joint filing.", 'spouseDateOfBirth');
+  }
+  for (const [key, label] of [
+    ['socialSecurityBenefit', 'Social Security benefits'],
+    ['otherOrdinaryIncome', 'Other ordinary income'],
+    ['qualifiedInvestmentIncome', 'Qualified dividends and gains'],
+    ['taxExemptInterest', 'Tax-exempt interest'],
+    ['itemizedDeductions', 'Itemized deductions'],
+  ] as const) {
+    if (!nonNeg(a[key])) bad(key, `${label} must be zero or positive.`, key);
+  }
+  if (!isWholeAge(a.socialSecurityStartAge)) bad('ss-age', 'Social Security start age must be a whole number.', 'socialSecurityStartAge');
+  if (!isRate(a.stateTaxRate)) bad('state-rate', 'State tax rate must be between 0% and 100%.', 'stateTaxRate');
+  if (!isRate(a.heirsTaxRate)) bad('heirs-rate', "Heirs' tax rate must be between 0% and 100%.", 'heirsTaxRate');
+  if (!isNum(a.inflationRate) || a.inflationRate <= -1) bad('inflation', 'Inflation must be greater than -100%.', 'inflationRate');
+  if (!a.discountMatchesReturn && (!isNum(a.discountRate) || a.discountRate <= -1)) {
+    bad('discount', 'Discount rate must be greater than -100%.', 'discountRate');
   }
   return out;
 }

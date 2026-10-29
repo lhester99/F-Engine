@@ -5,7 +5,7 @@ import {
   type IrmaaSchedule,
 } from '../data/irmaa';
 import type { AnalysisSettings, FilingStatus, ProjectionResult, Scenario } from '../types';
-import { parseIsoDate } from './dates';
+import { computeTax, householdIncomeForYear, marginalRate, peopleAge65, type HouseholdIncome, type TaxResult } from './federalTax';
 
 /** Medicare eligibility age used to decide whether IRMAA can apply in a premium year. */
 export const MEDICARE_AGE = 65;
@@ -77,17 +77,22 @@ export interface IncomeYear {
   /** Income (tax) year. */
   year: number;
   age: number;
-  otherIncome: number;
   /** Taxable IRA distributions, including any taxable QCD portion. */
   taxableIra: number;
   conversion: number;
   deductibleContributions: number;
-  /** MAGI estimate: other income + taxable IRA distributions + conversions − deductible IRA contributions. */
+  income: HouseholdIncome;
+  tax: TaxResult;
+  /** Federal + state tax on the next $1,000 of ordinary income. */
+  marginalRate: number;
+  /** MAGI for IRMAA: AGI plus tax-exempt interest. */
   magi: number;
   /** Premium year this income determines (income year + 2). */
   premiumYear: number;
-  /** False when the client is under 65 in the premium year, so IRMAA does not apply. */
+  /** False when nobody on the return is 65 or older in the premium year, so IRMAA does not apply. */
   medicareApplies: boolean;
+  /** People on the return who are 65 or older in the premium year. */
+  enrollees: number;
   tier: number;
   annualSurcharge: number;
   /** Thresholds used for the premium year (bounds for the filing status), lowest first. */
@@ -96,34 +101,35 @@ export interface IncomeYear {
 }
 
 /**
- * Estimated MAGI for each projection year and the IRMAA result for the premium
- * year two years later. Other income is the single amount the advisor entered,
- * grown at the inflation rate from the first projection year.
+ * Household income, estimated tax, and the IRMAA result (for the premium year
+ * two years later) for every projection year.
  */
 export function incomeByYear(result: ProjectionResult, scenario: Scenario): IncomeYear[] {
   const a: AnalysisSettings = scenario.analysis;
-  const birth = parseIsoDate(scenario.people[0]?.dateOfBirth ?? '');
   return result.years.map((y) => {
     const t = y.totals;
-    const otherIncome = a.otherIncome * Math.pow(1 + a.inflationRate, y.year - scenario.startYear);
-    const magi = otherIncome + t.taxableDistribution + t.conversionGross - t.deductibleContributions;
+    const ira = { taxableIra: t.taxableDistribution, conversion: t.conversionGross, deductibleContributions: t.deductibleContributions };
+    const income = householdIncomeForYear(scenario, y.year, ira);
+    const tax = computeTax(income);
     const premiumYear = y.year + IRMAA_LOOKBACK_YEARS;
-    const medicareApplies = birth !== null && premiumYear - birth.year >= MEDICARE_AGE;
+    const enrollees = peopleAge65(scenario, premiumYear);
+    const medicareApplies = enrollees > 0;
     const found = irmaaScheduleForYear(premiumYear, a.inflationRate);
     const schedule = found?.schedule;
-    const tier = schedule && medicareApplies ? irmaaTier(magi, a.filingStatus, schedule) : 0;
+    const tier = schedule && medicareApplies ? irmaaTier(tax.irmaaMagi, a.filingStatus, schedule) : 0;
     return {
       year: y.year,
       age: y.age,
-      otherIncome,
-      taxableIra: t.taxableDistribution,
-      conversion: t.conversionGross,
-      deductibleContributions: t.deductibleContributions,
-      magi,
+      ...ira,
+      income,
+      tax,
+      marginalRate: marginalRate(income),
+      magi: tax.irmaaMagi,
       premiumYear,
       medicareApplies,
+      enrollees,
       tier,
-      annualSurcharge: schedule ? annualIrmaaSurcharge(tier, schedule, a.medicareEnrollees) : 0,
+      annualSurcharge: schedule ? annualIrmaaSurcharge(tier, schedule, enrollees) : 0,
       thresholds: schedule ? schedule.tiers.map((tr) => (a.filingStatus === 'joint' ? tr.joint : tr.single)) : [],
       thresholdsProjected: found?.projected ?? true,
     };

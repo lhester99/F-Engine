@@ -1,11 +1,11 @@
 import { formatPercent, formatUsd } from '../utils/format';
 import type { ProjectionResult, Scenario } from '../types';
-import type { IrmaaSummary } from './irmaa';
+import type { IncomeYear, IrmaaSummary } from './irmaa';
 import type { ProjectionSummary } from './summary';
 import type { TaxComparison } from './taxComparison';
 
 export interface Finding {
-  id: 'size' | 'strategy' | 'shift' | 'tax' | 'irmaa';
+  id: 'size' | 'strategy' | 'shift' | 'brackets' | 'tax' | 'irmaa';
   /** Short label for the finding. */
   title: string;
   text: string;
@@ -20,6 +20,8 @@ export interface FindingsInput {
   tax: TaxComparison | null;
   baselineIrmaa: IrmaaSummary | null;
   strategyIrmaa: IrmaaSummary | null;
+  baselineIncome?: IncomeYear[];
+  strategyIncome?: IncomeYear[];
 }
 
 const pct = (part: number, whole: number) => (whole > 0 ? formatPercent(part / whole, 0) : '0%');
@@ -40,10 +42,8 @@ export function buildFindings(i: FindingsInput): Finding[] {
   const out: Finding[] = [];
   const b = i.baselineSummary;
   const s = i.strategySummary;
-  const hasStrategy =
-    i.scenario.strategy.conversions.some((c) => c.amount > 0) ||
-    i.scenario.strategy.recurringQcds.some((q) => q.annualAmount > 0) ||
-    i.scenario.strategy.oneTimeQcds.some((q) => q.amount > 0);
+  // Judge by what the projection actually did, so fill-to-bracket rules count too.
+  const hasStrategy = s.totalConversions > 0.5 || s.totalQcd > 0.5;
 
   if (b.firstRmd && b.peakRmd) {
     const multiple = b.peakRmd.amount / b.firstRmd.amount;
@@ -98,20 +98,45 @@ export function buildFindings(i: FindingsInput): Finding[] {
   if (totalQcd > 0) parts.push(`QCDs send ${formatUsd(totalQcd)} to charity directly from the IRA, and that income is not taxed.`);
   if (parts.length) out.push({ id: 'shift', title: 'When income is taxed', text: parts.join(' ') });
 
+  if (i.strategyIncome && i.baselineIncome) {
+    const conv = i.strategyIncome.filter((y) => y.conversion > 0.5);
+    if (conv.length) {
+      const topBracket = Math.max(...conv.map((y) => y.tax.bracketRate));
+      const topMarginal = Math.max(...conv.map((y) => y.marginalRate));
+      const marginalNote =
+        topMarginal > topBracket + 0.005
+          ? ` The estimated tax on the last dollar converted reaches ${formatPercent(topMarginal)} (federal and state), above the bracket rate, because extra income also makes more Social Security taxable or reduces deductions.`
+          : '';
+      const laterBase = i.baselineIncome.filter((y) => y.year > conv[conv.length - 1]!.year);
+      const laterBaseTop = laterBase.length ? Math.max(...laterBase.map((y) => y.tax.bracketRate)) : 0;
+      const laterStrat = i.strategyIncome.filter((y) => y.year > conv[conv.length - 1]!.year);
+      const laterStratTop = laterStrat.length ? Math.max(...laterStrat.map((y) => y.tax.bracketRate)) : 0;
+      const later = laterBase.length
+        ? ` After the conversions, the highest bracket is ${formatPercent(laterStratTop, 0)} with the strategy and ${formatPercent(laterBaseTop, 0)} without it.`
+        : '';
+      out.push({
+        id: 'brackets',
+        title: 'Tax brackets',
+        text: `In conversion years (${ageRange(conv)}), income reaches the ${formatPercent(topBracket, 0)} federal bracket.${marginalNote}${later}`,
+      });
+    }
+  }
+
   if (i.tax) {
     const t = i.tax;
     const a = i.scenario.analysis;
     const net = t.netTaxPv;
     const verdict =
       Math.abs(net) < 0.5
-        ? 'estimated income tax is about the same in present value'
+        ? 'about the same'
         : net > 0
-          ? `estimated income tax is about ${formatUsd(net)} lower in present value`
-          : `estimated income tax is about ${formatUsd(-net)} higher in present value`;
-    const breakeven =
-      t.breakevenAvoidedRate === null
-        ? ''
-        : ` Estimated tax is lower whenever the tax rate on avoided income is above ${formatPercent(t.breakevenAvoidedRate)}.`;
+          ? `about ${formatUsd(net)} lower`
+          : `about ${formatUsd(-net)} higher`;
+    let breakeven = '';
+    if (t.breakevenHeirsRate === 0) breakeven = ' It is lower even if heirs pay no tax on the pre-tax balance.';
+    else if (t.breakevenHeirsRate !== null) {
+      breakeven = ` It comes out lower whenever the heirs' tax rate is above ${formatPercent(t.breakevenHeirsRate)}.`;
+    }
     const qcdNote =
       t.qcdExcludedIncome > 0.5
         ? ` This counts the ${formatUsd(t.qcdExcludedIncome)} of QCD gifts as income not taxed; it does not count the gifts themselves.`
@@ -119,7 +144,7 @@ export function buildFindings(i: FindingsInput): Finding[] {
     out.push({
       id: 'tax',
       title: 'Estimated tax trade-off',
-      text: `At the rates entered (${formatPercent(a.addedIncomeTaxRate, 0)} on added income, ${formatPercent(a.avoidedIncomeTaxRate, 0)} on avoided income), ${verdict}.${breakeven}${qcdNote}`,
+      text: `The strategy adds about ${formatUsd(t.taxPaidEarlier)} of federal, state, and IRMAA costs in the years it raises income, and avoids about ${formatUsd(t.taxAvoidedLater)} in later years and for heirs (at the ${formatPercent(a.heirsTaxRate, 0)} rate entered). In present value, its estimated total is ${verdict}.${breakeven}${qcdNote}`,
     });
   }
 

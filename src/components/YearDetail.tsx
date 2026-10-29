@@ -16,7 +16,9 @@ interface Props {
 interface RowDef {
   label: string;
   value: (y: YearResult, inc?: IncomeYear) => number | null;
-  format?: 'usd' | 'period' | 'tier';
+  format?: 'usd' | 'period' | 'tier' | 'pct';
+  /** Only shown when the year's tax estimate is available. */
+  needsIncome?: boolean;
   note?: string;
 }
 
@@ -40,8 +42,12 @@ const ROWS: RowDef[] = [
   { label: 'Ending Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.endBalancePretax },
   { label: 'Ending Dec 31 balance (Roth IRA)', value: (y) => y.totals.endBalanceRoth },
   { label: 'Ending Dec 31 balance (total)', value: (y) => y.totals.endBalanceTotal },
-  { label: 'Estimated MAGI (including other income)', value: (_y, inc) => inc?.magi ?? null },
-  { label: 'IRMAA tier', value: (_y, inc) => (inc && inc.medicareApplies ? inc.tier : null), format: 'tier' },
+  { label: 'Taxable income (after deductions)', value: (_y, inc) => inc?.tax.taxableIncome ?? null, needsIncome: true },
+  { label: 'Federal bracket', value: (_y, inc) => inc?.tax.bracketRate ?? null, format: 'pct', needsIncome: true },
+  { label: 'Federal income tax', value: (_y, inc) => inc?.tax.federalTax ?? null, needsIncome: true },
+  { label: 'State income tax', value: (_y, inc) => inc?.tax.stateTax ?? null, needsIncome: true },
+  { label: 'Estimated MAGI (for IRMAA)', value: (_y, inc) => inc?.magi ?? null, needsIncome: true },
+  { label: 'IRMAA tier', value: (_y, inc) => (inc && inc.medicareApplies ? inc.tier : null), format: 'tier', needsIncome: true },
 ];
 
 const OPTIONAL = new Set([
@@ -56,6 +62,7 @@ function fmt(v: number | null, kind: RowDef['format']) {
   if (v === null) return '—';
   if (kind === 'period') return v.toFixed(1);
   if (kind === 'tier') return v === 0 ? 'None' : `Tier ${v}`;
+  if (kind === 'pct') return `${Math.round(v * 100)}%`;
   return formatUsd(v);
 }
 
@@ -65,8 +72,7 @@ export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome,
   const rows = ROWS.filter(
     (r) =>
       (!OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5)) &&
-      (r.format !== 'tier' || strategyIncome !== undefined) &&
-      (!r.label.startsWith('Estimated MAGI') || strategyIncome !== undefined),
+      (!r.needsIncome || strategyIncome !== undefined),
   );
   const tierLabel = (label: string) =>
     label === 'IRMAA tier' && strategyIncome
@@ -141,7 +147,7 @@ export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome,
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(b, r.format)}</td>
                   <td className="px-2 py-1.5 text-right text-ink">{fmt(s, r.format)}</td>
                   <td className="hidden py-1.5 pl-2 text-right text-ink-2 sm:table-cell">
-                    {r.format === 'period' || r.format === 'tier' || b === null || s === null ? '' : formatSignedUsd(s - b)}
+                    {r.format === 'period' || r.format === 'tier' || r.format === 'pct' || b === null || s === null ? '' : formatSignedUsd(s - b)}
                   </td>
                 </tr>
               );

@@ -1,141 +1,144 @@
-import type { AnalysisSettings, EngineMessage, ProjectionResult, Scenario } from '../types';
+import type { ProjectionResult, Scenario } from '../types';
 import { incomeByYear, type IncomeYear } from './irmaa';
 import { effectiveAnnualReturn } from './returns';
 
 /**
- * Estimated tax comparison at advisor-entered rates. This is not a tax
- * calculation: it applies two assumed marginal rates to the change in taxable
- * IRA income the strategy causes.
- *
- * Each year, Δ = (strategy taxable IRA distributions + conversions)
- *              − (baseline taxable IRA distributions + conversions).
- * Positive Δ is income the strategy adds (taxed at the "added" rate); negative
- * Δ is income it avoids (taxed at the "avoided" rate). The difference in
- * pre-tax balances left at the end of the projection is treated as one more
- * flow at the end, because that money is still taxable whenever it is
- * withdrawn. Present values discount each year back to the start of the first
- * projection year; the end balance is discounted one year past the last year.
+ * Estimated tax comparison, strategy vs. no strategy. Each year's federal and
+ * state income tax comes from the bracket-based estimate; IRMAA surcharges are
+ * counted in their premium year (premium years after the projection are not
+ * counted). Pre-tax money left at the end of the projection is taxed at the
+ * heirs' rate entered, one year after the last projection year. Present values
+ * discount to the start of the first projection year.
  */
+export interface TaxTotals {
+  federal: number;
+  state: number;
+  irmaa: number;
+  /** federal + state + IRMAA during the projection. */
+  lifetime: number;
+  lifetimePv: number;
+  /** Pre-tax balance left at the end. */
+  endingPretax: number;
+  /** endingPretax × heirs' rate. */
+  heirsTax: number;
+  heirsTaxPv: number;
+  /** lifetime + heirs' tax. */
+  total: number;
+  totalPv: number;
+}
+
 export interface TaxComparison {
-  /** Taxable income the strategy adds (sum of positive Δ, plus a higher ending pre-tax balance if any). */
-  addedIncome: number;
-  /** Taxable income the strategy avoids (sum of negative Δ, plus a lower ending pre-tax balance). */
-  avoidedIncome: number;
-  addedIncomePv: number;
-  avoidedIncomePv: number;
-  /** Ending pre-tax balance, strategy minus baseline (negative = less pre-tax money left). */
-  endingPretaxDifference: number;
-  /**
-   * QCD dollars excluded from income, strategy minus baseline. Part of avoided
-   * income: the comparison counts the tax not paid, not the gifts themselves.
-   */
-  qcdExcludedIncome: number;
-  /** Discount rate actually used. */
-  discountRate: number;
-  taxOnAdded: number;
-  taxAvoided: number;
-  /** taxAvoided − taxOnAdded. Positive means the strategy comes out ahead at the entered rates. */
+  baseline: TaxTotals;
+  strategy: TaxTotals;
+  /** Sum of the years in which the strategy's tax is higher (mostly conversion years). */
+  taxPaidEarlier: number;
+  taxPaidEarlierPv: number;
+  /** Sum of the years in which the strategy's tax is lower, plus lower heirs' tax. */
+  taxAvoidedLater: number;
+  taxAvoidedLaterPv: number;
+  /** baseline total − strategy total. Positive: the strategy's estimated total tax is lower. */
   netTax: number;
-  taxOnAddedPv: number;
-  taxAvoidedPv: number;
   netTaxPv: number;
   /**
-   * Rate on avoided income at which the present-value net is zero, holding the
-   * added-income rate fixed. Null when the strategy adds or avoids no income.
+   * Heirs' tax rate at which the present-value totals are equal. 0 means the
+   * strategy's tax is lower even if heirs pay no tax; null means no breakeven
+   * (the strategy does not leave less pre-tax money, or there is no strategy).
    */
-  breakevenAvoidedRate: number | null;
-  /** IRMAA surcharges (premium years inside the projection), baseline minus strategy. */
-  irmaaDifference: number;
-  irmaaDifferencePv: number;
-  baselineIrmaa: number;
-  strategyIrmaa: number;
+  breakevenHeirsRate: number | null;
+  /** QCD dollars excluded from income (strategy − baseline); the gifts themselves are not a cost here. */
+  qcdExcludedIncome: number;
+  discountRate: number;
 }
 
-export function validateAnalysis(a: AnalysisSettings): EngineMessage[] {
-  const out: EngineMessage[] = [];
-  const bad = (code: string, text: string, field: string) => out.push({ severity: 'error', code, text, field });
-  const isRate = (v: number) => Number.isFinite(v) && v >= 0 && v <= 1;
-  if (!Number.isFinite(a.otherIncome) || a.otherIncome < 0) bad('other-income', 'Other income must be zero or positive.', 'otherIncome');
-  if (!Number.isFinite(a.inflationRate) || a.inflationRate <= -1) bad('inflation', 'Inflation must be greater than -100%.', 'inflationRate');
-  if (!isRate(a.addedIncomeTaxRate)) bad('tax-rate', 'Tax rates must be between 0% and 100%.', 'addedIncomeTaxRate');
-  if (!isRate(a.avoidedIncomeTaxRate)) bad('tax-rate', 'Tax rates must be between 0% and 100%.', 'avoidedIncomeTaxRate');
-  if (!a.discountMatchesReturn && (!Number.isFinite(a.discountRate) || a.discountRate <= -1)) bad('discount', 'Discount rate must be greater than -100%.', 'discountRate');
-  if (a.medicareEnrollees !== 1 && a.medicareEnrollees !== 2) bad('enrollees', 'Enter 1 or 2 people on Medicare.', 'medicareEnrollees');
-  return out;
+function totals(income: IncomeYear[], result: ProjectionResult, scenario: Scenario, df: (t: number) => number): TaxTotals {
+  const start = scenario.startYear;
+  const last = result.years[result.years.length - 1];
+  const lastYear = last?.year ?? start;
+  let federal = 0;
+  let state = 0;
+  let irmaa = 0;
+  let lifetimePv = 0;
+  for (const y of income) {
+    federal += y.tax.federalTax;
+    state += y.tax.stateTax;
+    lifetimePv += y.tax.totalTax * df(y.year - start);
+    if (y.premiumYear <= lastYear) {
+      irmaa += y.annualSurcharge;
+      lifetimePv += y.annualSurcharge * df(y.premiumYear - start);
+    }
+  }
+  const endingPretax = last?.totals.endBalancePretax ?? 0;
+  const heirsTax = endingPretax * scenario.analysis.heirsTaxRate;
+  const heirsTaxPv = heirsTax * df(lastYear + 1 - start);
+  const lifetime = federal + state + irmaa;
+  return {
+    federal,
+    state,
+    irmaa,
+    lifetime,
+    lifetimePv,
+    endingPretax,
+    heirsTax,
+    heirsTaxPv,
+    total: lifetime + heirsTax,
+    totalPv: lifetimePv + heirsTaxPv,
+  };
 }
 
-const irmaaInRange = (income: IncomeYear[], lastYear: number) =>
-  income.filter((i) => i.premiumYear <= lastYear);
-
-export function compareTaxes(
-  baseline: ProjectionResult,
-  strategy: ProjectionResult,
-  scenario: Scenario,
-): TaxComparison {
+export function compareTaxes(baseline: ProjectionResult, strategy: ProjectionResult, scenario: Scenario): TaxComparison {
   const a = scenario.analysis;
   const start = scenario.startYear;
   const discountRate = a.discountMatchesReturn ? effectiveAnnualReturn(scenario.returns) : a.discountRate;
-  const df = (yearsFromStart: number) => 1 / Math.pow(1 + discountRate, yearsFromStart);
+  const df = (t: number) => 1 / Math.pow(1 + discountRate, t);
 
-  let added = 0;
-  let avoided = 0;
-  let addedPv = 0;
-  let avoidedPv = 0;
-  const add = (delta: number, t: number) => {
-    if (delta > 0) {
-      added += delta;
-      addedPv += delta * df(t);
-    } else if (delta < 0) {
-      avoided += -delta;
-      avoidedPv += -delta * df(t);
-    }
-  };
+  const bIncome = incomeByYear(baseline, scenario);
+  const sIncome = incomeByYear(strategy, scenario);
+  const b = totals(bIncome, baseline, scenario, df);
+  const s = totals(sIncome, strategy, scenario, df);
+  const lastYear = strategy.years[strategy.years.length - 1]?.year ?? start;
 
-  strategy.years.forEach((s, i) => {
-    const b = baseline.years[i];
-    if (!b) return;
-    const delta =
-      s.totals.taxableDistribution + s.totals.conversionGross - (b.totals.taxableDistribution + b.totals.conversionGross);
-    add(delta, s.year - start);
+  // Year-by-year differences, with each IRMAA surcharge placed in its premium year.
+  const flows = new Map<number, number>();
+  const addFlow = (year: number, v: number) => flows.set(year, (flows.get(year) ?? 0) + v);
+  sIncome.forEach((sy, i) => {
+    const by = bIncome[i]!;
+    addFlow(sy.year, sy.tax.totalTax - by.tax.totalTax);
+    if (sy.premiumYear <= lastYear) addFlow(sy.premiumYear, sy.annualSurcharge - by.annualSurcharge);
   });
+  addFlow(lastYear + 1, s.heirsTax - b.heirsTax);
 
-  const lastS = strategy.years[strategy.years.length - 1];
-  const lastB = baseline.years[baseline.years.length - 1];
-  const endingPretaxDifference = lastS && lastB ? lastS.totals.endBalancePretax - lastB.totals.endBalancePretax : 0;
-  if (lastS) add(endingPretaxDifference, lastS.year - start + 1);
+  let earlier = 0;
+  let earlierPv = 0;
+  let later = 0;
+  let laterPv = 0;
+  for (const [year, v] of flows) {
+    if (v > 0) {
+      earlier += v;
+      earlierPv += v * df(year - start);
+    } else {
+      later -= v;
+      laterPv -= v * df(year - start);
+    }
+  }
 
-  const lastYear = lastS?.year ?? start;
-  const bIncome = irmaaInRange(incomeByYear(baseline, scenario), lastYear);
-  const sIncome = irmaaInRange(incomeByYear(strategy, scenario), lastYear);
-  const baselineIrmaa = bIncome.reduce((x, i) => x + i.annualSurcharge, 0);
-  const strategyIrmaa = sIncome.reduce((x, i) => x + i.annualSurcharge, 0);
-  const pvIrmaa = (rows: IncomeYear[]) => rows.reduce((x, i) => x + i.annualSurcharge * df(i.premiumYear - start), 0);
+  const lifetimeDiffPv = s.lifetimePv - b.lifetimePv;
+  const pretaxDiffPv = (b.endingPretax - s.endingPretax) * df(lastYear + 1 - start);
+  let breakevenHeirsRate: number | null = null;
+  if (pretaxDiffPv > 0.5) breakevenHeirsRate = Math.max(0, lifetimeDiffPv / pretaxDiffPv);
+  else if (lifetimeDiffPv < -0.5) breakevenHeirsRate = 0;
 
-  const taxOnAdded = added * a.addedIncomeTaxRate;
-  const taxAvoided = avoided * a.avoidedIncomeTaxRate;
-  const taxOnAddedPv = addedPv * a.addedIncomeTaxRate;
-  const taxAvoidedPv = avoidedPv * a.avoidedIncomeTaxRate;
-
+  const qcdIn = (r: ProjectionResult) => r.years.reduce((x, y) => x + y.totals.qcd - y.totals.qcdNotExcluded, 0);
   return {
-    addedIncome: added,
-    avoidedIncome: avoided,
-    addedIncomePv: addedPv,
-    avoidedIncomePv: avoidedPv,
-    endingPretaxDifference,
-    qcdExcludedIncome:
-      strategy.years.reduce((x, y) => x + y.totals.qcd - y.totals.qcdNotExcluded, 0) -
-      baseline.years.reduce((x, y) => x + y.totals.qcd - y.totals.qcdNotExcluded, 0),
+    baseline: b,
+    strategy: s,
+    taxPaidEarlier: earlier,
+    taxPaidEarlierPv: earlierPv,
+    taxAvoidedLater: later,
+    taxAvoidedLaterPv: laterPv,
+    netTax: b.total - s.total,
+    netTaxPv: b.totalPv - s.totalPv,
+    breakevenHeirsRate,
+    qcdExcludedIncome: qcdIn(strategy) - qcdIn(baseline),
     discountRate,
-    taxOnAdded,
-    taxAvoided,
-    netTax: taxAvoided - taxOnAdded,
-    taxOnAddedPv,
-    taxAvoidedPv,
-    netTaxPv: taxAvoidedPv - taxOnAddedPv,
-    breakevenAvoidedRate: addedPv > 0 && avoidedPv > 0 ? (a.addedIncomeTaxRate * addedPv) / avoidedPv : null,
-    irmaaDifference: baselineIrmaa - strategyIrmaa,
-    irmaaDifferencePv: pvIrmaa(bIncome) - pvIrmaa(sIncome),
-    baselineIrmaa,
-    strategyIrmaa,
   };
 }

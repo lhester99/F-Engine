@@ -2,7 +2,7 @@ import type { ProjectionResult, ReturnAssumption, Scenario, Strategy } from '../
 import { incomeByYear, summarizeIrmaa, type IrmaaSummary } from './irmaa';
 import { runComparison } from './projection';
 import { summarize, type ProjectionSummary } from './summary';
-import { compareTaxes, validateAnalysis, type TaxComparison } from './taxComparison';
+import { compareTaxes, type TaxComparison, type TaxTotals } from './taxComparison';
 
 /** A saved set of planning levers. Client inputs always come from the current scenario. */
 export interface SavedStrategy {
@@ -16,7 +16,9 @@ export interface SavedStrategy {
 export interface ScenarioMetrics {
   summary: ProjectionSummary;
   irmaa: IrmaaSummary;
-  /** Null for the baseline column or when the tax assumptions are invalid. */
+  /** Estimated tax totals for this column. */
+  taxTotals: TaxTotals;
+  /** Comparison against no strategy; null for the baseline column. */
   tax: TaxComparison | null;
 }
 
@@ -38,18 +40,20 @@ export function metricsForStrategy(
   const scenario: Scenario = { ...base, strategy: levers.strategy, returns: levers.returns };
   const { baseline, strategy } = runComparison(scenario);
   if (!baseline.ok || !strategy.ok) return null;
-  const analysisOk = validateAnalysis(scenario.analysis).length === 0;
   const last = lastYearOf(strategy);
+  const tax = compareTaxes(baseline, strategy, scenario);
   return {
     baseline: {
       summary: summarize(baseline),
       irmaa: summarizeIrmaa(incomeByYear(baseline, scenario), last),
+      taxTotals: tax.baseline,
       tax: null,
     },
     strategy: {
       summary: summarize(strategy),
       irmaa: summarizeIrmaa(incomeByYear(strategy, scenario), last),
-      tax: analysisOk ? compareTaxes(baseline, strategy, scenario) : null,
+      taxTotals: tax.strategy,
+      tax,
     },
   };
 }

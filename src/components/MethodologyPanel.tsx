@@ -4,18 +4,21 @@ import { PUBLISHED_QCD_LIMITS } from '../data/qcdLimits';
 import { formatUsd } from '../utils/format';
 
 export const KNOWN_LIMITATIONS = [
-  'One person only in this version. Spousal projections and the Joint and Last Survivor Table (spouse sole beneficiary more than 10 years younger) are not yet modeled; the Uniform Lifetime Table is always used.',
+  'One person’s IRAs only in this version. A spouse can be entered for joint filing (deductions and Medicare), but the spouse’s own IRAs, the first spouse’s death, and the switch to single filing are not modeled yet. The Joint and Last Survivor Table (spouse sole beneficiary more than 10 years younger) is not used.',
   'Traditional and Roth IRAs only. 401(k), 403(b), SEP and SIMPLE IRAs, Roth 401(k)s, and the still-working exception are not yet modeled.',
-  'Inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse during the projection, and spousal rollovers are out of scope.',
+  'Heirs are represented only by one tax rate applied to the pre-tax balance left at the end. The 10-year rule and heirs’ own brackets are not modeled yet. Accounts the client has already inherited, and trusts as beneficiaries, are out of scope.',
   'Assumes none of the current year’s RMD has been taken yet. If the first RMD year was last year and that RMD was deferred to April 1 of this year, the deferred amount is not modeled.',
   'One constant annual return is applied to every account in every year. Real returns vary; sequence of returns is not modeled.',
   'All flows (RMDs, QCDs, withdrawals, conversions, contributions) are assumed to occur before the year’s growth, which slightly understates growth compared with mid-year or year-end withdrawals.',
   'RMDs, QCDs, extra withdrawals, and conversions are taken pro rata across Traditional IRAs. IRS rules allow the IRA RMD total to come from any IRA, so actual account-level balances may differ.',
   'QCDs are modeled annually. In the year age 70½ is reached, a QCD is only valid if made on or after the 70½ date. The one-time QCD to a split-interest entity is not modeled.',
   'QCD limits after the latest published year use an editable assumed value (default: held flat), which understates future inflation indexing.',
-  'Tax figures are estimates at the two marginal rates you enter, not a tax calculation. Brackets, deductions, Social Security taxation, credits, and state rules are not modeled, so a large conversion that crosses brackets is taxed at one rate. The 10% early-distribution penalty before age 59½ is not modeled.',
+  'Federal tax is an estimate from the brackets, standard or itemized deduction, age-65 additions, the 2025–2028 senior deduction, Social Security taxation, capital-gains rates, and the 3.8% NIIT. Credits, AMT, the qualified business income deduction, and the 10% early-distribution penalty before 59½ are not modeled. State tax is one flat rate on income other than Social Security.',
+  'Tax brackets and deductions after 2026 are projected at the inflation rate entered. Tax law can change.',
+  'Entered income (Social Security, pensions, interest, dividends, itemized deductions) is held in today’s dollars and grows with inflation every year. Pensions without cost-of-living increases are overstated in later years.',
+  'Conversion taxes are assumed to be paid from money outside these accounts unless withholding is set. The taxable account for unneeded RMDs, and the choice of how conversion taxes are paid, are not modeled yet.',
   'The tax comparison treats QCD dollars as income avoided. It assumes the client would not otherwise make the same gifts; if they would give cash anyway, the real benefit of a QCD depends on whether they itemize.',
-  'IRMAA uses estimated MAGI: the single other-income amount you enter (grown with inflation) plus modeled IRA income. Married filing separately, IRMAA appeals for life-changing events, and the spouse’s own Medicare timing are not modeled. Income in the last two projection years affects premiums after the projection and is not counted.',
+  'IRMAA uses estimated MAGI (AGI plus tax-exempt interest). Married filing separately and IRMAA appeals for life-changing events are not modeled; people on the return are assumed to be on Medicare from 65. Income in the last two projection years affects premiums after the projection and is not counted.',
   'IRMAA thresholds and surcharges after 2026 are projections at the inflation rate entered, not published figures.',
   'Traditional IRA contribution limits, deductibility rules, and earned-income requirements are not checked; contributions go to the first Traditional IRA.',
   'Balance comparisons are pre-tax account values only. Withdrawn RMDs and QCDs leave the model, and income tax on conversions is assumed to be paid from outside the accounts unless withholding is entered, so a higher strategy total does not mean higher after-tax wealth.',
@@ -152,28 +155,73 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
           </section>
 
           <section>
-            <h3>Estimated tax trade-off</h3>
+            <h3>Estimated income tax</h3>
             <p className="mb-2">
-              This is an estimate at the marginal rates you enter, not a tax calculation. For each year, the app compares
-              taxable IRA income (taxable distributions plus Roth conversions) under the strategy and under no strategy:
+              Each year’s federal and state tax is estimated for the household, with and without the strategy, from the
+              income you enter plus the projected IRA amounts:
             </p>
             <ul className="list-disc space-y-1 pl-5">
-              <li>Income the strategy adds is taxed at the “income added” rate.</li>
-              <li>Income the strategy avoids is taxed at the “income avoided” rate.</li>
               <li>
-                The difference in pre-tax balances left at the end of the projection counts as income added or avoided one
-                year after the last year, because that money is taxable whenever it is withdrawn, by the client or heirs.
+                Ordinary income = pensions, wages, and interest + taxable IRA distributions + Roth conversions − deductible
+                IRA contributions. Qualified dividends and long-term gains are added separately.
               </li>
               <li>
-                Present value discounts each year to the start of the first projection year. By default the discount rate is
-                the investment return; with equal tax rates, a Roth conversion is then tax-neutral, the standard result.
+                Taxable Social Security uses the IRS provisional-income formula (up to 85% of benefits). Thresholds of
+                $25,000/$34,000 single and $32,000/$44,000 joint are fixed in law and not indexed.
               </li>
               <li>
-                Breakeven rate: the “income avoided” rate at which the present-value net is zero, holding the “income added”
-                rate fixed. Above it, estimated income tax is lower under the strategy.
+                Deduction: the larger of itemized deductions or the standard deduction plus the age-65 addition for each
+                person 65 or older. For 2025–2028 the senior deduction adds $6,000 per person 65 or older, reduced by 6% of
+                income above $75,000 (single) or $150,000 (joint).
               </li>
               <li>
-                QCD gifts count as income not taxed. The comparison covers income tax only and does not treat the gifts
+                Ordinary income is taxed through the brackets. Qualified income is taxed at 0/15/20% starting where
+                ordinary income ends. The 3.8% net investment income tax applies to qualified income above $200,000 /
+                $250,000 of income.
+              </li>
+              <li>
+                2026 figures are from IRS Rev. Proc. 2025-32. Later years are indexed at the inflation rate entered,
+                rounded down to $25 for brackets and $50 for deductions, as the law requires.
+              </li>
+              <li>
+                “Rate on next dollar” is the extra federal and state tax on the next $1,000 of income. It can exceed the
+                bracket rate when extra income makes more Social Security taxable or reduces the senior deduction.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Fill-to-bracket conversions</h3>
+            <p>
+              For each year in the rule’s age range, the app converts the largest whole-dollar amount that keeps ordinary
+              taxable income at or below the top of the chosen bracket, after that year’s RMD, other income, and
+              deductions. If an IRMAA limit is chosen and someone on the return will be 65 or older two years later, MAGI is
+              also kept at or below that tier’s threshold. Amounts recalculate whenever any input changes. A fixed amount
+              entered for a year takes precedence over a rule.
+            </p>
+          </section>
+
+          <section>
+            <h3>Tax trade-off</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Paid earlier: the sum of the years in which the strategy’s federal, state, and IRMAA costs are higher.
+                Avoided later: the years in which they are lower, plus lower heirs’ tax.
+              </li>
+              <li>
+                Heirs’ tax: the pre-tax balance left at the end, times the heirs’ rate entered, counted one year after the
+                last projection year.
+              </li>
+              <li>
+                Present value discounts each year to the start of the first projection year, by default at the investment
+                return.
+              </li>
+              <li>
+                Breakeven heirs’ rate: the heirs’ rate at which the present-value totals are equal. Above it, the
+                strategy’s estimated total is lower.
+              </li>
+              <li>
+                QCD gifts count as income not taxed. The comparison covers taxes only and does not treat the gifts
                 themselves as a cost.
               </li>
             </ul>
@@ -183,12 +231,12 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
             <h3>Medicare IRMAA</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                Estimated MAGI = other income entered (grown with inflation) + taxable IRA distributions + Roth conversions −
-                deductible IRA contributions. QCDs are excluded from MAGI.
+                MAGI = adjusted gross income (including the taxable part of Social Security, IRA distributions, and
+                conversions) + tax-exempt interest. QCDs are excluded.
               </li>
               <li>
-                Each year’s MAGI sets the premium surcharge two years later. IRMAA applies only from the premium year the
-                client is 65 or older.
+                Each year’s MAGI sets the premium surcharge two years later. IRMAA applies to each person on the return who
+                is 65 or older in the premium year.
               </li>
               <li>
                 Tiers apply when MAGI is more than a threshold; the top tier applies at or above it. 2026 thresholds: single
@@ -211,6 +259,7 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
               <li>Treas. Reg. §1.401(a)(9) final regulations (T.D. 10001) and proposed regulations, published July 19, 2024.</li>
               <li>SECURE Act (2019) §114; SECURE 2.0 Act (2022) §107 (applicable age), §307 (QCD indexing), §325 (Roth 401(k)).</li>
               <li>IRC §408(d)(8) (qualified charitable distributions), including the reduction for deductible contributions after age 70½ added by the SECURE Act (2019) §107; IRS notices announcing the indexed QCD limit.</li>
+              <li>IRS Rev. Proc. 2025-32 (2026 inflation adjustments); IRC §1, §63, §86 (Social Security), §151(d)(5) (senior deduction, Pub. L. 119-21), §1411 (NIIT).</li>
               <li>Social Security Act §1839(i) (Part B income-related premium) and §1860D-13(a)(7) (Part D); CMS announcement of 2026 Medicare Part B premiums and IRMAA amounts.</li>
             </ul>
             <p className="mt-2 text-xs text-muted">

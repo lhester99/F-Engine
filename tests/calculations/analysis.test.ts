@@ -9,13 +9,24 @@ import {
 } from '../../src/calculations/irmaa';
 import { runComparison, runProjection } from '../../src/calculations/projection';
 import { summarize } from '../../src/calculations/summary';
-import { compareTaxes, validateAnalysis } from '../../src/calculations/taxComparison';
+import { compareTaxes } from '../../src/calculations/taxComparison';
+import { validateAnalysis } from '../../src/calculations/validate';
 import { IRMAA_2026 } from '../../src/data/irmaa';
 import { DEFAULT_ANALYSIS } from '../../src/utils/defaultScenario';
 import type { ProjectionResult } from '../../src/types';
 import { scenario } from './helpers';
 
 const year = (r: ProjectionResult, y: number) => r.years.find((x) => x.year === y)!;
+
+/** No household income outside the IRAs, so hand calculations stay simple. */
+const NO_OTHER_INCOME = {
+  socialSecurityBenefit: 0,
+  otherOrdinaryIncome: 0,
+  qualifiedInvestmentIncome: 0,
+  taxExemptInterest: 0,
+  itemizedDeductions: 0,
+  stateTaxRate: 0,
+};
 
 describe('QCD offset for deductible IRA contributions after 70½', () => {
   // Born 1951-01-15: 70½ on 2021-07-15. Age 75 in 2026 (24.6), 76 in 2027 (23.7).
@@ -139,7 +150,7 @@ describe('IRMAA', () => {
       dob: '1958-05-05',
       endAge: 70,
       traditional: [800_000],
-      analysis: { otherIncome: 100_000, inflationRate: 0, filingStatus: 'single', medicareEnrollees: 1 },
+      analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 100_000, inflationRate: 0, filingStatus: 'single' },
       strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 50_000 }] },
     });
     const income = incomeByYear(runProjection(s), s);
@@ -149,7 +160,7 @@ describe('IRMAA', () => {
     // Premium years 2028 only are inside a projection that ends in 2028.
     expect(summarizeIrmaa(income, 2028)).toEqual({ yearsWithSurcharge: 1, highestTier: 2, totalSurcharge: income[0]!.annualSurcharge });
 
-    const young = scenario({ dob: '1965-01-01', endAge: 63, traditional: [800_000], analysis: { otherIncome: 400_000 } });
+    const young = scenario({ dob: '1965-01-01', endAge: 63, traditional: [800_000], analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 400_000 } });
     expect(incomeByYear(runProjection(young), young)[0]!.medicareApplies).toBe(false);
     expect(incomeByYear(runProjection(young), young)[0]!.tier).toBe(0);
   });
@@ -160,7 +171,7 @@ describe('IRMAA', () => {
       endAge: 64,
       traditional: [100_000],
       tradContribution: { annualAmount: 8_000, throughAge: 70 },
-      analysis: { otherIncome: 120_000, inflationRate: 0 },
+      analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 120_000, inflationRate: 0 },
     });
     expect(incomeByYear(runProjection(s), s)[0]!.magi).toBe(112_000);
   });
@@ -168,51 +179,44 @@ describe('IRMAA', () => {
 
 describe('estimated tax comparison', () => {
   it('hand-calculated: one $100,000 conversion before RMD age', () => {
-    // Born 1965, ages 61–62 (2026–2027), $1,000,000, 0% return. Convert $100,000 in 2026.
-    // Added income: +100,000 in 2026 (t = 0) → PV 100,000.
-    // Ending pre-tax balance: 900,000 vs 1,000,000 → −100,000 avoided, at t = 2 → PV 100,000 / 1.04² = 92,455.62.
-    // Rates 22% added / 24% avoided, discount 4%.
-    //   tax on added = 22,000; tax avoided = 24,000; net = +2,000
-    //   PV: 22,000 vs 24,000 / 1.0816 = 22,189.35 → net PV = 189.35
-    //   breakeven = 0.22 × 100,000 / 92,455.62 = 23.795%
+    // Born 1965 (ages 61–62 in 2026–2027), single, no other income, $1,000,000, 0% return, 0% discount.
+    // Convert $100,000 in 2026: AGI 100,000 − 16,100 standard deduction = 83,900 taxable
+    //   tax = 1,240 + 4,560 + (83,900 − 50,400) × 22% = 13,170
+    // Heirs at 24%: baseline 1,000,000 → 240,000; strategy 900,000 → 216,000
+    // Net = 240,000 − (13,170 + 216,000) = 10,830 lower. Breakeven heirs' rate = 13,170 / 100,000 = 13.17%.
     const s = scenario({
       dob: '1965-01-01',
       endAge: 62,
       traditional: [1_000_000],
       strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 100_000 }] },
-      analysis: { addedIncomeTaxRate: 0.22, avoidedIncomeTaxRate: 0.24, discountRate: 0.04, discountMatchesReturn: false, otherIncome: 0 },
+      analysis: { ...NO_OTHER_INCOME, heirsTaxRate: 0.24, discountRate: 0, discountMatchesReturn: false },
     });
     const { baseline, strategy } = runComparison(s);
     const t = compareTaxes(baseline, strategy, s);
-    expect(t.addedIncome).toBeCloseTo(100_000, 6);
-    expect(t.avoidedIncome).toBeCloseTo(100_000, 6);
-    expect(t.endingPretaxDifference).toBeCloseTo(-100_000, 6);
-    expect(t.avoidedIncomePv).toBeCloseTo(92_455.62, 2);
-    expect(t.taxOnAdded).toBeCloseTo(22_000, 6);
-    expect(t.taxAvoided).toBeCloseTo(24_000, 6);
-    expect(t.netTax).toBeCloseTo(2_000, 6);
-    expect(t.netTaxPv).toBeCloseTo(189.35, 2);
-    expect(t.breakevenAvoidedRate!).toBeCloseTo(0.237952, 6);
-    expect(t.irmaaDifference).toBe(0);
+    expect(t.baseline.lifetime).toBe(0);
+    expect(t.strategy.federal).toBeCloseTo(13_170, 6);
+    expect(t.baseline.heirsTax).toBeCloseTo(240_000, 6);
+    expect(t.strategy.heirsTax).toBeCloseTo(216_000, 6);
+    expect(t.taxPaidEarlier).toBeCloseTo(13_170, 6);
+    expect(t.taxAvoidedLater).toBeCloseTo(24_000, 6);
+    expect(t.netTax).toBeCloseTo(10_830, 6);
+    expect(t.netTaxPv).toBeCloseTo(10_830, 6);
+    expect(t.breakevenHeirsRate!).toBeCloseTo(0.1317, 8);
   });
 
-  it('a conversion is tax-neutral when both rates are equal and the discount rate equals the return', () => {
-    // Standard result: converting X costs t·X now; leaving it costs t·X·(1+r)^n later, worth t·X today at discount r.
-    // Holds with RMDs too, because every pre-tax dollar's eventual tax has present value t × that dollar.
+  it('keeps the identity: net = avoided later − paid earlier', () => {
     const s = scenario({
       dob: '1956-06-15',
       endAge: 95,
       rate: 0.06,
       traditional: [1_750_000],
-      strategy: { conversions: [2026, 2027, 2028, 2029, 2030].map((y) => ({ personId: 'p1', year: y, amount: 100_000 })) },
-      analysis: { addedIncomeTaxRate: 0.24, avoidedIncomeTaxRate: 0.24, discountMatchesReturn: true },
+      strategy: { conversions: [2026, 2027, 2028].map((y) => ({ personId: 'p1', year: y, amount: 120_000 })) },
     });
     const { baseline, strategy } = runComparison(s);
     const t = compareTaxes(baseline, strategy, s);
+    expect(t.netTax).toBeCloseTo(t.taxAvoidedLater - t.taxPaidEarlier, 4);
+    expect(t.netTaxPv).toBeCloseTo(t.taxAvoidedLaterPv - t.taxPaidEarlierPv, 4);
     expect(t.discountRate).toBe(0.06);
-    expect(t.addedIncome).toBeGreaterThan(100_000);
-    expect(Math.abs(t.netTaxPv)).toBeLessThan(0.01);
-    expect(t.breakevenAvoidedRate!).toBeCloseTo(0.24, 10);
   });
 
   it('reports QCD gifts within avoided income', () => {
@@ -226,12 +230,12 @@ describe('estimated tax comparison', () => {
     expect(compareTaxes(baseline, strategy, s).qcdExcludedIncome).toBeCloseTo(40_000, 6);
   });
 
-  it('with no strategy, nothing is added or avoided', () => {
+  it('with no strategy, nothing differs and there is no breakeven', () => {
     const s = scenario({ dob: '1955-01-01', endAge: 95, rate: 0.05 });
     const { baseline, strategy } = runComparison(s);
     const t = compareTaxes(baseline, strategy, s);
     expect(t.netTax).toBe(0);
-    expect(t.breakevenAvoidedRate).toBeNull();
+    expect(t.breakevenHeirsRate).toBeNull();
   });
 
   it('counts the IRMAA difference caused by a conversion', () => {
@@ -239,26 +243,50 @@ describe('estimated tax comparison', () => {
       dob: '1958-05-05',
       endAge: 70,
       traditional: [800_000],
-      analysis: { otherIncome: 100_000, inflationRate: 0, discountRate: 0.04, discountMatchesReturn: false },
+      analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 100_000, inflationRate: 0 },
       strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 50_000 }] },
     });
     const { baseline, strategy } = runComparison(s);
     const t = compareTaxes(baseline, strategy, s);
-    expect(t.baselineIrmaa).toBe(0);
-    expect(t.strategyIrmaa).toBeCloseTo(2_884.8, 6);
-    expect(t.irmaaDifference).toBeCloseTo(-2_884.8, 6);
-    expect(t.irmaaDifferencePv).toBeCloseTo(-2_884.8 / 1.04 ** 2, 6);
+    expect(t.baseline.irmaa).toBe(0);
+    expect(t.strategy.irmaa).toBeCloseTo(2_884.8, 6);
   });
 
   it('validates the assumptions', () => {
     expect(validateAnalysis(DEFAULT_ANALYSIS)).toHaveLength(0);
-    expect(validateAnalysis({ ...DEFAULT_ANALYSIS, addedIncomeTaxRate: 1.2, otherIncome: -1 }).map((m) => m.code)).toEqual(
-      expect.arrayContaining(['tax-rate', 'other-income']),
-    );
+    expect(
+      validateAnalysis({ ...DEFAULT_ANALYSIS, heirsTaxRate: 1.2, otherOrdinaryIncome: -1, filingStatus: 'joint', spouseDateOfBirth: '' }).map((m) => m.code),
+    ).toEqual(expect.arrayContaining(['heirs-rate', 'otherOrdinaryIncome', 'spouse-dob']));
   });
 });
 
 describe('findings', () => {
+  it('treats conversions from a fill-to-bracket rule as a strategy', () => {
+    const sc = scenario({
+      dob: '1956-06-15',
+      endAge: 95,
+      rate: 0.06,
+      traditional: [1_750_000],
+      strategy: { bracketFills: [{ id: 'f', personId: 'p1', startAge: 70, endAge: 72, bracketRate: 0.24, irmaaMaxTier: null }] },
+    });
+    const { baseline, strategy: st } = runComparison(sc);
+    const f = buildFindings({
+      scenario: sc,
+      baseline,
+      strategy: st,
+      baselineSummary: summarize(baseline),
+      strategySummary: summarize(st),
+      tax: compareTaxes(baseline, st, sc),
+      baselineIrmaa: null,
+      strategyIrmaa: null,
+      baselineIncome: incomeByYear(baseline, sc),
+      strategyIncome: incomeByYear(st, sc),
+    });
+    expect(f.find((x) => x.id === 'strategy')!.text).toMatch(/^This strategy/);
+    expect(f.find((x) => x.id === 'brackets')!.text).toContain('income reaches the 24% federal bracket');
+  });
+
+
   const build = (strategy = {}) => {
     const s = scenario({ dob: '1956-06-15', endAge: 95, rate: 0.06, traditional: [1_750_000], strategy });
     const { baseline, strategy: st } = runComparison(s);
@@ -271,6 +299,8 @@ describe('findings', () => {
       tax: compareTaxes(baseline, st, s),
       baselineIrmaa: summarizeIrmaa(incomeByYear(baseline, s), 2051),
       strategyIrmaa: summarizeIrmaa(incomeByYear(st, s), 2051),
+      baselineIncome: incomeByYear(baseline, s),
+      strategyIncome: incomeByYear(st, s),
     });
   };
 
@@ -286,11 +316,12 @@ describe('findings', () => {
       conversions: [70, 71, 72].map((a) => ({ personId: 'p1', year: 1956 + a, amount: 100_000 })),
       recurringQcds: [{ id: 'q', personId: 'p1', annualAmount: 20_000, startAge: 73, endAge: 95 }],
     });
-    expect(f.map((x) => x.id)).toEqual(['size', 'strategy', 'shift', 'tax', 'irmaa']);
+    expect(f.map((x) => x.id)).toEqual(['size', 'strategy', 'shift', 'brackets', 'tax', 'irmaa']);
     expect(f[1]!.text).toMatch(/lowers the peak RMD by \$[\d,]+ \(\d+%\)/);
     expect(f[2]!.text).toContain('Conversions move $300,000 of taxable income into ages 70–72.');
-    expect(f[3]!.text).toMatch(/At the rates entered \(24% on added income, 24% on avoided income\), estimated income tax is/);
-    expect(f[3]!.text).toContain('it does not count the gifts themselves');
+    expect(f[3]!.text).toMatch(/^In conversion years \(ages 70–72\), income reaches the \d+% federal bracket\./);
+    expect(f[4]!.text).toMatch(/^The strategy adds about \$[\d,]+ of federal, state, and IRMAA costs/);
+    expect(f[4]!.text).toContain('it does not count the gifts themselves');
     const all = f.map((x) => x.text).join(' ').toLowerCase();
     expect(all).not.toMatch(/sav(e|ed|ing)/);
     expect(all).not.toMatch(/better|recommend/);

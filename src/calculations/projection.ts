@@ -11,6 +11,8 @@ import type {
 } from '../types';
 import { emptyStrategy, requestedConversion, requestedQcd } from '../strategies/schedule';
 import { allocateProRata } from './allocate';
+import { computeTax, householdIncomeForYear, peopleAge65, taxParametersForYear } from './federalTax';
+import { irmaaScheduleForYear, IRMAA_LOOKBACK_YEARS } from './irmaa';
 import { ageAttainedInYear, dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from './dates';
 import { qcdLimitForYear } from './qcd';
 import { effectiveAnnualReturn } from './returns';
@@ -244,7 +246,24 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       }
 
       // Step 6: Roth conversions, only after the RMD has been satisfied.
-      const conversionRequested = requestedConversion(strategy.conversions, person.id, year);
+      // A fixed amount for the year takes precedence over a fill-to-bracket rule.
+      const hasFixed = strategy.conversions.some((c) => c.personId === person.id && c.year === year);
+      const fillRule = strategy.bracketFills.find((r) => r.personId === person.id && age >= r.startAge && age <= r.endAge);
+      let conversionRequested = requestedConversion(strategy.conversions, person.id, year);
+      let conversionMethod: PersonYear['conversionMethod'] = hasFixed ? 'fixed' : 'none';
+      if (hasFixed && fillRule) {
+        msg('info', 'conversion-fixed-over-fill', `Age ${age} (${year}): the fixed conversion amount is used instead of the fill-to-bracket rule.`, 'conversion');
+      }
+      if (!hasFixed && fillRule && rothIra && rmdDeferredToNextYear <= 0 && rmdShortfall <= 0.005) {
+        conversionMethod = 'fill';
+        conversionRequested = bracketFillAmount(scenario, year, fillRule, sumAvail(pretaxIras), {
+          taxableIra: rmdTaxable + extra + qcdNotExcluded,
+          deductibleContributions,
+        });
+        if (conversionRequested <= 0) {
+          msg('info', 'fill-no-room', `Age ${age} (${year}): income is already at or above the ${Math.round(fillRule.bracketRate * 100)}% bracket${fillRule.irmaaMaxTier !== null ? ' or IRMAA limit' : ''}, so nothing is converted.`, 'conversion');
+        }
+      }
       let conversionGross = 0;
       let conversionWithheld = 0;
       let conversionToRoth = 0;
@@ -309,6 +328,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         // QCD dollars are counted once, even when part of a QCD is taxable.
         totalDistributions: qcd + rmdTaxable + extra,
         conversionRequested,
+        conversionMethod,
         conversionGross,
         conversionWithheld,
         conversionToRoth,
@@ -370,6 +390,54 @@ function sumTotals(accounts: AccountYear[], people: PersonYear[]): YearTotals {
     endBalanceRoth: endRoth,
     endBalanceTotal: endPretax + endRoth,
   };
+}
+
+/**
+ * Largest conversion that keeps ordinary taxable income within the rule's
+ * bracket (and MAGI within its IRMAA limit, when the client will be on Medicare
+ * in the premium year), given the year's other income. Taxable income only
+ * rises with the conversion, so a bisection search to the dollar is exact.
+ */
+export function bracketFillAmount(
+  scenario: Scenario,
+  year: number,
+  rule: { bracketRate: number; irmaaMaxTier: number | null },
+  available: number,
+  ira: { taxableIra: number; deductibleContributions: number },
+): number {
+  if (available <= 0) return 0;
+  const a = scenario.analysis;
+  const brackets = taxParametersForYear(year, a.inflationRate).params.brackets[a.filingStatus];
+  const top = brackets.find((b) => Math.abs(b.rate - rule.bracketRate) < 1e-9)?.upTo;
+  if (top === undefined) return 0;
+
+  let magiCap = Infinity;
+  if (rule.irmaaMaxTier !== null && peopleAge65(scenario, year + IRMAA_LOOKBACK_YEARS) > 0) {
+    const schedule = irmaaScheduleForYear(year + IRMAA_LOOKBACK_YEARS, a.inflationRate)?.schedule;
+    const next = schedule?.tiers[rule.irmaaMaxTier];
+    if (next) {
+      const bound = a.filingStatus === 'joint' ? next.joint : next.single;
+      // Tiers apply above their bound; the top tier applies at its bound.
+      magiCap = rule.irmaaMaxTier + 1 === schedule!.tiers.length ? bound - 1 : bound;
+    }
+  }
+
+  const fits = (c: number) => {
+    const t = computeTax(householdIncomeForYear(scenario, year, { ...ira, conversion: c }));
+    return t.ordinaryTaxableIncome <= top + 1e-6 && t.irmaaMagi <= magiCap + 1e-6;
+  };
+  if (fits(available)) return available;
+  if (!fits(0)) return 0;
+  let lo = 0;
+  let hi = available;
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  // Whole dollars, never past the limit; the limit itself counts as within it.
+  const whole = Math.floor(hi);
+  return fits(whole) ? whole : Math.floor(lo);
 }
 
 /** Same inputs with no conversions and no QCDs: the "No strategy" baseline. */

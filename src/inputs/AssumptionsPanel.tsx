@@ -1,96 +1,170 @@
+import { useId } from 'react';
 import type { AnalysisSettings, EngineMessage, Scenario } from '../types';
 import { NumberField } from './NumberField';
 
 interface Props {
   scenario: Scenario;
   update: (fn: (s: Scenario) => Scenario) => void;
-  errors: EngineMessage[];
+  messages: EngineMessage[];
 }
 
-/** Filing status, other income, and tax-rate assumptions for the IRMAA check and tax comparison. */
-export function AssumptionsPanel({ scenario, update, errors }: Props) {
+/** Household income, filing status, and tax assumptions used for the tax estimate and IRMAA. */
+export function AssumptionsPanel({ scenario, update, messages }: Props) {
+  const spouseId = useId();
   const a = scenario.analysis;
   const set = (patch: Partial<AnalysisSettings>) => update((s) => ({ ...s, analysis: { ...s.analysis, ...patch } }));
-  const err = (field: string) => errors.find((m) => m.field === field)?.text;
+  const err = (field: string) => messages.find((m) => m.severity === 'error' && m.field === field)?.text;
+  const spouseErr = err('spouseDateOfBirth');
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <span className="field-label" id="filing-label">Filing status</span>
-          <div className="seg w-full" role="group" aria-labelledby="filing-label">
-            <button type="button" className="seg-btn flex-1" aria-pressed={a.filingStatus === 'single'} onClick={() => set({ filingStatus: 'single' })}>
-              Single
-            </button>
-            <button type="button" className="seg-btn flex-1" aria-pressed={a.filingStatus === 'joint'} onClick={() => set({ filingStatus: 'joint' })}>
-              Joint
-            </button>
-          </div>
-        </div>
-        <div>
-          <span className="field-label" id="enrollees-label">On Medicare</span>
-          <div className="seg w-full" role="group" aria-labelledby="enrollees-label">
-            <button type="button" className="seg-btn flex-1" aria-pressed={a.medicareEnrollees === 1} onClick={() => set({ medicareEnrollees: 1 })}>
-              1 person
-            </button>
-            <button type="button" className="seg-btn flex-1" aria-pressed={a.medicareEnrollees === 2} onClick={() => set({ medicareEnrollees: 2 })}>
-              2 people
-            </button>
-          </div>
+      <div>
+        <span className="field-label" id="filing-label">Filing status</span>
+        <div className="seg w-full" role="group" aria-labelledby="filing-label">
+          <button
+            type="button"
+            className="seg-btn flex-1"
+            aria-pressed={a.filingStatus === 'single'}
+            onClick={() => set({ filingStatus: 'single' })}
+          >
+            Single
+          </button>
+          <button
+            type="button"
+            className="seg-btn flex-1"
+            aria-pressed={a.filingStatus === 'joint'}
+            onClick={() =>
+              set({ filingStatus: 'joint', spouseDateOfBirth: a.spouseDateOfBirth || scenario.people[0]?.dateOfBirth || '' })
+            }
+          >
+            Married filing jointly
+          </button>
         </div>
       </div>
 
+      {a.filingStatus === 'joint' && (
+        <div>
+          <label htmlFor={spouseId} className="field-label">Spouse date of birth</label>
+          <input
+            id={spouseId}
+            type="date"
+            className={`field-input ${spouseErr ? 'field-input-error' : ''}`}
+            value={a.spouseDateOfBirth}
+            aria-invalid={spouseErr ? true : undefined}
+            aria-describedby={`${spouseId}-note`}
+            onChange={(e) => set({ spouseDateOfBirth: e.target.value })}
+          />
+          <p id={`${spouseId}-note`} className={spouseErr ? 'field-error' : 'field-hint'}>
+            {spouseErr ??
+              "Used for the age-65 deductions and Medicare. The spouse's own IRAs are not modeled yet; include any spouse income below."}
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Social Security per year"
+          kind="currency"
+          min={0}
+          value={a.socialSecurityBenefit}
+          externalError={err('socialSecurityBenefit')}
+          onCommit={(v) => set({ socialSecurityBenefit: v })}
+          testId="ss-benefit"
+        />
+        <NumberField
+          label="Starting at client age"
+          kind="integer"
+          min={0}
+          max={120}
+          value={a.socialSecurityStartAge}
+          externalError={err('socialSecurityStartAge')}
+          onCommit={(v) => set({ socialSecurityStartAge: v })}
+          testId="ss-age"
+        />
+      </div>
+      <p className="field-hint -mt-1">Household benefits before tax. The taxable share is calculated each year.</p>
+
       <NumberField
-        label="Other income each year (counted in MAGI)"
+        label="Pensions, wages, and interest"
         kind="currency"
         min={0}
-        value={a.otherIncome}
-        externalError={err('otherIncome')}
-        onCommit={(v) => set({ otherIncome: v })}
-        hint="Pensions, taxable Social Security, wages, interest (including tax-exempt), dividends, capital gains. Include a spouse's income if filing jointly. In today's dollars."
+        value={a.otherOrdinaryIncome}
+        externalError={err('otherOrdinaryIncome')}
+        onCommit={(v) => set({ otherOrdinaryIncome: v })}
         testId="other-income"
       />
-      <NumberField
-        label="Inflation"
-        kind="percent"
-        min={-50}
-        max={20}
-        value={a.inflationRate}
-        externalError={err('inflationRate')}
-        onCommit={(v) => set({ inflationRate: v })}
-        hint="Grows other income and indexes IRMAA thresholds and surcharges after 2026."
-        testId="inflation"
-      />
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Qualified dividends and gains"
+          kind="currency"
+          min={0}
+          value={a.qualifiedInvestmentIncome}
+          externalError={err('qualifiedInvestmentIncome')}
+          onCommit={(v) => set({ qualifiedInvestmentIncome: v })}
+          testId="qualified-income"
+        />
+        <NumberField
+          label="Tax-exempt interest"
+          kind="currency"
+          min={0}
+          value={a.taxExemptInterest}
+          externalError={err('taxExemptInterest')}
+          onCommit={(v) => set({ taxExemptInterest: v })}
+          testId="tax-exempt"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Itemized deductions"
+          kind="currency"
+          min={0}
+          value={a.itemizedDeductions}
+          externalError={err('itemizedDeductions')}
+          onCommit={(v) => set({ itemizedDeductions: v })}
+          hint="Used only if larger than the standard deduction."
+          testId="itemized"
+        />
+        <NumberField
+          label="State income tax rate"
+          kind="percent"
+          min={0}
+          max={100}
+          value={a.stateTaxRate}
+          externalError={err('stateTaxRate')}
+          onCommit={(v) => set({ stateTaxRate: v })}
+          hint="Flat rate; Social Security exempt."
+          testId="state-rate"
+        />
+      </div>
+      <p className="field-hint">All amounts are in today's dollars and grow with inflation.</p>
 
-      <fieldset className="space-y-2">
-        <legend className="field-label">Assumed tax rates for the trade-off estimate</legend>
-        <div className="grid grid-cols-2 gap-2">
-          <NumberField
-            label="On income added"
-            kind="percent"
-            min={0}
-            max={100}
-            value={a.addedIncomeTaxRate}
-            externalError={err('addedIncomeTaxRate')}
-            onCommit={(v) => set({ addedIncomeTaxRate: v })}
-            testId="rate-added"
-          />
-          <NumberField
-            label="On income avoided"
-            kind="percent"
-            min={0}
-            max={100}
-            value={a.avoidedIncomeTaxRate}
-            externalError={err('avoidedIncomeTaxRate')}
-            onCommit={(v) => set({ avoidedIncomeTaxRate: v })}
-            testId="rate-avoided"
-          />
-        </div>
-        <p className="field-hint">
-          Marginal rates you expect: on income the strategy adds (mostly conversion years), and on income it avoids
-          later, including pre-tax money left at the end. Federal plus state, if you want both reflected.
-        </p>
-      </fieldset>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Inflation"
+          kind="percent"
+          min={-50}
+          max={20}
+          value={a.inflationRate}
+          externalError={err('inflationRate')}
+          onCommit={(v) => set({ inflationRate: v })}
+          testId="inflation"
+        />
+        <NumberField
+          label="Heirs' tax rate"
+          kind="percent"
+          min={0}
+          max={100}
+          value={a.heirsTaxRate}
+          externalError={err('heirsTaxRate')}
+          onCommit={(v) => set({ heirsTaxRate: v })}
+          testId="heirs-rate"
+        />
+      </div>
+      <p className="field-hint -mt-1">
+        Inflation grows the amounts above and indexes brackets and IRMAA after 2026. The heirs' rate applies to the
+        pre-tax balance left at the end.
+      </p>
+
       <div className="space-y-2">
         <label className="flex items-start gap-2 text-sm text-ink-2">
           <input
@@ -102,7 +176,7 @@ export function AssumptionsPanel({ scenario, update, errors }: Props) {
           <span>
             Discount at the investment return
             <span className="block text-xs text-muted">
-              Keeps a conversion tax-neutral when both rates are equal. Turn off to enter your own discount rate.
+              Used for present values. Turn off to enter your own discount rate.
             </span>
           </span>
         </label>

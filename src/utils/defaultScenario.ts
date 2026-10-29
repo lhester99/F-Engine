@@ -4,17 +4,19 @@ import type { AnalysisSettings, Scenario } from '../types';
 
 export const PRIMARY_ID = 'client';
 
-/**
- * Default tax and IRMAA assumptions. Both tax rates start equal so the
- * comparison begins neutral; the advisor sets them for the client.
- */
+/** Default household income and tax assumptions for the hypothetical client. */
 export const DEFAULT_ANALYSIS: AnalysisSettings = {
   filingStatus: 'single',
-  medicareEnrollees: 1,
-  otherIncome: 60_000,
+  spouseDateOfBirth: '',
+  socialSecurityBenefit: 36_000,
+  socialSecurityStartAge: 67,
+  otherOrdinaryIncome: 15_000,
+  qualifiedInvestmentIncome: 5_000,
+  taxExemptInterest: 0,
+  itemizedDeductions: 0,
+  stateTaxRate: 0,
   inflationRate: 0.025,
-  addedIncomeTaxRate: 0.24,
-  avoidedIncomeTaxRate: 0.24,
+  heirsTaxRate: 0.24,
   discountRate: 0.04,
   discountMatchesReturn: true,
 };
