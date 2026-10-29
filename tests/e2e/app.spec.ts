@@ -238,7 +238,7 @@ test('findings, trade-offs, and assumptions respond to the strategy', async ({ p
   await page.getByTestId('state-rate').fill('5');
   await expect(summary).not.toHaveText(before!);
   await page.getByTestId('heirs-rate').fill('32');
-  await page.getByRole('button', { name: 'Married filing jointly' }).click();
+  await page.getByRole('button', { name: 'Add spouse' }).click();
   await page.getByLabel('Spouse date of birth').fill('1958-02-02');
   await page.getByTestId('ss-benefit').fill('48000');
   await page.getByTestId('ss-age').fill('70');
@@ -347,5 +347,32 @@ test('taxable account, cash, spending, tax source, and the Wealth tab', async ({
   await expect(page.getByText('Taxable account, strategy')).toBeVisible();
   await page.getByRole('button', { name: 'After-tax value' }).click();
   await expect(page.getByTestId('wealth-chart')).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+test('spouse, first death, and survivor view', async ({ page }) => {
+  await openInputs(page);
+  await page.getByRole('button', { name: 'Add spouse' }).click();
+  await page.getByLabel('Spouse date of birth').fill('1959-02-02');
+  await page.getByTestId('spouse-ss').fill('22000');
+  await page.getByTestId('spouse-ss-age').fill('67');
+  await page.getByLabel('Spouse Traditional IRA 1 — prior December 31 balance').fill('600000');
+  await page.getByRole('button', { name: 'Add spouse Traditional IRA' }).click();
+  await page.getByRole('button', { name: 'Remove Spouse Traditional IRA 2' }).click();
+  await page.getByTestId('balance-spouse-roth').fill('50000');
+  await page.getByRole('checkbox', { name: /Model the first death/ }).check();
+  await page.getByLabel('Who dies first').selectOption('client');
+  await page.getByTestId('death-age').fill('84');
+  await page.getByTestId('income-after').fill('60');
+  await page.getByTestId('spending-after').fill('80');
+  await expect(page.getByTestId('finding-survivor')).toContainText('the survivor files single');
+  await page.getByRole('group', { name: 'Convert from' }).getByRole('button', { name: 'Spouse’s IRAs' }).click();
+  await page.getByRole('button', { name: 'Apply to range' }).click();
+  await page.getByRole('group', { name: 'QCDs from' }).getByRole('button', { name: 'Spouse’s IRAs' }).click();
+  await page.getByRole('tab', { name: 'Tax Brackets' }).click();
+  await expect(page.getByTestId('bracket-chart').getByText('First death')).toBeVisible();
+  await expect(page.getByTestId('plan-table')).toContainText('Single');
+  await page.getByRole('button', { name: 'Remove spouse', exact: true }).click();
+  await expect(page.getByTestId('finding-survivor')).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });

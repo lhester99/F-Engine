@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from '../calculations/dates';
 import { qcdLimitForYear } from '../calculations/qcd';
 import { MessageList } from '../components/MessageList';
@@ -6,6 +7,7 @@ import { LATEST_PUBLISHED_QCD_YEAR } from '../data/qcdLimits';
 import type { EngineMessage, OneTimeQcd, RecurringQcdRule, Scenario } from '../types';
 import { formatUsd } from '../utils/format';
 import { NumberField } from './NumberField';
+import { PersonPicker } from './PersonPicker';
 
 interface Props {
   scenario: Scenario;
@@ -17,7 +19,8 @@ let nextId = 1;
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${nextId++}`;
 
 export function QcdPanel({ scenario, update, messages }: Props) {
-  const person = scenario.people[0]!;
+  const [personId, setPersonId] = useState(scenario.people[0]!.id);
+  const person = scenario.people.find((p) => p.id === personId) ?? scenario.people[0]!;
   const birth = parseIsoDate(person.dateOfBirth);
   const halfDate = birth ? dateAttaining70AndAHalf(birth) : null;
   const firstEligibleAge = birth && halfDate ? halfDate.year - birth.year : 71;
@@ -33,6 +36,7 @@ export function QcdPanel({ scenario, update, messages }: Props) {
 
   return (
     <div className="space-y-4">
+      <PersonPicker people={scenario.people} value={person.id} onChange={setPersonId} label="QCDs from" />
       <p className="text-xs text-ink-2">
         {halfDate ? <>Eligible from age 70½ ({formatCalendarDate(halfDate)}). </> : null}
         Limit {formatUsd(qcdLimitForYear(scenario.qcdLimits, scenario.startYear))} per person in {scenario.startYear}. QCDs count

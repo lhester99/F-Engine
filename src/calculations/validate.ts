@@ -37,6 +37,12 @@ export function validateScenario(s: Scenario): EngineMessage[] {
     } else if (ageAtStart > 120) {
       err('dob-too-old', 'Date of birth implies an age over 120.', 'dateOfBirth', p.id);
     }
+    if (!isNum(p.socialSecurityBenefit) || p.socialSecurityBenefit < 0) {
+      err('ss-benefit', 'Social Security must be zero or positive.', 'socialSecurityBenefit', p.id);
+    }
+    if (!isWholeAge(p.socialSecurityStartAge)) {
+      err('ss-age', 'Social Security start age must be a whole number.', 'socialSecurityStartAge', p.id);
+    }
     if (p.delayFirstRmd) {
       const start = getRmdStart(birth);
       if (start.firstRmdYear < s.startYear) {
@@ -46,6 +52,48 @@ export function validateScenario(s: Scenario): EngineMessage[] {
           'delayFirstRmd',
           p.id,
         );
+      }
+    }
+  }
+
+  if (s.people.length > 2) err('people', 'At most two people (spouses) are supported.');
+  if (s.people.length === 2) {
+    const [a, b] = s.people.map((p) => parseIsoDate(p.dateOfBirth));
+    if (a && b && Math.abs(a.year - b.year) > 10) {
+      warn(
+        'joint-life-table',
+        'One spouse is more than 10 years younger. If that spouse is the sole beneficiary, the IRS Joint and Last Survivor Table applies and gives smaller RMDs than shown. That table is not yet supported; the Uniform Lifetime Table is used.',
+        'dateOfBirth',
+      );
+    }
+    const sv = s.survivorship;
+    if (sv.enabled) {
+      const dying = s.people.find((p) => p.id === sv.firstDeathPersonId);
+      const db = dying ? parseIsoDate(dying.dateOfBirth) : null;
+      if (!dying) err('death-person', 'Choose which spouse dies first.', 'survivorship');
+      else if (!isWholeAge(sv.deathAge)) err('death-age', 'Age at death must be a whole number.', 'deathAge');
+      else if (db && db.year + sv.deathAge < s.startYear) {
+        err('death-age', `Age at death must be at least ${s.startYear - db.year} (the projection starts in ${s.startYear}).`, 'deathAge');
+      } else if (db) {
+        const dy = db.year + sv.deathAge;
+        const late = [
+          ...s.strategy.conversions.filter((c) => c.personId === dying.id && c.year > dy),
+          ...s.strategy.oneTimeQcds.filter((q) => q.personId === dying.id && q.year > dy),
+        ];
+        const lateRules = [...s.strategy.recurringQcds, ...s.strategy.bracketFills].filter((r) => r.personId === dying.id && db.year + r.endAge > dy);
+        if (late.length || lateRules.length) {
+          warn(
+            'after-death-ignored',
+            `${dying.label}'s conversions and QCDs after ${dy} are ignored; after the rollover, add them for the survivor instead.`,
+            'survivorship',
+          );
+        }
+      }
+      for (const [v, field, label] of [
+        [sv.otherIncomeAfter, 'otherIncomeAfter', 'Income that continues'],
+        [sv.spendingAfter, 'spendingAfter', 'Spending that continues'],
+      ] as const) {
+        if (!isNum(v) || v < 0 || v > 2) err(field, `${label} must be between 0% and 200%.`, field);
       }
     }
   }
@@ -147,11 +195,7 @@ export function validateAnalysis(a: AnalysisSettings): EngineMessage[] {
   const bad = (code: string, text: string, field: string) => out.push({ severity: 'error', code, text, field });
   const nonNeg = (v: number) => isNum(v) && v >= 0;
   const isRate = (v: number) => isNum(v) && v >= 0 && v <= 1;
-  if (a.filingStatus === 'joint' && !parseIsoDate(a.spouseDateOfBirth)) {
-    bad('spouse-dob', "Enter the spouse's date of birth for joint filing.", 'spouseDateOfBirth');
-  }
   for (const [key, label] of [
-    ['socialSecurityBenefit', 'Social Security benefits'],
     ['otherOrdinaryIncome', 'Other ordinary income'],
     ['qualifiedInvestmentIncome', 'Qualified dividends and gains'],
     ['taxExemptInterest', 'Tax-exempt interest'],
@@ -159,7 +203,6 @@ export function validateAnalysis(a: AnalysisSettings): EngineMessage[] {
   ] as const) {
     if (!nonNeg(a[key])) bad(key, `${label} must be zero or positive.`, key);
   }
-  if (!isWholeAge(a.socialSecurityStartAge)) bad('ss-age', 'Social Security start age must be a whole number.', 'socialSecurityStartAge');
   if (!isRate(a.stateTaxRate)) bad('state-rate', 'State tax rate must be between 0% and 100%.', 'stateTaxRate');
   if (!isRate(a.heirsTaxRate)) bad('heirs-rate', "Heirs' tax rate must be between 0% and 100%.", 'heirsTaxRate');
   if (!isNum(a.inflationRate) || a.inflationRate <= -1) bad('inflation', 'Inflation must be greater than -100%.', 'inflationRate');

@@ -4,7 +4,9 @@ import { PUBLISHED_QCD_LIMITS } from '../data/qcdLimits';
 import { formatUsd } from '../utils/format';
 
 export const KNOWN_LIMITATIONS = [
-  'One person’s IRAs only in this version. A spouse can be entered for joint filing (deductions and Medicare), but the spouse’s own IRAs, the first spouse’s death, and the switch to single filing are not modeled yet. The Joint and Last Survivor Table (spouse sole beneficiary more than 10 years younger) is not used.',
+  'The Joint and Last Survivor Table (spouse is the sole beneficiary and more than 10 years younger) is not supported; the Uniform Lifetime Table is used, which overstates RMDs for that couple. The app shows a note when it applies.',
+  'First death: the death is assumed at the end of the death year (joint return, full RMD taken). The survivor always does a spousal rollover; remaining a beneficiary of an inherited IRA instead, and qualifying-surviving-spouse filing with a dependent child, are not modeled. The survivor keeps the larger of the two Social Security benefits as entered, a simplification of the survivor benefit rules.',
+  'Only one first death is modeled; the survivor lives to the end of the projection. The projection ends when the client would reach the ending age.',
   'Traditional and Roth IRAs only. 401(k), 403(b), SEP and SIMPLE IRAs, Roth 401(k)s, and the still-working exception are not yet modeled.',
   'Heirs are represented only by one tax rate applied to the pre-tax balance left at the end. The 10-year rule and heirs’ own brackets are not modeled yet. Accounts the client has already inherited, and trusts as beneficiaries, are out of scope.',
   'Assumes none of the current year’s RMD has been taken yet. If the first RMD year was last year and that RMD was deferred to April 1 of this year, the deferred amount is not modeled.',
@@ -226,6 +228,28 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
               <li>
                 QCD gifts count as income not taxed. The comparison covers taxes only and does not treat the gifts
                 themselves as a cost.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Spouses and the first death</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Each spouse’s RMDs are computed on their own IRAs and their own age, then combined. A couple files jointly.</li>
+              <li>
+                Conversions are sized after both spouses’ RMDs for the year are known, so a fill-to-bracket rule sees the
+                household’s full income.
+              </li>
+              <li>
+                In the year of the first death the couple still files jointly and the deceased’s full RMD for that year is
+                taken. From January 1 of the next year the survivor treats the deceased’s IRAs as their own (spousal
+                rollover): RMDs use the survivor’s own age and Uniform Lifetime Table factor on the combined prior December 31
+                balance, and a younger survivor has no RMDs until their own RMD age.
+              </li>
+              <li>
+                The survivor files single: single brackets, standard deduction, senior deduction, Social Security thresholds,
+                and IRMAA thresholds. Household Social Security drops to the larger of the two benefits. Other income and
+                spending continue at the shares entered.
               </li>
             </ul>
           </section>

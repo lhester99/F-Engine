@@ -4,6 +4,7 @@ import type {
   AccountYear,
   EngineMessage,
   HouseholdCashFlow,
+  Person,
   PersonYear,
   ProjectionResult,
   Scenario,
@@ -13,7 +14,8 @@ import type {
 import { emptyStrategy, requestedConversion, requestedQcd } from '../strategies/schedule';
 import { allocateProRata } from './allocate';
 import { settleHouseholdYear } from './cashFlow';
-import { computeTax, householdIncomeForYear, NO_SIDE_INCOME, peopleAge65, taxParametersForYear, type SideIncome } from './federalTax';
+import { computeTax, householdIncomeForYear, NO_SIDE_INCOME, taxParametersForYear, type SideIncome } from './federalTax';
+import { alivePeople, deathYear, filingStatusForYear, ownerIdForYear, peopleAge65, spendingFactor } from './household';
 import { irmaaScheduleForYear, IRMAA_LOOKBACK_YEARS } from './irmaa';
 import { ageAttainedInYear, dateAttaining70AndAHalf, formatCalendarDate, parseIsoDate } from './dates';
 import { qcdLimitForYear } from './qcd';
@@ -61,7 +63,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
   const cf = scenario.cashFlow;
   let side = { taxable: cf.taxableBalance, basis: cf.taxableBasis, cash: cf.cashBalance };
   const irmaaDue = new Map<number, number>();
-  const primaryRoth = scenario.accounts.find((a) => a.ownerId === primary.id && a.type === 'roth_ira');
+  const dYear = deathYear(scenario);
 
   const years: YearResult[] = [];
   for (let year = scenario.startYear; year <= lastYear; year++) {
@@ -105,18 +107,24 @@ export function runProjection(scenario: Scenario): ProjectionResult {
     // Side-account income known at the start of the year (used when filling a bracket).
     const sideStart: SideIncome = { qualified: side.taxable * cf.taxableYield, ordinary: side.cash * cf.cashRate };
 
-    for (const person of scenario.people) {
+    // Phase A (steps 1–5) for every living person, so the household's RMD income is
+    // known before any conversion is sized in phase B.
+    const ctxs: PersonContext[] = [];
+    for (const person of alivePeople(scenario, year)) {
       const birth = parseIsoDate(person.dateOfBirth)!;
       const age = ageAttainedInYear(birth, year);
       const start = getRmdStart(birth);
       const isRmdYear = year >= start.firstRmdYear;
       const isFirstRmdYear = year === start.firstRmdYear;
-      const deferralThisYear = person.delayFirstRmd && isFirstRmdYear;
+      // A first RMD cannot be deferred past the owner's death; the deceased's full RMD is taken in the death year.
+      const diesThisYear = dYear === year && person.id === scenario.survivorship.firstDeathPersonId;
+      const deferralThisYear = person.delayFirstRmd && isFirstRmdYear && !diesThisYear;
       const distributionPeriod = isRmdYear ? uniformLifetimeDivisor(age) : null;
       const msg = (severity: EngineMessage['severity'], code: string, text: string, field?: string) =>
         yearMessages.push({ severity, code, text, year, personId: person.id, field });
 
-      const owned = scenario.accounts.filter((a) => a.ownerId === person.id);
+      // Includes a deceased spouse's IRAs after the spousal rollover.
+      const owned = scenario.accounts.filter((a) => ownerIdForYear(scenario, a, year) === person.id);
       const pretaxIras = owned.filter(
         (a) => ACCOUNT_RULES[a.type].taxTreatment === 'pretax' && ACCOUNT_RULES[a.type].rmdAggregation === 'ira',
       );
@@ -130,7 +138,9 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       let deductibleContributions = 0;
       for (const a of pretaxIras) {
         const c = a.contribution;
-        if (c && c.annualAmount > 0 && age <= c.throughAge && c.deductible !== false) deductibleContributions += c.annualAmount;
+        if (a.ownerId === person.id && c && c.annualAmount > 0 && age <= c.throughAge && c.deductible !== false) {
+          deductibleContributions += c.annualAmount;
+        }
       }
       if (year >= halfDate.year) {
         qcdOffsetPool.set(person.id, (qcdOffsetPool.get(person.id) ?? 0) + deductibleContributions);
@@ -254,6 +264,58 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       if (rmdDeferredToNextYear > 0 && year === lastYear) {
         msg('info', 'deferral-beyond-horizon', `Age ${age} (${year}): ${usd(rmdDeferredToNextYear)} deferred to April 1, ${year + 1}, after the projection ends.`);
       }
+      ctxs.push({
+        person,
+        age,
+        msg,
+        owned,
+        pretaxIras,
+        rothIra,
+        isRmdYear,
+        isFirstRmdYear,
+        distributionPeriod,
+        rmdForYear,
+        deferredIn,
+        rmdDeferredToNextYear,
+        requiredRmd,
+        qcd,
+        qcdTowardRmd,
+        qcdNotExcluded,
+        deductibleContributions,
+        rmdTaxable,
+        rmdShortfall,
+        extra,
+      });
+    }
+
+    // Phase B (steps 6–7): conversions and contributions, person by person, with
+    // the household's income (including earlier conversions this year) in view.
+    const householdIra = ctxs.reduce((x, c) => x + c.rmdTaxable + c.extra + c.qcdNotExcluded, 0);
+    const householdDeductible = ctxs.reduce((x, c) => x + c.deductibleContributions, 0);
+    let convertedSoFar = 0;
+    for (const ctx of ctxs) {
+      const {
+        person,
+        age,
+        msg,
+        owned,
+        pretaxIras,
+        rothIra,
+        isRmdYear,
+        isFirstRmdYear,
+        distributionPeriod,
+        rmdForYear,
+        deferredIn,
+        rmdDeferredToNextYear,
+        requiredRmd,
+        qcd,
+        qcdTowardRmd,
+        qcdNotExcluded,
+        deductibleContributions,
+        rmdTaxable,
+        rmdShortfall,
+        extra,
+      } = ctx;
 
       // Step 6: Roth conversions, only after the RMD has been satisfied.
       // A fixed amount for the year takes precedence over a fill-to-bracket rule.
@@ -271,7 +333,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
           year,
           fillRule,
           sumAvail(pretaxIras),
-          { taxableIra: rmdTaxable + extra + qcdNotExcluded, deductibleContributions },
+          { taxableIra: householdIra + convertedSoFar, deductibleContributions: householdDeductible },
           sideStart,
         );
         if (conversionRequested <= 0) {
@@ -306,6 +368,7 @@ export function runProjection(scenario: Scenario): ProjectionResult {
             amount = available;
           }
           conversionGross = take(pretaxIras, amount, 'conversionOut');
+          convertedSoFar += conversionGross;
           // Any tax withheld is settled with the household's taxes below.
           conversionToRoth = conversionGross;
           avail.set(rothIra.id, avail.get(rothIra.id)! + conversionToRoth);
@@ -313,9 +376,9 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         }
       }
 
-      // Step 7: contributions.
+      // Step 7: contributions (only to the person's own accounts, never to a deceased spouse's).
       for (const a of owned) {
-        if (a.contribution && a.contribution.annualAmount > 0 && age <= a.contribution.throughAge) {
+        if (a.ownerId === person.id && a.contribution && a.contribution.annualAmount > 0 && age <= a.contribution.throughAge) {
           avail.set(a.id, avail.get(a.id)! + a.contribution.annualAmount);
           accountYears.get(a.id)!.contribution += a.contribution.annualAmount;
         }
@@ -352,6 +415,8 @@ export function runProjection(scenario: Scenario): ProjectionResult {
 
     // Household taxes and cash flows outside the IRAs (see cashFlow.ts for the order).
     const sumP = (f: (p: PersonYear) => number) => personYears.reduce((x, p) => x + f(p), 0);
+    // Roth IRAs held by living people this year (after any rollover).
+    const rothsNow = scenario.accounts.filter((a) => a.type === 'roth_ira');
     const settled = settleHouseholdYear({
       scenario,
       year,
@@ -362,23 +427,38 @@ export function runProjection(scenario: Scenario): ProjectionResult {
       },
       iraCash: sumP((p) => p.rmdTaxableWithdrawal + p.extraWithdrawal),
       start: side,
-      rothAvailable: primaryRoth ? avail.get(primaryRoth.id)! : 0,
+      rothAvailable: rothsNow.reduce((x, a) => x + avail.get(a.id)!, 0),
       irmaaDue: irmaaDue.get(year) ?? 0,
-      spendingTarget: cf.spendingFromIra * Math.pow(1 + scenario.analysis.inflationRate, year - scenario.startYear),
+      spendingTarget:
+        cf.spendingFromIra * Math.pow(1 + scenario.analysis.inflationRate, year - scenario.startYear) * spendingFactor(scenario, year),
       source: strategy.conversionTaxSource,
     });
     const hmsg = (severity: EngineMessage['severity'], code: string, text: string, field?: string) =>
       yearMessages.push({ severity, code, text, year, personId: primary.id, field });
+    if (dYear === year) {
+      const deceased = scenario.people.find((p) => p.id === scenario.survivorship.firstDeathPersonId)!;
+      hmsg(
+        'info',
+        'first-death',
+        `${year}: ${deceased.label} dies at age ${scenario.survivorship.deathAge}. This year is filed jointly and the full RMD is taken; from ${year + 1} the survivor owns the IRAs and files single.`,
+      );
+    }
     const primaryAge = ageAttainedInYear(primaryBirth, year);
-    if (settled.conversionTaxWithheld > 0 && primaryRoth) {
-      // Withheld tax never reaches the Roth IRA.
-      const withheld = Math.min(settled.conversionTaxWithheld, avail.get(primaryRoth.id)!);
-      avail.set(primaryRoth.id, avail.get(primaryRoth.id)! - withheld);
-      accountYears.get(primaryRoth.id)!.conversionIn -= withheld;
-      const converter = personYears.find((p) => p.conversionGross > 0);
-      if (converter) {
-        converter.conversionWithheld = withheld;
-        converter.conversionToRoth = converter.conversionGross - withheld;
+    if (settled.conversionTaxWithheld > 0) {
+      // Withheld tax never reaches the Roth IRA. With two converters, it is split in
+      // proportion to each person's conversion.
+      const totalConv = sumP((p) => p.conversionGross);
+      let withheld = 0;
+      for (const p of personYears) {
+        if (p.conversionGross <= 0) continue;
+        const roth = scenario.accounts.find((a) => a.type === 'roth_ira' && ownerIdForYear(scenario, a, year) === p.personId);
+        if (!roth) continue;
+        const share = Math.min((settled.conversionTaxWithheld * p.conversionGross) / totalConv, avail.get(roth.id)!);
+        avail.set(roth.id, avail.get(roth.id)! - share);
+        accountYears.get(roth.id)!.conversionIn -= share;
+        p.conversionWithheld = share;
+        p.conversionToRoth = p.conversionGross - share;
+        withheld += share;
       }
       if (settled.conversionTaxFellBack) {
         hmsg(
@@ -389,9 +469,12 @@ export function runProjection(scenario: Scenario): ProjectionResult {
         );
       }
     }
-    if (settled.withdrawnRoth > 0 && primaryRoth) {
-      avail.set(primaryRoth.id, avail.get(primaryRoth.id)! - settled.withdrawnRoth);
-      accountYears.get(primaryRoth.id)!.withdrawal += settled.withdrawnRoth;
+    if (settled.withdrawnRoth > 0) {
+      const parts = allocateProRata(settled.withdrawnRoth, rothsNow.map((a) => avail.get(a.id)!));
+      rothsNow.forEach((a, i) => {
+        avail.set(a.id, avail.get(a.id)! - parts[i]!);
+        accountYears.get(a.id)!.withdrawal += parts[i]!;
+      });
     }
     if (settled.spendingShortfall > 0.5) {
       hmsg('warning', 'spending-shortfall', `Age ${primaryAge} (${year}): ${usd(settled.spendingShortfall)} of the spending could not be covered by the accounts modeled.`, 'spending');
@@ -493,6 +576,30 @@ function sumTotals(accounts: AccountYear[], people: PersonYear[], h: HouseholdCa
   };
 }
 
+/** Per-person values carried from phase A (steps 1–5) to phase B (steps 6–7). */
+interface PersonContext {
+  person: Person;
+  age: number;
+  msg: (severity: EngineMessage['severity'], code: string, text: string, field?: string) => void;
+  owned: Account[];
+  pretaxIras: Account[];
+  rothIra: Account | undefined;
+  isRmdYear: boolean;
+  isFirstRmdYear: boolean;
+  distributionPeriod: number | null;
+  rmdForYear: number;
+  deferredIn: number;
+  rmdDeferredToNextYear: number;
+  requiredRmd: number;
+  qcd: number;
+  qcdTowardRmd: number;
+  qcdNotExcluded: number;
+  deductibleContributions: number;
+  rmdTaxable: number;
+  rmdShortfall: number;
+  extra: number;
+}
+
 /**
  * Largest conversion that keeps ordinary taxable income within the rule's
  * bracket (and MAGI within its IRMAA limit, when the client will be on Medicare
@@ -509,7 +616,8 @@ export function bracketFillAmount(
 ): number {
   if (available <= 0) return 0;
   const a = scenario.analysis;
-  const brackets = taxParametersForYear(year, a.inflationRate).params.brackets[a.filingStatus];
+  const status = filingStatusForYear(scenario, year);
+  const brackets = taxParametersForYear(year, a.inflationRate).params.brackets[status];
   const top = brackets.find((b) => Math.abs(b.rate - rule.bracketRate) < 1e-9)?.upTo;
   if (top === undefined) return 0;
 
@@ -518,7 +626,8 @@ export function bracketFillAmount(
     const schedule = irmaaScheduleForYear(year + IRMAA_LOOKBACK_YEARS, a.inflationRate)?.schedule;
     const next = schedule?.tiers[rule.irmaaMaxTier];
     if (next) {
-      const bound = a.filingStatus === 'joint' ? next.joint : next.single;
+      // The IRMAA tier is set by this year's return (filing status), for premiums two years later.
+      const bound = status === 'joint' ? next.joint : next.single;
       // Tiers apply above their bound; the top tier applies at its bound.
       magiCap = rule.irmaaMaxTier + 1 === schedule!.tiers.length ? bound - 1 : bound;
     }

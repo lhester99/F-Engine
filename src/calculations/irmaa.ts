@@ -5,7 +5,8 @@ import {
   type IrmaaSchedule,
 } from '../data/irmaa';
 import type { AnalysisSettings, FilingStatus, ProjectionResult, Scenario } from '../types';
-import { computeTax, householdIncomeForYear, marginalRate, peopleAge65, type HouseholdIncome, type TaxResult } from './federalTax';
+import { computeTax, householdIncomeForYear, marginalRate, type HouseholdIncome, type TaxResult } from './federalTax';
+import { filingStatusForYear, peopleAge65 } from './household';
 
 /** Medicare eligibility age used to decide whether IRMAA can apply in a premium year. */
 export const MEDICARE_AGE = 65;
@@ -116,7 +117,9 @@ export function incomeByYear(result: ProjectionResult, scenario: Scenario): Inco
     const medicareApplies = enrollees > 0;
     const found = irmaaScheduleForYear(premiumYear, a.inflationRate);
     const schedule = found?.schedule;
-    const tier = schedule && medicareApplies ? irmaaTier(tax.irmaaMagi, a.filingStatus, schedule) : 0;
+    // The tier uses the filing status on the income year's return.
+    const status = filingStatusForYear(scenario, y.year);
+    const tier = schedule && medicareApplies ? irmaaTier(tax.irmaaMagi, status, schedule) : 0;
     return {
       year: y.year,
       age: y.age,
@@ -130,7 +133,7 @@ export function incomeByYear(result: ProjectionResult, scenario: Scenario): Inco
       enrollees,
       tier,
       annualSurcharge: schedule ? annualIrmaaSurcharge(tier, schedule, enrollees) : 0,
-      thresholds: schedule ? schedule.tiers.map((tr) => (a.filingStatus === 'joint' ? tr.joint : tr.single)) : [],
+      thresholds: schedule ? schedule.tiers.map((tr) => (status === 'joint' ? tr.joint : tr.single)) : [],
       thresholdsProjected: found?.projected ?? true,
     };
   });
@@ -146,7 +149,7 @@ export function surchargeForIncome(scenario: Scenario, incomeYear: number, magi:
   const enrollees = peopleAge65(scenario, premiumYear);
   const schedule = irmaaScheduleForYear(premiumYear, a.inflationRate)?.schedule;
   if (!schedule || enrollees === 0) return 0;
-  return annualIrmaaSurcharge(irmaaTier(magi, a.filingStatus, schedule), schedule, enrollees);
+  return annualIrmaaSurcharge(irmaaTier(magi, filingStatusForYear(scenario, incomeYear), schedule), schedule, enrollees);
 }
 
 export interface IrmaaSummary {

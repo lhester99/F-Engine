@@ -7,6 +7,7 @@ import { fillConversionRange, removeConversionYear, setConversionYear } from '..
 import type { BracketFillRule, ConversionTaxSource, EngineMessage, ProjectionResult, Scenario } from '../types';
 import { formatUsd } from '../utils/format';
 import { NumberField } from './NumberField';
+import { PersonPicker } from './PersonPicker';
 
 interface Props {
   scenario: Scenario;
@@ -21,7 +22,8 @@ const irmaaLimitLabel = (t: number | null) =>
   t === null ? 'no IRMAA limit' : t === 0 ? 'no IRMAA surcharge' : `IRMAA tier ${t} or lower`;
 
 export function ConversionPanel({ scenario, update, result, messages }: Props) {
-  const person = scenario.people[0]!;
+  const [personId, setPersonId] = useState(scenario.people[0]!.id);
+  const person = scenario.people.find((p) => p.id === personId) ?? scenario.people[0]!;
   const birth = parseIsoDate(person.dateOfBirth);
   const currentAge = birth ? scenario.startYear - birth.year : 65;
   const [range, setRange] = useState({ startAge: Math.max(currentAge, 0), endAge: Math.max(currentAge + 4, 0), amount: 50_000 });
@@ -73,6 +75,7 @@ export function ConversionPanel({ scenario, update, result, messages }: Props) {
 
   return (
     <div className="space-y-3">
+      <PersonPicker people={scenario.people} value={person.id} onChange={setPersonId} label="Convert from" />
       <fieldset className="space-y-2">
         <legend className="field-label">Set conversions for a range of ages</legend>
         <div className="seg w-full" role="group" aria-label="Conversion method">
@@ -94,7 +97,7 @@ export function ConversionPanel({ scenario, update, result, messages }: Props) {
               <select id="fill-rate" className="field-input" value={fillRate} onChange={(e) => setFillRate(Number(e.target.value))}>
                 {BRACKET_RATES.map((r) => (
                   <option key={r} value={r}>
-                    {Math.round(r * 100)}% bracket
+                    {Math.round(r * 100)}%
                   </option>
                 ))}
               </select>

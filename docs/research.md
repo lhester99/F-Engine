@@ -197,7 +197,29 @@ year, IRMAA in its premium year, and the heirs' rate on the pre-tax balance left
 end. Validated with a hand-calculated case (tests/calculations/analysis.test.ts) and the
 identity net = avoided later − paid earlier.
 
-## 9. Out of scope (stated in the app and README)
+## 9. Spouses and the first death (added October 29, 2026)
+
+From the engineer's knowledge of the rules; not separately verified online on this
+date (IRS.gov unreachable from the build environment). Please spot-check against
+Pub. 590-B, "Spouse as sole beneficiary".
+
+- Each IRA owner's RMD is computed on their own IRAs and age (Treas. Reg. §1.408-8).
+- Year of death: if the owner died on or after the required beginning date, the
+  owner's RMD for the year of death must be taken (by the beneficiary if not before
+  death). The app assumes the full RMD is taken that year.
+- A surviving spouse who is the sole beneficiary may treat the IRA as their own
+  (spousal rollover/election); from then on, RMDs follow the survivor's own age and
+  required beginning date. A younger survivor can therefore defer RMDs.
+- A surviving spouse may file jointly for the year of death (IRC §6013(a)(2)) and
+  files single afterward unless a qualifying surviving spouse (dependent child),
+  which is not modeled.
+- Social Security survivor benefits: simplified to the larger of the two entered
+  benefits. Actual survivor benefits depend on claiming ages and can be reduced.
+- Joint and Last Survivor Table (Table II): applies when the sole beneficiary is a
+  spouse more than 10 years younger. Not implemented, because the table values could
+  not be verified from the build environment; the app warns when it applies.
+
+## 10. Out of scope (stated in the app and README)
 
 Inherited accounts, non-spouse beneficiaries, the 10-year rule, death of a spouse
 during the projection, and spousal rollovers.

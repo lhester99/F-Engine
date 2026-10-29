@@ -18,6 +18,28 @@ export interface Person {
   dateOfBirth: string;
   /** Delay the first RMD to April 1 of the following year. */
   delayFirstRmd: boolean;
+  /** This person's Social Security benefit per year before tax, in today's dollars (entered, never projected). */
+  socialSecurityBenefit: number;
+  /** This person's age when that benefit begins (already claiming: current age or lower). */
+  socialSecurityStartAge: number;
+}
+
+/**
+ * The first death between spouses. In the death year the couple still files
+ * jointly and the deceased's RMD for that year is taken in full. From January 1
+ * of the next year the survivor rolls the deceased's IRAs into their own
+ * (spousal rollover), files single, and keeps the larger Social Security benefit.
+ */
+export interface SurvivorshipSettings {
+  enabled: boolean;
+  /** Spouse who dies first. */
+  firstDeathPersonId: string;
+  /** That spouse's age in the year of death. */
+  deathAge: number;
+  /** Other entered income that continues for the survivor, as a fraction (e.g. a pension's survivor benefit). */
+  otherIncomeAfter: number;
+  /** Spending from IRA withdrawals that continues for the survivor, as a fraction. */
+  spendingAfter: number;
 }
 
 export interface ContributionRule {
@@ -118,14 +140,7 @@ export type FilingStatus = 'single' | 'joint';
  * never calculated.
  */
 export interface AnalysisSettings {
-  filingStatus: FilingStatus;
-  /** Spouse's date of birth (YYYY-MM-DD) when filing jointly; used for age-65 deductions and Medicare. */
-  spouseDateOfBirth: string;
-  /** Household Social Security benefits per year, before tax. */
-  socialSecurityBenefit: number;
-  /** Client's age when the Social Security benefits above begin (already-claimed clients: current age or lower). */
-  socialSecurityStartAge: number;
-  /** Pensions, wages, interest, and other ordinary income. */
+  /** Pensions, wages, interest, and other ordinary income (household). */
   otherOrdinaryIncome: number;
   /** Qualified dividends and long-term capital gains. */
   qualifiedInvestmentIncome: number;
@@ -169,9 +184,10 @@ export interface CashFlowSettings {
 export interface Scenario {
   /** First projection year. Balances are as of December 31 of the prior year. */
   startYear: number;
+  /** One person, or two spouses filing jointly. people[0] is the client. */
   people: Person[];
   accounts: Account[];
-  /** Projection runs through the year the primary person (people[0]) attains this age. */
+  /** Projection runs through the year the client (people[0]) would attain this age, even if the client dies first. */
   endAge: number;
   returns: ReturnAssumption;
   extraWithdrawals: ExtraWithdrawalRule[];
@@ -179,6 +195,7 @@ export interface Scenario {
   strategy: Strategy;
   analysis: AnalysisSettings;
   cashFlow: CashFlowSettings;
+  survivorship: SurvivorshipSettings;
 }
 
 export type MessageSeverity = 'error' | 'warning' | 'info';

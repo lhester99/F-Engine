@@ -117,7 +117,7 @@ describe('App', () => {
   it('shows a clear message for an invalid ending age', async () => {
     const user = userEvent.setup();
     render(<App />);
-    const end = screen.getByLabelText('Projection ending age');
+    const end = screen.getByLabelText("Projection ending age (client's age)");
     await user.clear(end);
     await user.type(end, '60');
     expect(screen.getByTestId('input-errors')).toHaveTextContent(/ending age must be at least/i);

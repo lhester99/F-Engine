@@ -9,7 +9,7 @@ import {
   type FederalTaxYear,
 } from '../data/federalTax';
 import type { FilingStatus, Scenario } from '../types';
-import { parseIsoDate } from './dates';
+import { filingStatusForYear, otherIncomeFactor, peopleAge65, socialSecurityForYear } from './household';
 
 const floorTo = (v: number, step: number) => Math.floor(v / step) * step;
 
@@ -218,17 +218,6 @@ export interface SideIncome {
 
 export const NO_SIDE_INCOME: SideIncome = { qualified: 0, ordinary: 0 };
 
-/** Number of people on the return who are 65 or older at the end of `year`. */
-export function peopleAge65(scenario: Scenario, year: number): number {
-  const primary = parseIsoDate(scenario.people[0]?.dateOfBirth ?? '');
-  let n = primary && year - primary.year >= 65 ? 1 : 0;
-  if (scenario.analysis.filingStatus === 'joint') {
-    const spouse = parseIsoDate(scenario.analysis.spouseDateOfBirth);
-    if (spouse && year - spouse.year >= 65) n += 1;
-  }
-  return n;
-}
-
 /** Builds the year's household income from the entered assumptions plus the projected IRA amounts. */
 export function householdIncomeForYear(
   scenario: Scenario,
@@ -238,15 +227,14 @@ export function householdIncomeForYear(
 ): HouseholdIncome {
   const a = scenario.analysis;
   const g = Math.pow(1 + a.inflationRate, year - scenario.startYear);
-  const primary = parseIsoDate(scenario.people[0]?.dateOfBirth ?? '');
-  const age = primary ? year - primary.year : 0;
   return {
     year,
-    filingStatus: a.filingStatus,
-    ordinaryIncome: a.otherOrdinaryIncome * g + ira.taxableIra + ira.conversion - ira.deductibleContributions + side.ordinary,
-    qualifiedIncome: a.qualifiedInvestmentIncome * g + side.qualified,
-    taxExemptInterest: a.taxExemptInterest * g,
-    socialSecurity: age >= a.socialSecurityStartAge ? a.socialSecurityBenefit * g : 0,
+    filingStatus: filingStatusForYear(scenario, year),
+    ordinaryIncome:
+      a.otherOrdinaryIncome * g * otherIncomeFactor(scenario, year) + ira.taxableIra + ira.conversion - ira.deductibleContributions + side.ordinary,
+    qualifiedIncome: a.qualifiedInvestmentIncome * g * otherIncomeFactor(scenario, year) + side.qualified,
+    taxExemptInterest: a.taxExemptInterest * g * otherIncomeFactor(scenario, year),
+    socialSecurity: socialSecurityForYear(scenario, year),
     peopleAge65: peopleAge65(scenario, year),
     itemizedDeductions: a.itemizedDeductions * g,
     stateTaxRate: a.stateTaxRate,

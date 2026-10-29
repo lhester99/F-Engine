@@ -21,8 +21,9 @@ export function ClientPanel({ scenario, update, messages }: Props) {
   const birth = parseIsoDate(person.dateOfBirth);
   const rmdStart = birth ? getRmdStart(birth) : null;
   const priorYear = scenario.startYear - 1;
-  const traditional = scenario.accounts.filter((a) => a.type === 'traditional_ira');
-  const roth = scenario.accounts.find((a) => a.type === 'roth_ira');
+  const mine = (a: Account) => a.ownerId === person.id;
+  const traditional = scenario.accounts.filter((a) => mine(a) && a.type === 'traditional_ira');
+  const roth = scenario.accounts.find((a) => mine(a) && a.type === 'roth_ira');
   const firstTrad = traditional[0];
   const tradContribution = firstTrad?.contribution ?? { annualAmount: 0, throughAge: 72, deductible: true };
   const extra = scenario.extraWithdrawals[0];
@@ -35,7 +36,7 @@ export function ClientPanel({ scenario, update, messages }: Props) {
 
   const addTraditional = () =>
     update((s) => {
-      const n = s.accounts.filter((a) => a.type === 'traditional_ira').length + 1;
+      const n = s.accounts.filter((a) => mine(a) && a.type === 'traditional_ira').length + 1;
       let i = n;
       while (s.accounts.some((a) => a.id === `trad-${i}`)) i++;
       const acct: Account = {
@@ -45,7 +46,7 @@ export function ClientPanel({ scenario, update, messages }: Props) {
         label: `Traditional IRA ${n}`,
         priorYearEndBalance: 0,
       };
-      const rothIdx = s.accounts.findIndex((a) => a.type === 'roth_ira');
+      const rothIdx = s.accounts.findIndex((a) => mine(a) && a.type === 'roth_ira');
       const accounts = [...s.accounts];
       accounts.splice(rothIdx === -1 ? accounts.length : rothIdx, 0, acct);
       return { ...s, accounts };
@@ -58,7 +59,7 @@ export function ClientPanel({ scenario, update, messages }: Props) {
         ...s,
         accounts: s.accounts
           .filter((a) => a.id !== id)
-          .map((a) => (a.type === 'traditional_ira' ? { ...a, label: `Traditional IRA ${++n}` } : a)),
+          .map((a) => (mine(a) && a.type === 'traditional_ira' ? { ...a, label: `Traditional IRA ${++n}` } : a)),
       };
     });
 
@@ -90,8 +91,30 @@ export function ClientPanel({ scenario, update, messages }: Props) {
         </p>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Client Social Security / yr"
+          kind="currency"
+          min={0}
+          value={person.socialSecurityBenefit}
+          externalError={messages.find((m) => m.severity === 'error' && m.field === 'socialSecurityBenefit' && m.personId === person.id)?.text}
+          onCommit={(v) => update((s) => ({ ...s, people: s.people.map((p, i) => (i === 0 ? { ...p, socialSecurityBenefit: v } : p)) }))}
+          testId="ss-benefit"
+        />
+        <NumberField
+          label="Starting at age"
+          kind="integer"
+          min={0}
+          max={120}
+          value={person.socialSecurityStartAge}
+          onCommit={(v) => update((s) => ({ ...s, people: s.people.map((p, i) => (i === 0 ? { ...p, socialSecurityStartAge: v } : p)) }))}
+          testId="ss-age"
+        />
+      </div>
+      <p className="field-hint -mt-1">Before tax, in today's dollars. The taxable share is calculated each year.</p>
+
       <NumberField
-        label="Projection ending age"
+        label="Projection ending age (client's age)"
         kind="integer"
         value={scenario.endAge}
         min={1}

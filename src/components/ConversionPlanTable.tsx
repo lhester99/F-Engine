@@ -21,6 +21,7 @@ export function ConversionPlanTable({ baseline, strategy }: Props) {
             <th scope="col" className="px-2 py-2 text-right font-medium">Roth conversion</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">Taxable IRA distributions</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">Taxable income</th>
+            <th scope="col" className="px-2 py-2 text-left font-medium">Return</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">Federal bracket</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">Rate on next dollar</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">Federal + state tax</th>
@@ -40,6 +41,7 @@ export function ConversionPlanTable({ baseline, strategy }: Props) {
                 <td className={`px-2 py-1 text-right ${converting ? 'font-semibold text-ink' : 'text-muted'}`}>{formatUsd(s.conversion)}</td>
                 <td className="px-2 py-1 text-right">{formatUsd(s.taxableIra)}</td>
                 <td className="px-2 py-1 text-right">{formatUsd(s.tax.taxableIncome)}</td>
+                <td className="px-2 py-1 text-left text-ink-2">{s.income.filingStatus === 'joint' ? 'Joint' : 'Single'}</td>
                 <td className="px-2 py-1 text-right">{formatPercent(s.tax.bracketRate, 0)}</td>
                 <td className="px-2 py-1 text-right">{formatPercent(s.marginalRate)}</td>
                 <td className="px-2 py-1 text-right">{formatUsd(s.tax.totalTax)}</td>
@@ -57,7 +59,7 @@ export function ConversionPlanTable({ baseline, strategy }: Props) {
             <th scope="row" className="px-2 py-1.5 text-left">Total</th>
             <td className="px-2 py-1.5 text-right">{formatUsd(total(strategy, (y) => y.conversion))}</td>
             <td className="px-2 py-1.5 text-right">{formatUsd(total(strategy, (y) => y.taxableIra))}</td>
-            <td className="px-2 py-1.5 text-right" colSpan={3} />
+            <td className="px-2 py-1.5 text-right" colSpan={4} />
             <td className="px-2 py-1.5 text-right">{formatUsd(total(strategy, (y) => y.tax.totalTax))}</td>
             <td className="px-2 py-1.5" />
             <td className="px-2 py-1.5 text-right">

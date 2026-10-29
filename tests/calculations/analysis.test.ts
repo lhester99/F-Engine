@@ -151,7 +151,7 @@ describe('IRMAA', () => {
       dob: '1958-05-05',
       endAge: 70,
       traditional: [800_000],
-      analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 100_000, inflationRate: 0, filingStatus: 'single' },
+      analysis: { ...NO_OTHER_INCOME, otherOrdinaryIncome: 100_000, inflationRate: 0 },
       strategy: { conversions: [{ personId: 'p1', year: 2026, amount: 50_000 }] },
     });
     const income = incomeByYear(runProjection(s), s);
@@ -256,8 +256,8 @@ describe('estimated tax comparison', () => {
   it('validates the assumptions', () => {
     expect(validateAnalysis(DEFAULT_ANALYSIS)).toHaveLength(0);
     expect(
-      validateAnalysis({ ...DEFAULT_ANALYSIS, heirsTaxRate: 1.2, otherOrdinaryIncome: -1, filingStatus: 'joint', spouseDateOfBirth: '' }).map((m) => m.code),
-    ).toEqual(expect.arrayContaining(['heirs-rate', 'otherOrdinaryIncome', 'spouse-dob']));
+      validateAnalysis({ ...DEFAULT_ANALYSIS, heirsTaxRate: 1.2, otherOrdinaryIncome: -1 }).map((m) => m.code),
+    ).toEqual(expect.arrayContaining(['heirs-rate', 'otherOrdinaryIncome']));
   });
 });
 

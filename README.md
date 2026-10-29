@@ -17,7 +17,7 @@ neutrally and does not make recommendations.
 **Build plan:** 1) tax engine, bracket view, fill-to-bracket conversions (done);
 2) taxable account for unneeded RMDs, how conversion taxes are paid (withheld, taxable
 account, or cash), after-tax wealth and breakeven age (done); 3) spouses and the
-survivor's switch to single filing; 4) heirs under the 10-year rule.
+survivor's switch to single filing (done); 4) heirs under the 10-year rule.
 
 > Hypothetical illustration only. Not a recommendation, forecast, or tax advice.
 
@@ -44,6 +44,10 @@ the spouse's date of birth), Social Security benefits and the age they start,
 pensions/wages/interest, qualified dividends and gains, tax-exempt interest, itemized
 deductions, a flat state tax rate, inflation, the heirs' tax rate, and a discount rate
 (by default the investment return). All amounts are entered in today's dollars.
+
+**Spouse & survivor:** add a spouse with their own date of birth, Social Security,
+Traditional IRAs, and Roth IRA. Optionally model the first death: who dies first and
+at what age, and how much other income and spending continue for the survivor.
 
 **Taxable account, cash & spending:** taxable brokerage balance, its cost basis, and
 dividend yield; cash and its interest rate; and how much of the IRA withdrawals the
@@ -123,6 +127,12 @@ indexed at the inflation rate entered.
 heirs' rate times the pre-tax balance left at the end. The breakeven is the heirs'
 rate at which the present-value totals are equal.
 
+**Spouses and the first death:** each spouse's RMDs use their own IRAs and age;
+the couple files jointly. Conversions are sized after both spouses' RMDs are known.
+In the death year the couple still files jointly and the deceased's full RMD is taken.
+From the next January the survivor rolls the IRAs into their own (RMDs on the
+survivor's own age), files single, and keeps the larger Social Security benefit.
+
 **Cash flows:** each year the tax caused by IRA income, conversions, and the taxable
 and cash accounts (total tax minus tax on the entered income alone) is paid from RMD
 cash first; the conversion's share is paid from the source chosen. Leftover RMD cash
@@ -152,9 +162,11 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Known limitations
 
-- One person's IRAs only. A spouse can be entered for joint filing, but the spouse's
-  IRAs, the first death, and single filing for the survivor come in build step 3.
-  The Joint and Last Survivor Table is not used.
+- The Joint and Last Survivor Table (spouse more than 10 years younger and sole
+  beneficiary) is not supported; the app notes when it applies and uses the Uniform
+  Lifetime Table, which overstates RMDs in that case.
+- First death: always a spousal rollover; one death only; Social Security survivor
+  benefit simplified to the larger of the two entered benefits.
 - Heirs are one tax rate on the pre-tax balance left; the 10-year rule comes in step 4.
 - Other entered income pays its own tax and isn't spent from the modeled accounts.
   The taxable account earns the IRA return; dividends are all qualified; Roth
@@ -186,13 +198,15 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 144 calculation and component tests, including IRS boundary cases,
+- `npm test`: 157 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a
   hand-calculated tax comparison, and hand-calculated cash flows (paying conversion
   tax from each source, realized gains settling, unneeded RMDs invested, Roth covering
-  spending, IRMAA paid two years later, after-tax value and breakeven age).
+  spending, IRMAA paid two years later, after-tax value and breakeven age), and
+  spouses (independent RMDs, joint deductions, the death-year RMD, spousal rollover
+  RMDs on the survivor's age, single filing, survivor Social Security).
 - `npm run test:e2e`: browser tests on desktop Chrome and an emulated iPhone 13
   viewport (iPhone screen size, touch, and user agent, but running in Chromium, not
   real Safari). Set `PW_WEBKIT=1` to add a real WebKit run where WebKit is installed,

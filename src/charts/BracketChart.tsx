@@ -1,7 +1,8 @@
-import { Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { taxParametersForYear } from '../calculations/federalTax';
 import type { IncomeYear } from '../calculations/irmaa';
-import type { FilingStatus } from '../types';
+import { filingStatusForYear } from '../calculations/household';
+import type { Scenario } from '../types';
 import { formatPercent, formatUsd, formatUsdCompact } from '../utils/format';
 import { useChartSelection } from './chartSelection';
 import { HatchDefs, SERIES_COLORS, type AxisMode } from './RmdChart';
@@ -10,8 +11,9 @@ interface Props {
   baseline: IncomeYear[];
   strategy: IncomeYear[];
   axis: AxisMode;
-  filingStatus: FilingStatus;
-  inflationRate: number;
+  scenario: Scenario;
+  /** Year of the first death, marked on the chart. */
+  deathYear: number | null;
   selectedYear: number | null;
   onSelectYear: (year: number) => void;
 }
@@ -63,13 +65,14 @@ function BracketTooltip({ active, payload }: { active?: boolean; payload?: { pay
 }
 
 /** Ordinary taxable income each year against the tops of the federal brackets. */
-export function BracketChart({ baseline, strategy, axis, filingStatus, inflationRate, selectedYear, onSelectYear }: Props) {
+export function BracketChart({ baseline, strategy, axis, scenario, deathYear, selectedYear, onSelectYear }: Props) {
   const rows: Row[] = strategy.map((s, i) => {
     const b = baseline[i];
     const taxable = s.tax.ordinaryTaxableIncome;
     const converted = Math.min(s.conversion, taxable);
     const tops: Record<string, number> = {};
-    const brackets = taxParametersForYear(s.year, inflationRate).params.brackets[filingStatus];
+    // Bracket tops follow the filing status: narrower single brackets after a first death.
+    const brackets = taxParametersForYear(s.year, scenario.analysis.inflationRate).params.brackets[filingStatusForYear(scenario, s.year)];
     for (const r of RATES) tops[key(r)] = brackets.find((x) => Math.abs(x.rate - r) < 1e-9)!.upTo;
     return {
       year: s.year,
@@ -92,6 +95,7 @@ export function BracketChart({ baseline, strategy, axis, filingStatus, inflation
     if (rows.every((row) => row[key(r)]! >= maxIncome)) break;
   }
   const selected = rows.find((r) => r.year === selectedYear);
+  const death = deathYear === null ? undefined : rows.find((r) => r.year === deathYear);
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
   const last = rows.length - 1;
 
@@ -111,6 +115,14 @@ export function BracketChart({ baseline, strategy, axis, filingStatus, inflation
             label={{ value: axis === 'age' ? 'Age' : 'Year', position: 'insideBottomRight', offset: -2, fontSize: 11, fill: '#667085' }}
           />
           <YAxis tickFormatter={formatUsdCompact} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#667085' }} width={56} />
+          {death && (
+            <ReferenceLine
+              x={death.x}
+              stroke="var(--color-ink)"
+              strokeWidth={1.25}
+              label={{ value: 'First death', position: 'insideTopRight', fontSize: 11, fill: 'var(--color-ink)' }}
+            />
+          )}
           {selected && <ReferenceArea x1={selected.x} x2={selected.x} fill="rgba(31,78,140,0.10)" ifOverflow="visible" />}
           <Tooltip content={<BracketTooltip />} cursor={{ fill: 'rgba(31,78,140,0.06)' }} />
           <Bar dataKey="baseline" name="No strategy" fill="url(#hatch-baseline)" radius={[3, 3, 0, 0]} isAnimationActive={false} />

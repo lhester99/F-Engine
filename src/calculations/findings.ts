@@ -2,11 +2,12 @@ import { formatPercent, formatUsd } from '../utils/format';
 import type { ProjectionResult, Scenario } from '../types';
 import type { IncomeYear, IrmaaSummary } from './irmaa';
 import type { WealthComparison } from './wealth';
+import { deathYear } from './household';
 import type { ProjectionSummary } from './summary';
 import type { TaxComparison } from './taxComparison';
 
 export interface Finding {
-  id: 'size' | 'excess' | 'strategy' | 'shift' | 'brackets' | 'tax' | 'wealth' | 'irmaa';
+  id: 'size' | 'excess' | 'strategy' | 'shift' | 'brackets' | 'survivor' | 'tax' | 'wealth' | 'irmaa';
   /** Short label for the finding. */
   title: string;
   text: string;
@@ -76,7 +77,11 @@ export function buildFindings(i: FindingsInput): Finding[] {
     });
   }
 
+  // Shown even without a strategy: the survivor's switch to single filing matters on its own.
+  const survivor = survivorFinding(i);
+
   if (!hasStrategy) {
+    if (survivor) out.push(survivor);
     out.push({
       id: 'strategy',
       title: 'Strategy',
@@ -133,6 +138,8 @@ export function buildFindings(i: FindingsInput): Finding[] {
       });
     }
   }
+
+  if (survivor) out.push(survivor);
 
   if (i.tax) {
     const t = i.tax;
@@ -193,4 +200,34 @@ export function buildFindings(i: FindingsInput): Finding[] {
   }
 
   return out;
+}
+
+/**
+ * What changes for the survivor: bracket and average estimated tax (federal,
+ * state) in the last joint years versus the first single years, with and
+ * without the strategy.
+ */
+function survivorFinding(i: FindingsInput): Finding | null {
+  const dy = deathYear(i.scenario);
+  if (dy === null || !i.baselineIncome || !i.strategyIncome) return null;
+  const deceased = i.scenario.people.find((p) => p.id === i.scenario.survivorship.firstDeathPersonId);
+  const window = (rows: IncomeYear[]) => ({
+    before: rows.filter((y) => y.year <= dy && y.year > dy - 3),
+    after: rows.filter((y) => y.year > dy && y.year <= dy + 5),
+  });
+  const avg = (rows: IncomeYear[]) => (rows.length ? rows.reduce((s, y) => s + y.tax.totalTax, 0) / rows.length : 0);
+  const top = (rows: IncomeYear[]) => (rows.length ? Math.max(...rows.map((y) => y.tax.bracketRate)) : 0);
+  const b = window(i.baselineIncome);
+  const s = window(i.strategyIncome);
+  if (!b.after.length) return null;
+  const describe = (w: { before: IncomeYear[]; after: IncomeYear[] }) =>
+    `the top bracket goes from ${formatPercent(top(w.before), 0)} to ${formatPercent(top(w.after), 0)} and estimated tax averages ${formatUsd(avg(w.after))} a year in the first single years, versus ${formatUsd(avg(w.before))} in the last joint years`;
+  const hasStrategy = i.strategySummary.totalConversions > 0.5 || i.strategySummary.totalQcd > 0.5;
+  return {
+    id: 'survivor',
+    title: 'Surviving spouse',
+    text:
+      `After ${deceased?.label ?? 'the first spouse'} dies at ${i.scenario.survivorship.deathAge} (${dy}), the survivor files single with about the same RMDs. Without the strategy, ${describe(b)}.` +
+      (hasStrategy ? ` With the strategy, ${describe(s)}.` : ''),
+  };
 }

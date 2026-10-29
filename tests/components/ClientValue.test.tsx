@@ -46,12 +46,36 @@ describe('client-value features', () => {
     expect(screen.getByLabelText('Discount rate (present value)')).toHaveValue('4%');
   });
 
-  it('asks for the spouse date of birth when filing jointly', async () => {
+  it('adds a spouse, files jointly, and models the first death', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Married filing jointly' }));
-    expect(screen.getByRole('button', { name: 'Married filing jointly' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('Spouse date of birth')).toHaveValue('1956-06-15');
+    expect(screen.getByTestId('filing-status')).toHaveTextContent('single');
+    await user.click(screen.getByRole('button', { name: 'Add spouse' }));
+    expect(screen.getByLabelText('Spouse date of birth')).toHaveValue('1958-06-15');
+    expect(screen.getByTestId('filing-status')).toHaveTextContent('married filing jointly');
+    expect(screen.getByLabelText('Spouse Traditional IRA 1 — prior December 31 balance')).toHaveValue('$400,000');
+
+    await user.click(screen.getByRole('checkbox', { name: /Model the first death/ }));
+    expect(screen.getByTestId('filing-status')).toHaveTextContent('then single for the survivor');
+    expect(screen.getByTestId('finding-survivor')).toHaveTextContent(/After Client dies at 85 \(2041\), the survivor files single/);
+
+    await user.click(screen.getByRole('tab', { name: 'Tax Brackets' }));
+    const table = screen.getByTestId('plan-table');
+    expect(within(table).getByRole('rowheader', { name: '85 (2041)' }).parentElement).toHaveTextContent('Joint');
+    expect(within(table).getByRole('rowheader', { name: '86 (2042)' }).parentElement).toHaveTextContent('Single');
+
+    await user.click(screen.getByRole('button', { name: 'Remove spouse' }));
+    expect(screen.getByTestId('filing-status')).toHaveTextContent('single');
+  });
+
+  it('lets conversions come from either spouse', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Add spouse' }));
+    await user.click(within(screen.getByRole('group', { name: 'Convert from' })).getByRole('button', { name: 'Spouse’s IRAs' }));
+    await user.click(screen.getByRole('button', { name: 'Apply to range' }));
+    expect(screen.getByTestId('conversion-table')).toBeInTheDocument();
+    expect(screen.getByTestId('finding-shift')).toHaveTextContent(/Conversions move \$250,000/);
   });
 
   it('shows the Tax Brackets tab with the year-by-year plan', async () => {

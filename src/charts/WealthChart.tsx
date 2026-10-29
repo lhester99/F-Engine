@@ -7,6 +7,8 @@ import type { AxisMode } from './RmdChart';
 interface Props {
   wealth: WealthComparison;
   axis: AxisMode;
+  /** Year of the first death, marked on the chart. */
+  deathYear?: number | null;
   selectedYear: number | null;
   onSelectYear: (year: number) => void;
 }
@@ -42,10 +44,11 @@ function WealthTooltip({ active, payload }: { active?: boolean; payload?: { payl
 }
 
 /** After-tax value over time, strategy vs. no strategy, with the breakeven age marked. */
-export function WealthChart({ wealth, axis, selectedYear, onSelectYear }: Props) {
+export function WealthChart({ wealth, axis, deathYear = null, selectedYear, onSelectYear }: Props) {
   const rows: Row[] = wealth.points.map((p) => ({ ...p, x: axis === 'age' ? p.age : p.year }));
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
   const selected = rows.find((r) => r.year === selectedYear);
+  const death = deathYear === null ? undefined : rows.find((r) => r.year === deathYear);
   const be = wealth.crossesOver && wealth.breakevenYear !== null ? rows.find((r) => r.year === wealth.breakevenYear) : undefined;
 
   return (
@@ -70,6 +73,14 @@ export function WealthChart({ wealth, axis, selectedYear, onSelectYear }: Props)
               stroke="var(--color-ink-2)"
               strokeDasharray="4 3"
               label={{ value: `Breakeven, age ${be.age}`, position: 'insideTopLeft', fontSize: 11, fill: 'var(--color-ink-2)' }}
+            />
+          )}
+          {death && (
+            <ReferenceLine
+              x={death.x}
+              stroke="var(--color-ink)"
+              strokeWidth={1.25}
+              label={{ value: 'First death', position: 'insideBottomRight', fontSize: 11, fill: 'var(--color-ink)' }}
             />
           )}
           <Tooltip content={<WealthTooltip />} />

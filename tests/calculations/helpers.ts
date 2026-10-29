@@ -1,7 +1,7 @@
 import { DEFAULT_QCD_LIMIT_SETTINGS } from '../../src/data/qcdLimits';
 import { emptyStrategy } from '../../src/strategies/schedule';
-import { DEFAULT_ANALYSIS } from '../../src/utils/defaultScenario';
-import type { Account, AnalysisSettings, CashFlowSettings, ContributionRule, Scenario, Strategy } from '../../src/types';
+import { DEFAULT_ANALYSIS, DEFAULT_SURVIVORSHIP } from '../../src/utils/defaultScenario';
+import type { Account, AnalysisSettings, CashFlowSettings, ContributionRule, Scenario, Strategy, SurvivorshipSettings } from '../../src/types';
 
 export interface TestScenarioOptions {
   dob: string;
@@ -16,8 +16,15 @@ export interface TestScenarioOptions {
   extra?: { annualAmount: number; startAge: number; endAge: number };
   /** Contribution to the first Traditional IRA ("t0"). */
   tradContribution?: ContributionRule;
-  analysis?: Partial<AnalysisSettings>;
+  /**
+   * Household assumptions. For convenience, socialSecurityBenefit and
+   * socialSecurityStartAge here set the client's own Social Security.
+   */
+  analysis?: Partial<AnalysisSettings> & { socialSecurityBenefit?: number; socialSecurityStartAge?: number };
   cashFlow?: Partial<CashFlowSettings>;
+  /** Adds a spouse "p2" with these values (Traditional IRA "s0", Roth IRA "sroth"). */
+  spouse?: { dob: string; traditional?: number; roth?: number; ss?: number; ssAge?: number };
+  survivorship?: Partial<SurvivorshipSettings>;
 }
 
 /**
@@ -43,6 +50,12 @@ export function scenario(o: TestScenarioOptions): Scenario {
     priorYearEndBalance: bal,
     contribution: i === 0 ? o.tradContribution : undefined,
   }));
+  if (o.spouse) {
+    accounts.push(
+      { id: 's0', ownerId: 'p2', type: 'traditional_ira', label: 'Spouse Traditional IRA', priorYearEndBalance: o.spouse.traditional ?? 0 },
+      { id: 'sroth', ownerId: 'p2', type: 'roth_ira', label: 'Spouse Roth IRA', priorYearEndBalance: o.spouse.roth ?? 0 },
+    );
+  }
   accounts.push({
     id: 'roth',
     ownerId: 'p1',
@@ -53,14 +66,42 @@ export function scenario(o: TestScenarioOptions): Scenario {
   });
   return {
     startYear: o.startYear ?? 2026,
-    people: [{ id: 'p1', label: 'Client', dateOfBirth: o.dob, delayFirstRmd: o.delayFirstRmd ?? false }],
+    people: [
+      {
+        id: 'p1',
+        label: 'Client',
+        dateOfBirth: o.dob,
+        delayFirstRmd: o.delayFirstRmd ?? false,
+        socialSecurityBenefit: o.analysis?.socialSecurityBenefit ?? 36_000,
+        socialSecurityStartAge: o.analysis?.socialSecurityStartAge ?? 67,
+      },
+      ...(o.spouse
+        ? [
+            {
+              id: 'p2',
+              label: 'Spouse',
+              dateOfBirth: o.spouse.dob,
+              delayFirstRmd: false,
+              socialSecurityBenefit: o.spouse.ss ?? 0,
+              socialSecurityStartAge: o.spouse.ssAge ?? 67,
+            },
+          ]
+        : []),
+    ],
     accounts,
     endAge: o.endAge,
     returns: { mode: 'single', annualReturn: o.rate ?? 0 },
     extraWithdrawals: o.extra ? [{ personId: 'p1', ...o.extra }] : [],
     qcdLimits: DEFAULT_QCD_LIMIT_SETTINGS,
     strategy: { ...emptyStrategy(), ...o.strategy },
-    analysis: { ...DEFAULT_ANALYSIS, ...o.analysis },
+    analysis: { ...DEFAULT_ANALYSIS, ...withoutPersonFields(o.analysis) },
     cashFlow: { ...TEST_CASH_FLOW, ...o.cashFlow },
+    survivorship: { ...DEFAULT_SURVIVORSHIP, firstDeathPersonId: 'p1', ...o.survivorship },
   };
+}
+
+function withoutPersonFields(a: TestScenarioOptions['analysis']): Partial<AnalysisSettings> {
+  if (!a) return {};
+  const { socialSecurityBenefit: _b, socialSecurityStartAge: _s, ...rest } = a;
+  return rest;
 }

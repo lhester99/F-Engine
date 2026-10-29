@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import type { AnalysisSettings, EngineMessage, Scenario } from '../types';
 import { NumberField } from './NumberField';
 
@@ -10,82 +9,26 @@ interface Props {
 
 /** Household income, filing status, and tax assumptions used for the tax estimate and IRMAA. */
 export function AssumptionsPanel({ scenario, update, messages }: Props) {
-  const spouseId = useId();
   const a = scenario.analysis;
   const set = (patch: Partial<AnalysisSettings>) => update((s) => ({ ...s, analysis: { ...s.analysis, ...patch } }));
   const err = (field: string) => messages.find((m) => m.severity === 'error' && m.field === field)?.text;
-  const spouseErr = err('spouseDateOfBirth');
 
   return (
     <div className="space-y-3">
-      <div>
-        <span className="field-label" id="filing-label">Filing status</span>
-        <div className="seg w-full" role="group" aria-labelledby="filing-label">
-          <button
-            type="button"
-            className="seg-btn flex-1"
-            aria-pressed={a.filingStatus === 'single'}
-            onClick={() => set({ filingStatus: 'single' })}
-          >
-            Single
-          </button>
-          <button
-            type="button"
-            className="seg-btn flex-1"
-            aria-pressed={a.filingStatus === 'joint'}
-            onClick={() =>
-              set({ filingStatus: 'joint', spouseDateOfBirth: a.spouseDateOfBirth || scenario.people[0]?.dateOfBirth || '' })
-            }
-          >
-            Married filing jointly
-          </button>
-        </div>
-      </div>
-
-      {a.filingStatus === 'joint' && (
-        <div>
-          <label htmlFor={spouseId} className="field-label">Spouse date of birth</label>
-          <input
-            id={spouseId}
-            type="date"
-            className={`field-input ${spouseErr ? 'field-input-error' : ''}`}
-            value={a.spouseDateOfBirth}
-            aria-invalid={spouseErr ? true : undefined}
-            aria-describedby={`${spouseId}-note`}
-            onChange={(e) => set({ spouseDateOfBirth: e.target.value })}
-          />
-          <p id={`${spouseId}-note`} className={spouseErr ? 'field-error' : 'field-hint'}>
-            {spouseErr ??
-              "Used for the age-65 deductions and Medicare. The spouse's own IRAs are not modeled yet; include any spouse income below."}
-          </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <NumberField
-          label="Social Security per year"
-          kind="currency"
-          min={0}
-          value={a.socialSecurityBenefit}
-          externalError={err('socialSecurityBenefit')}
-          onCommit={(v) => set({ socialSecurityBenefit: v })}
-          testId="ss-benefit"
-        />
-        <NumberField
-          label="Starting at client age"
-          kind="integer"
-          min={0}
-          max={120}
-          value={a.socialSecurityStartAge}
-          externalError={err('socialSecurityStartAge')}
-          onCommit={(v) => set({ socialSecurityStartAge: v })}
-          testId="ss-age"
-        />
-      </div>
-      <p className="field-hint -mt-1">Household benefits before tax. The taxable share is calculated each year.</p>
+      <p className="text-xs text-ink-2" data-testid="filing-status">
+        Filing status:{' '}
+        <span className="font-semibold text-ink">
+          {scenario.people.length > 1
+            ? scenario.survivorship.enabled
+              ? 'married filing jointly, then single for the survivor'
+              : 'married filing jointly'
+            : 'single'}
+        </span>
+        . Add a spouse under Client &amp; accounts to file jointly.
+      </p>
 
       <NumberField
-        label="Pensions, wages, and interest"
+        label="Pensions, wages, and interest (household)"
         kind="currency"
         min={0}
         value={a.otherOrdinaryIncome}

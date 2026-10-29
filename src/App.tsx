@@ -29,6 +29,8 @@ import type { Scenario } from './types';
 import { defaultScenario } from './utils/defaultScenario';
 import { formatPercent } from './utils/format';
 import { effectiveAnnualReturn } from './calculations/returns';
+import { deathYear } from './calculations/household';
+import { SpousePanel } from './inputs/SpousePanel';
 
 type Tab = 'rmd' | 'brackets' | 'income' | 'wealth';
 const TABS: { id: Tab; label: string; short: string }[] = [
@@ -86,6 +88,7 @@ export default function App() {
   const conversionYears = scenario.strategy.conversions.length;
   const qcdCount = scenario.strategy.recurringQcds.length + scenario.strategy.oneTimeQcds.length;
   const rate = effectiveAnnualReturn(scenario.returns);
+  const dYear = strategy.ok ? deathYear(scenario) : null;
 
   const reset = () => {
     setScenario(defaultScenario());
@@ -236,6 +239,9 @@ export default function App() {
             <Section title="Client & accounts">
               <ClientPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
+            <Section title="Spouse & survivor" badge={scenario.people.length > 1 ? 'Joint' : undefined}>
+              <SpousePanel scenario={scenario} update={update} messages={allMessages} />
+            </Section>
             <Section title="Household income & taxes">
               <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} />
             </Section>
@@ -331,8 +337,8 @@ export default function App() {
                         baseline={baselineIncome}
                         strategy={strategyIncome}
                         axis={axis}
-                        filingStatus={scenario.analysis.filingStatus}
-                        inflationRate={scenario.analysis.inflationRate}
+                        scenario={scenario}
+                        deathYear={dYear}
                         selectedYear={selectedYear}
                         onSelectYear={setSelectedYear}
                       />
@@ -381,7 +387,7 @@ export default function App() {
 
                   {tab === 'wealth' && wealthView === 'aftertax' && wealth && (
                     <>
-                      <WealthChart wealth={wealth} axis={axis} selectedYear={selectedYear} onSelectYear={setSelectedYear} />
+                      <WealthChart wealth={wealth} axis={axis} deathYear={dYear} selectedYear={selectedYear} onSelectYear={setSelectedYear} />
                       <ChartLegend
                         label="Chart legend"
                         items={[
