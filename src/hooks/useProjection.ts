@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { buildFindings } from '../calculations/findings';
 import { computeImpact } from '../calculations/impact';
+import { analyzeConversions } from '../calculations/conversionAnalysis';
 import { incomeByYear, summarizeIrmaa } from '../calculations/irmaa';
 import { runComparison } from '../calculations/projection';
 import { summarize } from '../calculations/summary';
@@ -27,6 +28,8 @@ export function useProjection(scenario: Scenario) {
         : undefined;
     const wealth = ok ? compareWealth(baseline, strategy, rates) : null;
     const impact = tax && wealth ? computeImpact(baseline, strategy, tax, wealth, scenario) : null;
+    const conversions =
+      tax && wealth ? analyzeConversions(scenario, strategy, baselineIncome, strategyIncome, tax, wealth) : null;
     const findings = ok
       ? buildFindings({
           scenario,
@@ -54,6 +57,7 @@ export function useProjection(scenario: Scenario) {
       tax,
       wealth,
       impact,
+      conversions,
       findings,
     };
   }, [scenario]);

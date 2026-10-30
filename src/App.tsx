@@ -13,6 +13,7 @@ import { Disclosures } from './components/Disclosures';
 import { Findings } from './components/Findings';
 import { ImpactCharts } from './components/ImpactCharts';
 import { HeaderScenery } from './components/HeaderScenery';
+import { ConversionView } from './components/ConversionView';
 import { ScenarioCompare } from './components/ScenarioCompare';
 import { TradeOffs } from './components/TradeOffs';
 import { AssumptionsPanel } from './inputs/AssumptionsPanel';
@@ -39,10 +40,11 @@ import { effectiveAnnualReturn } from './calculations/returns';
 import { deathYear } from './calculations/household';
 import { SpousePanel } from './inputs/SpousePanel';
 
-type Tab = 'rmd' | 'brackets' | 'income' | 'wealth' | 'heirs';
+type Tab = 'rmd' | 'brackets' | 'roth' | 'income' | 'wealth' | 'heirs';
 const TABS: { id: Tab; label: string; short: string }[] = [
   { id: 'rmd', label: 'RMD Projections', short: 'RMDs' },
   { id: 'brackets', label: 'Tax Brackets', short: 'Brackets' },
+  { id: 'roth', label: 'Roth Conversions', short: 'Roth' },
   { id: 'income', label: 'IRMAA', short: 'IRMAA' },
   { id: 'wealth', label: 'Wealth', short: 'Wealth' },
   { id: 'heirs', label: 'Heirs', short: 'Heirs' },
@@ -93,7 +95,7 @@ export default function App() {
   const [mobileInputsOpen, setMobileInputsOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<SavedStrategy[]>([]);
-  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, income: null, wealth: null, heirs: null });
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ rmd: null, brackets: null, roth: null, income: null, wealth: null, heirs: null });
 
   const update = useCallback((fn: (s: Scenario) => Scenario) => setScenario(fn), []);
   const {
@@ -108,6 +110,7 @@ export default function App() {
     tax,
     wealth,
     impact,
+    conversions,
     findings,
   } = useProjection(scenario);
   const closeMethodology = useCallback(() => setMethodologyOpen(false), []);
@@ -519,6 +522,10 @@ export default function App() {
                         balances still owe income tax, so see After-tax value for a like-for-like comparison.
                       </p>
                     </>
+                  )}
+
+                  {tab === 'roth' && conversions && (
+                    <ConversionView analysis={conversions} axis={axis} selectedYear={selectedYear} onSelectYear={toggleYear} />
                   )}
 
                   {tab === 'heirs' && tax && (

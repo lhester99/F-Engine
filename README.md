@@ -95,14 +95,27 @@ against the top of each federal bracket ("Fit to income" zooms to the client's i
 taxable income, bracket, rate on the next dollar, federal and state tax, IRMAA tier,
 and the change from no strategy.
 
-**Tab 3, IRMAA:** estimated MAGI each year, strategy against no strategy, with the
+**Tab 3, Roth Conversions:** what the conversions cost and whether they pay off. Four
+headline figures: total converted; tax added by converting (federal and state, plus any
+Medicare surcharge the conversion triggers two years later) and the cost per $1
+converted; the breakeven tax rate (the plan comes out ahead in total estimated tax if
+the pre-tax money left behind would be taxed above this rate); and the breakeven age
+(when after-tax wealth with the plan catches up to doing nothing and stays ahead). A
+chart splits each year's tax into what the household pays anyway and what the
+conversion adds, beside no strategy, and a table lists each conversion year: amount,
+tax paid anyway, tax added, Medicare surcharge added (with the tier change), total,
+cost per $1, bracket before and after, and where the tax was paid from. "Tax added" is
+the year's tax with the conversion minus the same year's tax without it, so it
+includes knock-on effects such as more Social Security becoming taxable.
+
+**Tab 4, IRMAA:** estimated MAGI each year, strategy against no strategy, with the
 IRMAA tier thresholds that apply two years later.
 
-**Tab 4, Wealth:** after-tax value each year (Roth + taxable + cash + pre-tax after
+**Tab 5, Wealth:** after-tax value each year (Roth + taxable + cash + pre-tax after
 the heirs' tax rate), strategy against no strategy, with the breakeven age marked; or
 account balances (Traditional, Roth, taxable, cash, total).
 
-**Tab 5, Heirs:** what heirs inherit with and without the strategy (pre-tax IRA,
+**Tab 6, Heirs:** what heirs inherit with and without the strategy (pre-tax IRA,
 Roth IRA, taxable and cash); the Roth IRA after 10 years of tax-free growth; the
 inherited pre-tax IRA withdrawn over 10 years, heirs' tax and average rate, and the
 highest bracket an heir reaches (when estimated from their income); and what heirs keep
@@ -240,7 +253,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 197 calculation and component tests, including IRS boundary cases,
+- `npm test`: 201 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

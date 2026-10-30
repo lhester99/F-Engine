@@ -18,8 +18,12 @@ async function openInputs(page: Page) {
 }
 
 async function expectNoHorizontalScroll(page: Page) {
+  // Compare with the device width too: a mobile browser widens its layout viewport to fit
+  // over-wide content, which would make scrollWidth and innerWidth agree.
+  const device = page.viewportSize()!.width;
   const [scrollWidth, innerWidth] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-  expect(scrollWidth).toBeLessThanOrEqual(innerWidth);
+  expect(innerWidth).toBeLessThanOrEqual(device);
+  expect(scrollWidth).toBeLessThanOrEqual(device);
 }
 
 const stat = (page: Page, label: string) => page.getByTestId('summary-stats').locator('div', { hasText: label }).first();
@@ -485,5 +489,20 @@ test('impact charts at the top compare no strategy with the strategy', async ({ 
   }
   await page.getByRole('button', { name: 'Today’s dollars' }).click();
   await expect(page.getByRole('button', { name: 'Today’s dollars' })).toHaveAttribute('aria-pressed', 'true');
+  await expectNoHorizontalScroll(page);
+});
+
+test('Roth Conversions tab: cost, breakeven, chart, and table', async ({ page }) => {
+  await openInputs(page);
+  await page.getByRole('button', { name: 'Fill to a bracket' }).click();
+  const apply = page.getByRole('button', { name: 'Apply to range' });
+  await apply.scrollIntoViewIfNeeded();
+  await apply.click();
+  const tab = page.getByRole('tab', { name: /Roth/ });
+  await tab.scrollIntoViewIfNeeded();
+  await tab.click();
+  await expect(page.getByTestId('conv-cost')).toContainText('per $1 converted');
+  await expect(page.locator('[data-testid="conversion-chart"] .recharts-bar-rectangle').first()).toBeVisible();
+  await expect(page.getByTestId('conversion-cost-table')).toContainText('Total');
   await expectNoHorizontalScroll(page);
 });

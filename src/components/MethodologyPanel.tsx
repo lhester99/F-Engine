@@ -213,6 +213,30 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
           </section>
 
           <section>
+            <h3>Roth Conversions tab</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Tax added by a conversion = that year’s federal and state tax with the conversion minus the same year’s tax
+                without it, with all other income, deductions, and account income unchanged. It includes knock-on effects such
+                as more Social Security becoming taxable and a smaller senior deduction.
+              </li>
+              <li>
+                Medicare surcharge added = the IRMAA surcharge for the premium year two years later at the year’s MAGI, minus
+                the surcharge at the MAGI without the conversion.
+              </li>
+              <li>Cost per $1 converted = (tax added + Medicare surcharge added) ÷ amount converted.</li>
+              <li>
+                Breakeven tax rate and breakeven age cover the whole plan: they are the breakeven heirs’ rate from the tax
+                trade-off and the after-tax wealth breakeven age (both described below).
+              </li>
+              <li>
+                Not counted as conversion cost: tax on gains realized when taxable shares are sold to pay the conversion tax
+                (it is in the year’s total tax).
+              </li>
+            </ul>
+          </section>
+
+          <section>
             <h3>Tax trade-off</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>

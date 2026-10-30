@@ -170,6 +170,22 @@ body {
   border-right-color: #a9bcdc;
   color: var(--color-ink);
 }
+@media (max-width: 639px) {
+  /* Phones: the six tabs share the width so the bar never pushes the page wider than the screen. */
+  .xp-tabs {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .xp-tab {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-right: 0;
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 13px;
+    text-align: center;
+  }
+}
 .xp-tab[aria-selected='false']:hover {
   border-top-color: #ffd27a;
 }
