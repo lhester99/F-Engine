@@ -29,7 +29,7 @@ export function useProjection(scenario: Scenario) {
     const wealth = ok ? compareWealth(baseline, strategy, rates) : null;
     const impact = tax && wealth ? computeImpact(baseline, strategy, tax, wealth, scenario) : null;
     const conversions =
-      tax && wealth ? analyzeConversions(scenario, strategy, baselineIncome, strategyIncome, tax, wealth) : null;
+      tax && wealth ? analyzeConversions(scenario, strategy, strategyIncome, tax, wealth) : null;
     const findings = ok
       ? buildFindings({
           scenario,

@@ -1,16 +1,17 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import App from '../../src/App';
 import { expandInputs } from './expandInputs';
 
-describe('Roth Conversions tab', () => {
-  it('shows an empty state, then the cost, breakeven rate and age, and the year-by-year table', async () => {
+describe('Roth conversion summary on the Tax Brackets tab', () => {
+  it('appears once conversions are entered, with cost, breakeven rate, and breakeven age', async () => {
     const user = userEvent.setup();
     render(<App />);
     await expandInputs(user);
-    await user.click(screen.getByRole('tab', { name: 'Roth Conversions' }));
-    expect(screen.getByTestId('conversion-empty')).toHaveTextContent('No Roth conversions are entered yet');
+    expect(screen.queryByRole('tab', { name: 'Roth Conversions' })).toBeNull();
+    await user.click(screen.getByRole('tab', { name: 'Tax Brackets' }));
+    expect(screen.queryByTestId('conversion-summary')).toBeNull();
 
     // Default fixed plan: $50,000 a year, ages 70–74.
     await user.click(screen.getByRole('button', { name: 'Apply to range' }));
@@ -19,14 +20,8 @@ describe('Roth Conversions tab', () => {
     expect(screen.getByTestId('conv-cost')).toHaveTextContent(/\$[\d,]+ federal & state .*per \$1 converted/);
     expect(screen.getByTestId('conv-breakeven-rate')).toHaveTextContent(/Breakeven tax rate/);
     expect(screen.getByTestId('conv-breakeven-age')).toHaveTextContent(/Age \d+|Not reached/);
-
-    const table = screen.getByTestId('conversion-cost-table');
-    const rows = within(table).getAllByRole('row');
-    // Header, five conversion years, and the total.
-    expect(rows).toHaveLength(7);
-    expect(rows[1]).toHaveTextContent('70 (');
-    expect(rows[1]).toHaveTextContent('$50,000');
-    expect(within(table).getByRole('rowheader', { name: 'Total' }).closest('tr')).toHaveTextContent('$250,000');
-    expect(screen.getByTestId('conversion-chart')).toBeInTheDocument();
+    // The bracket chart and plan table are still there.
+    expect(screen.getByTestId('bracket-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-table')).toBeInTheDocument();
   });
 });

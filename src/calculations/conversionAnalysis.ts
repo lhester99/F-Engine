@@ -33,21 +33,8 @@ export interface ConversionYear {
   withheld: number;
 }
 
-/** One bar of the chart: federal + state tax by year, with and without the strategy. */
-export interface ConversionChartYear {
-  year: number;
-  age: number;
-  /** No strategy at all. */
-  baselineTax: number;
-  /** With the strategy, the part it would pay without this year's conversion. */
-  strategyBase: number;
-  /** With the strategy, the part this year's conversion adds. */
-  strategyAdded: number;
-}
-
 export interface ConversionAnalysis {
   years: ConversionYear[];
-  chart: ConversionChartYear[];
   totalConverted: number;
   totalAddedTax: number;
   totalAddedIrmaa: number;
@@ -70,8 +57,6 @@ export interface ConversionAnalysis {
   breakevenYear: number | null;
   /** True if the plan is behind first and then catches up (false: ahead from the start). */
   crossesOver: boolean;
-  /** Later-year tax (federal + state) that is lower with the strategy than without, summed. */
-  laterTaxReduced: number;
 }
 
 /**
@@ -84,25 +69,16 @@ export interface ConversionAnalysis {
 export function analyzeConversions(
   scenario: Scenario,
   strategy: ProjectionResult,
-  baselineIncome: IncomeYear[],
   strategyIncome: IncomeYear[],
   tax: TaxComparison,
   wealth: WealthComparison,
 ): ConversionAnalysis {
   const years: ConversionYear[] = [];
-  const chart: ConversionChartYear[] = [];
   strategyIncome.forEach((si, i) => {
     const conversion = si.conversion;
-    const withoutTax = conversion > 0 ? computeTax({ ...si.income, ordinaryIncome: si.income.ordinaryIncome - conversion }) : si.tax;
-    const added = si.tax.totalTax - withoutTax.totalTax;
-    chart.push({
-      year: si.year,
-      age: si.age,
-      baselineTax: baselineIncome[i]?.tax.totalTax ?? 0,
-      strategyBase: withoutTax.totalTax,
-      strategyAdded: added,
-    });
     if (conversion <= 0) return;
+    const withoutTax = computeTax({ ...si.income, ordinaryIncome: si.income.ordinaryIncome - conversion });
+    const added = si.tax.totalTax - withoutTax.totalTax;
     const irmaaWithout = surchargeForIncome(scenario, si.year, withoutTax.irmaaMagi);
     const addedIrmaa = si.annualSurcharge - irmaaWithout;
     const h = strategy.years[i]!.household;
@@ -130,13 +106,8 @@ export function analyzeConversions(
   const sum = (f: (y: ConversionYear) => number) => years.reduce((s, y) => s + f(y), 0);
   const totalConverted = sum((y) => y.conversion);
   const totalAdded = sum((y) => y.totalAdded);
-  const lastConversionYear = years[years.length - 1]?.year ?? Infinity;
-  const laterTaxReduced = chart
-    .filter((c) => c.year > lastConversionYear)
-    .reduce((s, c) => s + Math.max(0, c.baselineTax - (c.strategyBase + c.strategyAdded)), 0);
   return {
     years,
-    chart,
     totalConverted,
     totalAddedTax: sum((y) => y.addedTax),
     totalAddedIrmaa: sum((y) => y.addedIrmaa),
@@ -149,7 +120,6 @@ export function analyzeConversions(
     breakevenAge: wealth.breakevenAge,
     breakevenYear: wealth.breakevenYear,
     crossesOver: wealth.crossesOver,
-    laterTaxReduced,
   };
 }
 

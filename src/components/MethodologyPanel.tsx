@@ -213,7 +213,7 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
           </section>
 
           <section>
-            <h3>Roth Conversions tab</h3>
+            <h3>Roth conversion summary (Tax Brackets tab)</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 Tax added by a conversion = that year’s federal and state tax with the conversion minus the same year’s tax

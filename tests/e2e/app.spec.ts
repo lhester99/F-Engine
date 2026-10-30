@@ -492,17 +492,17 @@ test('impact charts at the top compare no strategy with the strategy', async ({ 
   await expectNoHorizontalScroll(page);
 });
 
-test('Roth Conversions tab: cost, breakeven, chart, and table', async ({ page }) => {
+test('Tax Brackets tab: Roth conversion summary above the chart', async ({ page }) => {
   await openInputs(page);
   await page.getByRole('button', { name: 'Fill to a bracket' }).click();
   const apply = page.getByRole('button', { name: 'Apply to range' });
   await apply.scrollIntoViewIfNeeded();
   await apply.click();
-  const tab = page.getByRole('tab', { name: /Roth/ });
+  const tab = page.getByRole('tab', { name: /Brackets/ });
   await tab.scrollIntoViewIfNeeded();
   await tab.click();
   await expect(page.getByTestId('conv-cost')).toContainText('per $1 converted');
-  await expect(page.locator('[data-testid="conversion-chart"] .recharts-bar-rectangle').first()).toBeVisible();
-  await expect(page.getByTestId('conversion-cost-table')).toContainText('Total');
+  await expect(page.getByTestId('conv-breakeven-rate')).toBeVisible();
+  await expect(page.locator('[data-testid="bracket-chart"] .recharts-bar-rectangle').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

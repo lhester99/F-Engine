@@ -19,10 +19,9 @@ const EMPTY_SIDE = { taxableBalance: 0, taxableBasis: 0, taxableYield: 0, cashBa
 
 const analyze = (s: Scenario) => {
   const { baseline, strategy } = runComparison(s);
-  const bi = incomeByYear(baseline, s);
   const si = incomeByYear(strategy, s);
   const tax = compareTaxes(baseline, strategy, s);
-  return { a: analyzeConversions(s, strategy, bi, si, tax, compareWealth(baseline, strategy)), tax, si };
+  return { a: analyzeConversions(s, strategy, si, tax, compareWealth(baseline, strategy)), tax, si };
 };
 
 describe('Roth conversion analysis', () => {
@@ -49,7 +48,6 @@ describe('Roth conversion analysis', () => {
     expect(y.paidFromCash).toBeCloseTo(13_170, 6);
     expect(a.totalConverted).toBe(100_000);
     expect(a.averageRate).toBeCloseTo(0.1317, 10);
-    expect(a.chart[0]!.strategyBase + a.chart[0]!.strategyAdded).toBeCloseTo(13_170, 6);
   });
 
   it('counts the Medicare surcharge a conversion triggers two years later', () => {
@@ -87,7 +85,5 @@ describe('Roth conversion analysis', () => {
     expect(a.lastAge).toBe(72);
     expect(a.breakevenRate).toBe(tax.breakevenHeirsRate);
     expect(a.assumedLaterRate).toBe(s.analysis.heirsTaxRate);
-    // Later RMDs are smaller, so some later years' tax is lower.
-    expect(a.laterTaxReduced).toBeGreaterThan(0);
   });
 });
