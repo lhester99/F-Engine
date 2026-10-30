@@ -115,16 +115,32 @@ body {
 }
 .xp-logo {
   display: block;
-  /* Phones: full width, keeping the image's proportions. */
+  /* Phones and narrow windows: full width, keeping the image's proportions; the bottom
+     edge fades into the scenery behind the buttons. */
   width: 100%;
   height: auto;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 84%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 84%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
 }
-@media (min-width: 640px) {
+/* Beside the buttons, the scenery on the logo's right is trimmed (the fade moves with it)
+   so the buttons stay on the logo's row; min-width always keeps the whole wordmark clear of
+   the fade. When even that does not fit, the buttons wrap below. */
+@media (min-width: 934px) {
   .xp-logo {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 84%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 84%, transparent 100%);
     width: auto;
+    height: 88px;
+    min-width: 370px;
+    max-width: calc(100vw - 590px);
+    object-fit: cover;
+    object-position: left center;
+  }
+}
+@media (min-width: 1060px) {
+  .xp-logo {
     height: 112px;
+    min-width: 470px;
   }
 }
 .xp-header .btn:not(.btn-primary) {

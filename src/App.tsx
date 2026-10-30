@@ -249,7 +249,7 @@ export default function App() {
               Hypothetical illustration prepared {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-0 sm:pb-0 print:hidden">
+          <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-0 min-[934px]:pb-0 print:hidden">
             {presenting ? (
               <button type="button" className="btn btn-primary" onClick={() => setPresenting(false)}>
                 <X aria-hidden className="h-4 w-4" /> Exit presentation

@@ -50,10 +50,10 @@ export function HeaderScenery() {
         </g>
       ))}
       {/* Rolling hills along the bottom. */}
-      <path d="M 0 104 C 220 92, 420 96, 640 98 S 1000 80, 1200 84 S 1380 92, 1440 90 L 1440 112 L 0 112 Z" fill="url(#xp-hill-back)" />
-      <path d="M 0 108 C 260 104, 520 100, 760 104 S 1120 94, 1300 98 S 1420 104, 1440 103 L 1440 112 L 0 112 Z" fill="url(#xp-hill-front)" />
+      <path d="M 0 124 C 160 122, 300 112, 460 104 S 760 94, 980 88 S 1300 86, 1440 90 L 1440 112 L 0 112 Z" fill="url(#xp-hill-back)" />
+      <path d="M 0 126 C 220 124, 400 116, 620 108 S 1000 98, 1240 98 S 1420 104, 1440 103 L 1440 112 L 0 112 Z" fill="url(#xp-hill-front)" />
       <path
-        d="M 0 104 C 220 92, 420 96, 640 98 S 1000 80, 1200 84 S 1380 92, 1440 90"
+        d="M 0 124 C 160 122, 300 112, 460 104 S 760 94, 980 88 S 1300 86, 1440 90"
         fill="none"
         stroke="#d9f5a0"
         strokeOpacity="0.7"
