@@ -77,9 +77,10 @@ describe('App', () => {
     const cells = (label: string) =>
       within(detail).getByRole('rowheader', { name: label }).parentElement!.querySelectorAll('td');
     const money = (el: Element) => Number(el.textContent!.replace(/[$,]/g, ''));
-    const required = cells('Required RMD this calendar year');
-    const taxable = cells('Taxable IRA distribution');
-    expect(money(cells('QCD')[1]!)).toBe(20_000);
+    await user.click(within(detail).getByText(/^More detail/));
+    const required = cells('Required minimum distribution (RMD)');
+    const taxable = cells('Taxable IRA withdrawals');
+    expect(money(cells('Given to charity (QCD)')[1]!)).toBe(20_000);
     // Strategy column: taxable = required − QCD (to rounding).
     expect(Math.abs(money(required[1]!) - money(taxable[1]!) - 20_000)).toBeLessThanOrEqual(1);
     // Baseline column: no QCD, so taxable = required.

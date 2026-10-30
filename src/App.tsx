@@ -12,6 +12,7 @@ import type { SavedStrategy } from './calculations/compare';
 import { Disclosures } from './components/Disclosures';
 import { Findings } from './components/Findings';
 import { ImpactCharts } from './components/ImpactCharts';
+import { HeaderScenery } from './components/HeaderScenery';
 import { ScenarioCompare } from './components/ScenarioCompare';
 import { TradeOffs } from './components/TradeOffs';
 import { AssumptionsPanel } from './inputs/AssumptionsPanel';
@@ -231,8 +232,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="xp-header print:border-b-2 print:border-ink">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:px-6">
+      <header className="xp-header relative overflow-hidden print:border-b-2 print:border-ink">
+        <HeaderScenery />
+        <div className="relative mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:px-6">
           <div className="min-w-0">
             <h1 className="m-0">
               <img src={logo} alt="Retirement XP" className="xp-logo print:hidden" />

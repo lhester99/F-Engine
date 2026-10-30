@@ -82,6 +82,7 @@ test('April 1 deferral creates a two-RMD year', async ({ page }) => {
   await page.getByRole('button', { name: 'Open year detail' }).click();
   const detail = page.getByTestId('year-detail');
   await detail.getByLabel('Select year').selectOption('2030');
+  await detail.getByText(/^More detail/).click();
   await expect(detail.getByRole('rowheader', { name: 'Prior-year RMD deferred to April 1' })).toBeVisible();
 });
 
@@ -173,6 +174,8 @@ test('chart: axis toggle, click/tap a bar for details, table view', async ({ pag
   const detail = page.getByTestId('year-detail');
   await expect(detail).toBeVisible();
   await expect(detail.getByRole('heading')).toContainText('2041');
+  await expect(detail.getByRole('rowheader', { name: 'Required minimum distribution (RMD)' })).toBeVisible();
+  await detail.getByText(/^More detail/).click();
   await expect(detail.getByRole('rowheader', { name: 'Distribution period (Uniform Lifetime Table)' })).toBeVisible();
   const heading = await detail.getByRole('heading').textContent();
   await detail.getByRole('button', { name: 'Next year' }).click();
@@ -282,9 +285,10 @@ test('IRMAA tab: chart and tap/click year detail with MAGI', async ({ page }) =>
   else await page.mouse.click(x, y);
   const detail = page.getByTestId('year-detail');
   await expect(detail.getByRole('heading')).toContainText(String(new Date().getFullYear() + 3));
+  await expect(detail.getByRole('rowheader', { name: 'Federal tax bracket' })).toBeVisible();
+  await expect(detail.getByRole('rowheader', { name: /Medicare surcharge \(IRMAA\) tier for \d{4} premiums/ })).toBeVisible();
+  await detail.getByText(/^More detail/).click();
   await expect(detail.getByRole('rowheader', { name: 'Estimated MAGI (for IRMAA)' })).toBeVisible();
-  await expect(detail.getByRole('rowheader', { name: 'Federal bracket' })).toBeVisible();
-  await expect(detail.getByRole('rowheader', { name: /IRMAA tier for \d{4} premiums/ })).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
 

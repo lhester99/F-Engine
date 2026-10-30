@@ -21,64 +21,94 @@ interface RowDef {
   format?: 'usd' | 'period' | 'tier' | 'pct';
   /** Only shown when the year's tax estimate is available. */
   needsIncome?: boolean;
-  note?: string;
+  /** Shown even when zero in both columns. */
+  always?: boolean;
+  /** Bold total row. */
+  strong?: boolean;
+  /** Indented sub-item. */
+  sub?: boolean;
 }
 
-const ROWS: RowDef[] = [
-  { label: 'Prior Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.priorBalancePretax },
-  { label: 'Prior Dec 31 balance (Roth IRA)', value: (y) => y.totals.priorBalanceRoth },
+interface Group {
+  title: string;
+  rows: RowDef[];
+}
+
+/** The main breakdown: plain-language groups; rows that are $0 in both columns are hidden. */
+const GROUPS: Group[] = [
+  {
+    title: 'Taken out of the IRAs',
+    rows: [
+      { label: 'Required minimum distribution (RMD)', value: (y) => y.totals.requiredRmd, always: true, strong: true },
+      { label: 'Given to charity (QCD)', value: (y) => y.totals.qcd },
+      { label: 'Extra withdrawals', value: (y) => y.totals.extraWithdrawal },
+      { label: 'Roth conversion', value: (y) => y.totals.conversionGross, always: true, strong: true },
+    ],
+  },
+  {
+    title: 'Taxes',
+    rows: [
+      { label: 'Taxable income', value: (_y, inc) => inc?.tax.taxableIncome ?? null, needsIncome: true, always: true },
+      { label: 'Federal tax bracket', value: (_y, inc) => inc?.tax.bracketRate ?? null, format: 'pct', needsIncome: true, always: true },
+      { label: 'Federal income tax', value: (_y, inc) => inc?.tax.federalTax ?? null, needsIncome: true, always: true, strong: true },
+      { label: 'State income tax', value: (_y, inc) => inc?.tax.stateTax ?? null, needsIncome: true },
+      { label: 'Medicare surcharge (IRMAA) paid', value: (y) => y.household.irmaaPaid },
+      {
+        label: 'Medicare surcharge tier',
+        value: (_y, inc) => (inc && inc.medicareApplies ? inc.tier : null),
+        format: 'tier',
+        needsIncome: true,
+        always: true,
+      },
+    ],
+  },
+  {
+    title: 'How the conversion tax was paid',
+    rows: [
+      { label: 'From the taxable account', value: (y) => y.household.conversionTaxFromTaxable },
+      { label: 'From cash', value: (y) => y.household.conversionTaxFromCash },
+      { label: 'Withheld from the conversion', value: (y) => y.household.conversionTaxWithheld },
+    ],
+  },
+  {
+    title: 'Where the RMD money went',
+    rows: [
+      { label: 'Spent', value: (y) => y.household.spending },
+      { label: 'Added to the taxable account', value: (y) => y.household.invested },
+      { label: 'Taken from the Roth IRA for spending', value: (y) => y.household.withdrawnRoth },
+    ],
+  },
+  {
+    title: 'Balances on December 31',
+    rows: [
+      { label: 'Pre-tax IRAs', value: (y) => y.totals.endBalancePretax, always: true },
+      { label: 'Roth IRAs', value: (y) => y.totals.endBalanceRoth, always: true },
+      { label: 'Taxable account', value: (y) => y.household.taxableEnd },
+      { label: 'Cash', value: (y) => y.household.cashEnd },
+      { label: 'Total', value: (y) => y.totals.endBalanceTotal, always: true, strong: true },
+      { label: 'After-tax value (pre-tax after heirs’ tax)', value: (y) => y.totals.afterTaxValue, always: true, strong: true },
+    ],
+  },
+];
+
+/** Technical rows, in a collapsed "More detail" section. */
+const DETAIL_ROWS: RowDef[] = [
+  { label: 'Pre-tax IRAs on January 1', value: (y) => y.totals.priorBalancePretax, always: true },
+  { label: 'Roth IRAs on January 1', value: (y) => y.totals.priorBalanceRoth, always: true },
   { label: 'Distribution period', value: (y) => y.people[0]?.distributionPeriod ?? null, format: 'period' },
   { label: 'Distribution period, second spouse', value: (y) => y.people[1]?.distributionPeriod ?? null, format: 'period' },
   { label: 'RMD calculated for this year', value: (y) => y.totals.rmdForYear },
   { label: 'Prior-year RMD deferred to April 1', value: (y) => y.totals.deferredRmdFromPriorYear },
   { label: 'RMD deferred to April 1 next year', value: (y) => y.totals.rmdDeferredToNextYear },
-  { label: 'Required RMD this calendar year', value: (y) => y.totals.requiredRmd },
-  { label: 'QCD', value: (y) => y.totals.qcd },
-  { label: '  of which taxable (deductible contributions after 70½)', value: (y) => y.totals.qcdNotExcluded },
-  { label: 'Extra withdrawal', value: (y) => y.totals.extraWithdrawal },
-  { label: 'Taxable IRA distribution', value: (y) => y.totals.taxableDistribution },
-  { label: 'Roth conversion (gross)', value: (y) => y.totals.conversionGross },
-  { label: '  of which withheld for taxes', value: (y) => y.totals.conversionWithheld },
+  { label: 'Taxable IRA withdrawals', value: (y) => y.totals.taxableDistribution },
+  { label: 'QCD made taxable (deductible contributions after 70½)', value: (y) => y.totals.qcdNotExcluded },
   { label: 'Contributions', value: (y) => y.totals.contributions },
-  { label: '  of which deductible (pre-tax)', value: (y) => y.totals.deductibleContributions },
-  { label: 'Investment growth', value: (y) => y.totals.growth },
-  { label: 'Ending Dec 31 balance (Traditional IRAs)', value: (y) => y.totals.endBalancePretax },
-  { label: 'Ending Dec 31 balance (Roth IRA)', value: (y) => y.totals.endBalanceRoth },
-  { label: 'Tax caused by IRA income, conversions, and these accounts', value: (y) => y.household.taxOnModeledIncome },
-  { label: '  of which on the conversion', value: (y) => y.household.conversionTax },
-  { label: '  conversion tax from the taxable account', value: (y) => y.household.conversionTaxFromTaxable },
-  { label: '  conversion tax from cash', value: (y) => y.household.conversionTaxFromCash },
-  { label: '  conversion tax withheld', value: (y) => y.household.conversionTaxWithheld },
-  { label: 'IRMAA increase paid', value: (y) => y.household.irmaaPaid },
-  { label: 'Spending from IRA withdrawals', value: (y) => y.household.spending },
-  { label: 'Roth IRA withdrawal for spending', value: (y) => y.household.withdrawnRoth },
-  { label: 'Invested in the taxable account', value: (y) => y.household.invested },
-  { label: 'Ending Dec 31 taxable account', value: (y) => y.household.taxableEnd },
-  { label: 'Ending Dec 31 cash', value: (y) => y.household.cashEnd },
-  { label: 'Ending Dec 31 balance (all accounts)', value: (y) => y.totals.endBalanceTotal },
-  { label: 'After-tax value (pre-tax after heirs’ rate)', value: (y) => y.totals.afterTaxValue },
-  { label: 'Taxable income (after deductions)', value: (_y, inc) => inc?.tax.taxableIncome ?? null, needsIncome: true },
-  { label: 'Federal bracket', value: (_y, inc) => inc?.tax.bracketRate ?? null, format: 'pct', needsIncome: true },
-  { label: 'Federal income tax', value: (_y, inc) => inc?.tax.federalTax ?? null, needsIncome: true },
-  { label: 'State income tax', value: (_y, inc) => inc?.tax.stateTax ?? null, needsIncome: true },
+  { label: 'of which deductible (pre-tax)', value: (y) => y.totals.deductibleContributions, sub: true },
+  { label: 'Investment growth (IRAs)', value: (y) => y.totals.growth },
+  { label: 'Tax caused by IRA income, conversions, and the outside accounts', value: (y) => y.household.taxOnModeledIncome },
+  { label: 'of which on the conversion', value: (y) => y.household.conversionTax, sub: true },
   { label: 'Estimated MAGI (for IRMAA)', value: (_y, inc) => inc?.magi ?? null, needsIncome: true },
-  { label: 'IRMAA tier', value: (_y, inc) => (inc && inc.medicareApplies ? inc.tier : null), format: 'tier', needsIncome: true },
 ];
-
-const OPTIONAL = new Set([
-  'Prior-year RMD deferred to April 1',
-  'RMD deferred to April 1 next year',
-  '  of which withheld for taxes',
-  '  of which taxable (deductible contributions after 70½)',
-  '  of which deductible (pre-tax)',
-  '  of which on the conversion',
-  '  conversion tax from the taxable account',
-  '  conversion tax from cash',
-  '  conversion tax withheld',
-  'IRMAA increase paid',
-  'Spending from IRA withdrawals',
-  'Roth IRA withdrawal for spending',
-]);
 
 function fmt(v: number | null, kind: RowDef['format']) {
   if (v === null) return '—';
@@ -91,12 +121,17 @@ function fmt(v: number | null, kind: RowDef['format']) {
 /** Year-level breakdown, baseline vs strategy. */
 export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome, years, onSelectYear, onClose, personLabels }: Props) {
   const idx = years.indexOf(strategy.year);
-  const rows = ROWS.filter(
-    (r) =>
-      (!OPTIONAL.has(r.label) || (r.value(strategy) ?? 0) > 0.5 || (baseline && (r.value(baseline) ?? 0) > 0.5)) &&
-      (!r.needsIncome || strategyIncome !== undefined) &&
-      (r.label !== 'Distribution period, second spouse' || strategy.people.length > 1),
-  );
+  const shown = (r: RowDef) => {
+    if (r.needsIncome && strategyIncome === undefined) return false;
+    if (r.label === 'Distribution period, second spouse' && strategy.people.length < 2) return false;
+    if (r.always) return true;
+    const nonzero = (y: YearResult | undefined, inc?: IncomeYear) => {
+      if (!y) return false;
+      const v = r.value(y, inc);
+      return v !== null && Math.abs(v) > 0.5;
+    };
+    return nonzero(strategy, strategyIncome) || nonzero(baseline, baselineIncome);
+  };
   const periodLabel = (label: string) => {
     const p = label === 'Distribution period' ? strategy.people[0] : label === 'Distribution period, second spouse' ? strategy.people[1] : undefined;
     if (!p) return label;
@@ -105,11 +140,45 @@ export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome,
     return `Distribution period${who}${table}`;
   };
   const tierLabel = (label: string) =>
-    label === 'IRMAA tier' && strategyIncome
+    label === 'Medicare surcharge tier' && strategyIncome
       ? strategyIncome.medicareApplies
-        ? `IRMAA tier for ${strategyIncome.premiumYear} premiums`
-        : `IRMAA (${strategyIncome.premiumYear}: before Medicare)`
+        ? `Medicare surcharge (IRMAA) tier for ${strategyIncome.premiumYear} premiums`
+        : `Medicare surcharge (IRMAA) for ${strategyIncome.premiumYear}: before Medicare`
       : label;
+  const renderRow = (r: RowDef, key: string) => {
+    const b = baseline ? r.value(baseline, baselineIncome) : null;
+    const s = r.value(strategy, strategyIncome);
+    const money = r.format === undefined || r.format === 'usd';
+    return (
+      <tr key={key} className="border-b border-line-soft">
+        <th
+          scope="row"
+          className={`py-1.5 pr-2 text-left ${r.sub ? 'pl-4' : ''} ${r.strong ? 'font-semibold text-ink' : 'font-normal text-ink-2'}`}
+        >
+          {periodLabel(tierLabel(r.label))}
+        </th>
+        <td className={`px-2 py-1.5 text-right text-ink ${r.strong ? 'font-semibold' : ''}`}>{fmt(b, r.format)}</td>
+        <td className={`px-2 py-1.5 text-right text-ink ${r.strong ? 'font-semibold' : ''}`}>{fmt(s, r.format)}</td>
+        <td className="hidden py-1.5 pl-2 text-right text-ink-2 sm:table-cell">
+          {!money || b === null || s === null || Math.abs(s - b) < 0.5 ? '' : formatSignedUsd(s - b)}
+        </td>
+      </tr>
+    );
+  };
+  const groups = GROUPS.map((g) => ({ ...g, rows: g.rows.filter(shown) })).filter((g) => g.rows.length > 0);
+  const detailRows = DETAIL_ROWS.filter(shown);
+  const head = (
+    <thead>
+      <tr className="border-b border-line text-xs text-muted">
+        <th scope="col" className="py-1.5 pr-2 text-left font-medium">
+          <span className="sr-only">Item</span>
+        </th>
+        <th scope="col" className="px-2 py-1.5 text-right font-medium">No strategy</th>
+        <th scope="col" className="px-2 py-1.5 text-right font-medium">Strategy</th>
+        <th scope="col" className="hidden py-1.5 pl-2 text-right font-medium sm:table-cell">Difference</th>
+      </tr>
+    </thead>
+  );
   const notes = strategy.messages;
 
   return (
@@ -152,39 +221,37 @@ export function YearDetail({ baseline, strategy, baselineIncome, strategyIncome,
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm tabular-nums">
+        <table className="w-full text-sm tabular-nums" data-testid="year-detail-table">
           <caption className="sr-only">
             Year {strategy.year} breakdown, no strategy compared with current strategy
           </caption>
-          <thead>
-            <tr className="border-b border-line text-xs text-muted">
-              <th scope="col" className="py-1.5 pr-2 text-left font-medium">Item</th>
-              <th scope="col" className="px-2 py-1.5 text-right font-medium">No strategy</th>
-              <th scope="col" className="px-2 py-1.5 text-right font-medium">Strategy</th>
-              <th scope="col" className="hidden py-1.5 pl-2 text-right font-medium sm:table-cell">Difference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const b = baseline ? r.value(baseline, baselineIncome) : null;
-              const s = r.value(strategy, strategyIncome);
-              const emphasize = r.label.startsWith('Required RMD') || r.label.startsWith('Taxable');
-              return (
-                <tr key={r.label} className={`border-b border-line-soft ${emphasize ? 'font-semibold' : ''}`}>
-                  <th scope="row" className={`py-1.5 pr-2 text-left font-normal text-ink-2 ${r.label.startsWith('  ') ? 'pl-4' : ''} ${emphasize ? 'font-semibold text-ink' : ''}`}>
-                    {periodLabel(tierLabel(r.label)).trim()}
-                  </th>
-                  <td className="px-2 py-1.5 text-right text-ink">{fmt(b, r.format)}</td>
-                  <td className="px-2 py-1.5 text-right text-ink">{fmt(s, r.format)}</td>
-                  <td className="hidden py-1.5 pl-2 text-right text-ink-2 sm:table-cell">
-                    {r.format === 'period' || r.format === 'tier' || r.format === 'pct' || b === null || s === null ? '' : formatSignedUsd(s - b)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+          {head}
+          {groups.map((g) => (
+            <tbody key={g.title}>
+              <tr>
+                <th
+                  scope="colgroup"
+                  colSpan={4}
+                  className="bg-canvas px-2 pt-3 pb-1 text-left text-[11px] font-semibold tracking-wider text-ink-2 uppercase"
+                >
+                  {g.title}
+                </th>
+              </tr>
+              {g.rows.map((r) => renderRow(r, `${g.title}-${r.label}`))}
+            </tbody>
+          ))}
         </table>
       </div>
+      <details className="mt-3" data-testid="year-detail-more">
+        <summary className="cursor-pointer text-sm font-medium text-accent">More detail: starting balances, RMD factors, growth, MAGI</summary>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-sm tabular-nums">
+            <caption className="sr-only">Year {strategy.year} technical detail</caption>
+            {head}
+            <tbody>{detailRows.map((r) => renderRow(r, `d-${r.label}`))}</tbody>
+          </table>
+        </div>
+      </details>
       {notes.length > 0 && (
         <ul className="mt-2 space-y-1 text-xs text-ink-2">
           {notes.map((m, i) => (

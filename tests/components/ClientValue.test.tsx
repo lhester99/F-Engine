@@ -173,12 +173,12 @@ describe('step 2: taxable account, cash, spending, and wealth', () => {
     await user.click(screen.getByRole('tab', { name: 'Wealth' }));
     await user.click(screen.getByRole('button', { name: 'Open year detail' }));
     const rothEnd = () =>
-      within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'Ending Dec 31 balance (Roth IRA)' }).parentElement!
+      within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'Roth IRAs' }).parentElement!
         .querySelectorAll('td')[1]!.textContent;
     const fromTaxable = rothEnd();
     await user.selectOptions(screen.getByLabelText('Pay the conversion tax from'), 'withhold');
     expect(rothEnd()).not.toBe(fromTaxable);
-    expect(within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'conversion tax withheld' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('year-detail')).getByRole('rowheader', { name: 'Withheld from the conversion' })).toBeInTheDocument();
   });
 
   it('spending reduces what is invested from RMDs', async () => {

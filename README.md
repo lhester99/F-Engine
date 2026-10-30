@@ -82,7 +82,12 @@ trade-off with its breakeven rate, and IRMAA years.
 between *Required RMDs* and *Taxable IRA Distributions*. A "No strategy" baseline
 (same inputs, no conversions or QCDs) appears beside each bar, shown with a striped
 pattern. Conversions can be shown as a separate line. Click or tap a year for a full
-breakdown, baseline versus strategy. A year-by-year table is available.
+breakdown, baseline versus strategy, in plain-language groups: what was taken out of the
+IRAs, taxes, how the conversion tax was paid, where the RMD money went, and balances on
+December 31 (rows that are $0 in both columns are hidden). "More detail" holds the
+technical figures (starting balances, RMD factors, deferrals, growth, MAGI). Click the
+same year again, press Esc, or use "Show all years" to go back. A year-by-year table is
+available.
 
 **Tab 2, Tax Brackets:** taxable income each year with the conversion shown on top,
 against the top of each federal bracket ("Fit to income" zooms to the client's income;
@@ -114,7 +119,8 @@ left), in dollars and present value; and the breakeven heirs' tax rate.
 **Compare strategies:** save up to four named sets of levers and compare them side
 by side on the current client. Saved strategies live only in the open page.
 
-**Header:** Present (hides the inputs for screen-sharing with a client), Print
+**Header:** the Retirement XP logo over rolling hills and light streaks across the full
+width, with Present (hides the inputs for screen-sharing with a client), Print
 summary (a printable client handout with the disclosures), Methodology, and Reset.
 Disclosures appear on every view and cannot be turned off.
 
