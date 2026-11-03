@@ -2,6 +2,7 @@ import { ageAttainedInYear, parseIsoDate } from '../calculations/dates';
 import { effectiveAnnualReturn } from '../calculations/returns';
 import type { Scenario } from '../types';
 import { formatPercent, formatUsdCompact } from '../utils/format';
+import { INCOME_KIND_SHORT } from '../calculations/income';
 
 function Row({ term, children }: { term: string; children: string }) {
   return (
@@ -29,6 +30,13 @@ export function HouseholdSummary({ scenario }: { scenario: Scenario }) {
   const income = [
     ss > 0 ? `Social Security ${formatUsdCompact(ss)}` : 'No Social Security',
     a.otherOrdinaryIncome > 0 ? `Other ${formatUsdCompact(a.otherOrdinaryIncome)}` : '',
+    ...(s.incomeItems ?? [])
+      .filter((i) => i.amount > 0)
+      .map((i) => {
+        const who = s.people.length > 1 && i.ownerId !== s.people[0]!.id ? 'Spouse ' + INCOME_KIND_SHORT[i.kind].toLowerCase() : INCOME_KIND_SHORT[i.kind];
+        const when = `${i.startAge !== null ? ` from ${i.startAge}` : ''}${i.endAge !== null ? ` to ${i.endAge}` : ''}`;
+        return `${who} ${formatUsdCompact(i.amount)}${when}`;
+      }),
     a.qualifiedInvestmentIncome > 0 ? `Dividends ${formatUsdCompact(a.qualifiedInvestmentIncome)}` : '',
   ]
     .filter(Boolean)

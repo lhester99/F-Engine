@@ -55,7 +55,7 @@ export const DEFAULT_CASH_FLOW: CashFlowSettings = {
 
 /** Default household income and tax assumptions for the hypothetical client. */
 export const DEFAULT_ANALYSIS: AnalysisSettings = {
-  otherOrdinaryIncome: 15_000,
+  otherOrdinaryIncome: 0,
   qualifiedInvestmentIncome: 0,
   taxExemptInterest: 0,
   itemizedDeductions: 0,
@@ -112,5 +112,18 @@ export function defaultScenario(startYear = new Date().getFullYear()): Scenario 
     cashFlow: { ...DEFAULT_CASH_FLOW },
     survivorship: { ...DEFAULT_SURVIVORSHIP },
     heirs: { ...DEFAULT_HEIRS },
+    // A hypothetical $15,000 pension, already being paid, rising with inflation.
+    incomeItems: [
+      {
+        id: 'income-1',
+        kind: 'pension',
+        ownerId: PRIMARY_ID,
+        amount: 15_000,
+        startAge: null,
+        endAge: null,
+        growsWithInflation: true,
+        survivorShare: 1,
+      },
+    ],
   };
 }

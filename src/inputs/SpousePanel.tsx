@@ -156,25 +156,6 @@ export function SpousePanel({ scenario, update, messages, part }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <NumberField
-          label="Spouse Social Security / yr"
-          kind="currency"
-          min={0}
-          value={spouse.socialSecurityBenefit}
-          onCommit={(v) => setSpouse({ socialSecurityBenefit: v })}
-          testId="spouse-ss"
-        />
-        <NumberField
-          label="Spouse starting at age"
-          kind="integer"
-          min={0}
-          max={120}
-          value={spouse.socialSecurityStartAge}
-          onCommit={(v) => setSpouse({ socialSecurityStartAge: v })}
-          testId="spouse-ss-age"
-        />
-      </div>
 
       <fieldset className="space-y-2">
         <legend className="field-label">Spouse’s Traditional IRAs (balances as of December 31, {priorYear})</legend>
@@ -279,7 +260,7 @@ export function SpousePanel({ scenario, update, messages, part }: Props) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <NumberField
-                label="Other income that continues"
+                label="Dividends and tax-exempt interest that continue"
                 kind="percent"
                 min={0}
                 max={200}

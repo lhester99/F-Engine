@@ -12,7 +12,7 @@ describe('simplified sidebar', () => {
     expect(summary).toHaveTextContent(/Client \d+ · Single/);
     expect(summary).toHaveTextContent('$1.8M Traditional · $150K Roth');
     expect(summary).toHaveTextContent('$250K taxable · $50K cash');
-    expect(summary).toHaveTextContent('Social Security $36K · Other $15K per year');
+    expect(summary).toHaveTextContent('Social Security $36K · Pension $15K per year');
 
     const edit = screen.getByRole('button', { name: /^Client & household/ });
     expect(edit).toHaveAttribute('aria-expanded', 'false');

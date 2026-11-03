@@ -18,6 +18,7 @@ import { ScenarioCompare } from './components/ScenarioCompare';
 import { TradeOffs } from './components/TradeOffs';
 import { AssumptionsPanel } from './inputs/AssumptionsPanel';
 import { HeirsPanel } from './inputs/HeirsPanel';
+import { IncomeTimelinePanel } from './inputs/IncomeTimelinePanel';
 import { LegacyView } from './components/LegacyView';
 import { MessageList } from './components/MessageList';
 import { MethodologyPanel } from './components/MethodologyPanel';
@@ -57,7 +58,7 @@ let savedCounter = 0;
 /** Input fields in each collapsible sidebar group, so a group with an error opens itself. */
 const HOUSEHOLD_FIELDS: ReadonlySet<string> = new Set([
   'dateOfBirth', 'socialSecurityBenefit', 'socialSecurityStartAge', 'endAge', 'accounts',
-  'otherOrdinaryIncome', 'qualifiedInvestmentIncome', 'taxableBalance', 'cashBalance', 'spendingFromIra',
+  'otherOrdinaryIncome', 'qualifiedInvestmentIncome', 'taxableBalance', 'cashBalance', 'spendingFromIra', 'incomeItems',
 ]);
 const DETAIL_FIELDS: ReadonlySet<string> = new Set([
   'taxExemptInterest', 'itemizedDeductions', 'extraWithdrawals', 'contribution', 'deathAge', 'survivorship',
@@ -322,8 +323,10 @@ export default function App() {
               <ClientPanel scenario={scenario} update={update} messages={allMessages} part="facts" />
               <h3 className="subsection-title">Spouse</h3>
               <SpousePanel scenario={scenario} update={update} messages={allMessages} part="facts" />
-              <h3 className="subsection-title">Income &amp; outside accounts</h3>
+              <h3 className="subsection-title">Income</h3>
+              <IncomeTimelinePanel scenario={scenario} update={update} messages={allMessages} />
               <AssumptionsPanel scenario={scenario} update={update} messages={allMessages} part="income" />
+              <h3 className="subsection-title">Outside accounts</h3>
               <CashFlowPanel scenario={scenario} update={update} messages={allMessages} part="facts" />
               <MoreDetails
                 label="More details: deductions, contributions, withdrawals, first death"

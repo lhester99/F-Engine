@@ -10,6 +10,7 @@ import {
 } from '../data/federalTax';
 import type { FilingStatus, Scenario } from '../types';
 import { filingStatusForYear, otherIncomeFactor, peopleAge65ForTax, socialSecurityForYear } from './household';
+import { incomeItemsForYear } from './income';
 
 const floorTo = (v: number, step: number) => Math.floor(v / step) * step;
 
@@ -235,13 +236,20 @@ export function householdIncomeForYear(
 ): HouseholdIncome {
   const a = scenario.analysis;
   const g = Math.pow(1 + a.inflationRate, year - scenario.startYear);
+  const timeline = incomeItemsForYear(scenario, year);
   return {
     year,
     filingStatus: filingStatusForYear(scenario, year),
     ordinaryIncome:
-      a.otherOrdinaryIncome * g * otherIncomeFactor(scenario, year) + ira.taxableIra + ira.conversion - ira.deductibleContributions + side.ordinary,
+      a.otherOrdinaryIncome * g * otherIncomeFactor(scenario, year) +
+      timeline.ordinary +
+      ira.taxableIra +
+      ira.conversion -
+      ira.deductibleContributions +
+      side.ordinary,
     qualifiedIncome: a.qualifiedInvestmentIncome * g * otherIncomeFactor(scenario, year) + side.qualified,
-    ordinaryInvestmentIncome: side.ordinary,
+    // Cash-account interest and rental, interest, and non-qualified annuity income on the timeline.
+    ordinaryInvestmentIncome: side.ordinary + timeline.netInvestment,
     taxExemptInterest: a.taxExemptInterest * g * otherIncomeFactor(scenario, year),
     socialSecurity: socialSecurityForYear(scenario, year),
     peopleAge65: peopleAge65ForTax(scenario, year),

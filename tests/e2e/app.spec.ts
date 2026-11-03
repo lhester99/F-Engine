@@ -261,7 +261,7 @@ test('findings, trade-offs, and assumptions respond to the strategy', async ({ p
   await page.getByLabel('Spouse date of birth').fill('1958-02-02');
   await page.getByTestId('ss-benefit').fill('48000');
   await page.getByTestId('ss-age').fill('70');
-  await page.getByTestId('other-income').fill('30000');
+  await page.getByTestId('income-amount-0').fill('30000');
   await page.getByTestId('qualified-income').fill('8000');
   await page.getByTestId('tax-exempt').fill('2000');
   await page.getByTestId('itemized').fill('40000');
@@ -530,4 +530,27 @@ test('conversion markers: square for the client, circle for the spouse, star for
   await expect(legend).toContainText('Roth conversion, client');
   await expect(legend).toContainText('Roth conversion, spouse');
   await expect(legend).toContainText('Roth conversions, client and spouse');
+});
+
+test('income timeline: an income that stops shows up in the year detail', async ({ page }) => {
+  await openInputs(page);
+  const timeline = page.getByTestId('income-timeline');
+  const add = timeline.getByRole('button', { name: 'Add income' });
+  await add.scrollIntoViewIfNeeded();
+  await add.click();
+  await page.getByTestId('income-amount-1').fill('60000');
+  // Default client is 70 in 2026; wages through age 71 (2027).
+  await page.getByTestId('income-end-1').fill('71');
+  await expect(page.getByTestId('income-item-1')).toContainText('In 2027');
+  const open = page.getByRole('button', { name: 'Open year detail' });
+  await open.scrollIntoViewIfNeeded();
+  await open.click();
+  const detail = page.getByTestId('year-detail');
+  await detail.getByLabel('Select year').selectOption('2027');
+  const row = detail.getByRole('row', { name: /Wages, pensions, and other income/ });
+  // $15,000 pension + $60,000 wages, both in today's dollars, grown one year at 2.5%.
+  await expect(row).toContainText('$76,875');
+  await detail.getByLabel('Select year').selectOption('2028');
+  await expect(detail.getByRole('row', { name: /Wages, pensions, and other income/ })).toContainText('$15,759');
+  await expectNoHorizontalScroll(page);
 });

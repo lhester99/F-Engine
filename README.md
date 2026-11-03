@@ -41,7 +41,10 @@ The side panel (on a phone, the "Inputs & planning levers" button) has three par
 **Client & household** (set once; shows a short summary until you click **Edit**):
 each person's date of birth, Social Security and the age it starts, Traditional IRA
 balances (more than one allowed) and Roth IRA balance as of the prior December 31; the
-projection ending age; pensions, wages, and interest; qualified dividends and gains;
+projection ending age; an **income timeline** (each person's Social Security and start
+age, plus wages, pensions, annuities, rental income, interest, or other income, each
+with its own start and end age, whether it grows with inflation, and the share that
+continues for a survivor; ages show their calendar year); qualified dividends and gains;
 taxable account and cash balances; and how much of the IRA withdrawals the client
 spends each year (the rest, after tax, is invested in the taxable account). With a
 spouse more than 10 years younger, a "sole beneficiary" box appears. **More details**
@@ -238,8 +241,8 @@ verification notes are in [`docs/research.md`](docs/research.md).
 - Federal tax is a simplified estimate: no credits, AMT, QBI deduction, or the 10%
   early-distribution penalty. State tax is one flat rate. Tax law after 2026 is
   projected from current law. Balance totals are pre-tax.
-- Entered income grows with inflation every year (pensions without COLAs are
-  overstated later).
+- Self-employment tax is not modeled (enter only W-2 wages as wages). Rental income is
+  treated as passive net income (counted for the 3.8% NIIT).
 - The tax comparison counts QCD gifts as income not taxed but not the gifts
   themselves as a cost.
 - IRMAA: married filing separately and appeals are not modeled; everyone on the
@@ -249,7 +252,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 203 calculation and component tests, including IRS boundary cases,
+- `npm test`: 210 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

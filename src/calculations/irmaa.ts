@@ -7,6 +7,7 @@ import {
 import type { AnalysisSettings, FilingStatus, ProjectionResult, Scenario } from '../types';
 import { computeTax, householdIncomeForYear, marginalRate, type HouseholdIncome, type TaxResult } from './federalTax';
 import { filingStatusForYear, peopleAge65 } from './household';
+import { incomeItemsForYear } from './income';
 
 /** Medicare eligibility age used to decide whether IRMAA can apply in a premium year. */
 export const MEDICARE_AGE = 65;
@@ -88,6 +89,8 @@ export interface IncomeYear {
   marginalRate: number;
   /** MAGI for IRMAA: AGI plus tax-exempt interest. */
   magi: number;
+  /** Wages, pensions, annuities, rental income, interest, and other income from the income timeline. */
+  timelineIncome: number;
   /** Premium year this income determines (income year + 2). */
   premiumYear: number;
   /** False when nobody on the return is 65 or older in the premium year, so IRMAA does not apply. */
@@ -128,6 +131,7 @@ export function incomeByYear(result: ProjectionResult, scenario: Scenario): Inco
       tax,
       marginalRate: marginalRate(income),
       magi: tax.irmaaMagi,
+      timelineIncome: incomeItemsForYear(scenario, y.year).ordinary,
       premiumYear,
       medicareApplies,
       enrollees,

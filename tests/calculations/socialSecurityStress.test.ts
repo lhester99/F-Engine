@@ -35,6 +35,7 @@ function scenario(spouseSs: number): Scenario {
   s.people.push({ ...sp.person, dateOfBirth: '1960-03-01', socialSecurityBenefit: spouseSs, socialSecurityStartAge: 62 });
   s.accounts.push(...sp.accounts);
   s.analysis = { ...s.analysis, otherOrdinaryIncome: 0, stateTaxRate: 0 };
+  s.incomeItems = [];
   s.cashFlow = { ...s.cashFlow, taxableBalance: 0, taxableBasis: 0, cashBalance: 0 };
   s.strategy = { ...s.strategy, conversions: [{ personId: 'client', year: 2026, amount: CONVERSION }] };
   return s;

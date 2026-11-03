@@ -48,6 +48,8 @@ const GROUPS: Group[] = [
   {
     title: 'Taxes',
     rows: [
+      { label: 'Social Security (before tax)', value: (_y, inc) => inc?.income.socialSecurity ?? null, needsIncome: true },
+      { label: 'Wages, pensions, and other income', value: (_y, inc) => inc?.timelineIncome ?? null, needsIncome: true },
       { label: 'Taxable income', value: (_y, inc) => inc?.tax.taxableIncome ?? null, needsIncome: true, always: true },
       { label: 'Federal tax bracket', value: (_y, inc) => inc?.tax.bracketRate ?? null, format: 'pct', needsIncome: true, always: true },
       { label: 'Federal income tax', value: (_y, inc) => inc?.tax.federalTax ?? null, needsIncome: true, always: true, strong: true },

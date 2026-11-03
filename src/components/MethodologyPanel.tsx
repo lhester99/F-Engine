@@ -18,9 +18,9 @@ export const KNOWN_LIMITATIONS = [
   'RMDs, QCDs, extra withdrawals, and conversions are taken pro rata across Traditional IRAs. IRS rules allow the IRA RMD total to come from any IRA, so actual account-level balances may differ.',
   'QCDs are modeled annually. In the year age 70½ is reached, a QCD is only valid if made on or after the 70½ date. The one-time QCD to a split-interest entity is not modeled.',
   'QCD limits after the latest published year use an editable assumed value (default: held flat), which understates future inflation indexing.',
-  'Federal tax is an estimate from the brackets, standard or itemized deduction, age-65 additions, the 2025–2028 senior deduction, Social Security taxation, capital-gains rates, and the 3.8% NIIT. Credits, AMT, the qualified business income deduction, and the 10% early-distribution penalty before 59½ are not modeled. State tax is one flat rate on income other than Social Security. The NIIT applies to qualified dividends and gains and to cash-account interest; entered other income (pensions, wages, interest) is not split out, so any interest entered there is not counted for the NIIT.',
+  'Federal tax is an estimate from the brackets, standard or itemized deduction, age-65 additions, the 2025–2028 senior deduction, Social Security taxation, capital-gains rates, and the 3.8% NIIT. Credits, AMT, the qualified business income deduction, and the 10% early-distribution penalty before 59½ are not modeled. State tax is one flat rate on income other than Social Security. The NIIT applies to qualified dividends and gains, cash-account interest, and rental, interest, and non-qualified annuity income on the income timeline. Self-employment tax is not modeled, so self-employment income should not be entered as wages; rental income is treated as passive net income.',
   'Tax brackets and deductions after 2026 are projected at the inflation rate entered. Tax law can change.',
-  'Entered income (Social Security, pensions, interest, dividends, itemized deductions) is held in today’s dollars and grows with inflation every year. Pensions without cost-of-living increases are overstated in later years.',
+  'Social Security, dividends, tax-exempt interest, and itemized deductions are held in today’s dollars and grow with inflation. Each income on the income timeline either grows with inflation or stays a fixed amount, as chosen.',
   'Other entered income is assumed to pay its own tax and is not spent from the modeled accounts. Only the tax caused by IRA income, conversions, the taxable account, and cash is paid from the modeled accounts.',
   'The taxable account is invested at the same return as the IRAs. Its dividends are all treated as qualified and are reinvested; gains are realized only when money is withdrawn, in proportion to the unrealized gain. Short-term gains and tax-loss harvesting are not modeled.',
   'Withdrawing from the Roth IRA for spending assumes the five-year and age 59½ conditions for tax-free withdrawals are met.',
@@ -173,8 +173,9 @@ export function MethodologyPanel({ open, onClose }: { open: boolean; onClose: ()
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                Ordinary income = pensions, wages, and interest + taxable IRA distributions + Roth conversions − deductible
-                IRA contributions. Qualified dividends and long-term gains are added separately.
+                Ordinary income = income from the income timeline (wages, pensions, annuities, rental income, interest, other;
+                each paid only between its start and end ages, by its owner’s age) + taxable IRA distributions + Roth
+                conversions − deductible IRA contributions. Qualified dividends and long-term gains are added separately.
               </li>
               <li>
                 Taxable Social Security uses the IRS provisional-income formula (up to 85% of benefits). Thresholds of

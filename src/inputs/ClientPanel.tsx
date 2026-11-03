@@ -96,28 +96,6 @@ export function ClientPanel({ scenario, update, messages, part }: Props) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <NumberField
-          label="Client Social Security / yr"
-          kind="currency"
-          min={0}
-          value={person.socialSecurityBenefit}
-          externalError={messages.find((m) => m.severity === 'error' && m.field === 'socialSecurityBenefit' && m.personId === person.id)?.text}
-          onCommit={(v) => update((s) => ({ ...s, people: s.people.map((p, i) => (i === 0 ? { ...p, socialSecurityBenefit: v } : p)) }))}
-          testId="ss-benefit"
-        />
-        <NumberField
-          label="Starting at age"
-          kind="integer"
-          min={0}
-          max={120}
-          value={person.socialSecurityStartAge}
-          onCommit={(v) => update((s) => ({ ...s, people: s.people.map((p, i) => (i === 0 ? { ...p, socialSecurityStartAge: v } : p)) }))}
-          testId="ss-age"
-        />
-      </div>
-      <p className="field-hint -mt-1">Before tax, in today's dollars. The taxable share is calculated each year.</p>
-
       <NumberField
         label="Projection ending age (client's age)"
         kind="integer"

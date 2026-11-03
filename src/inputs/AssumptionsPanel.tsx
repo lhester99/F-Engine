@@ -31,27 +31,16 @@ export function AssumptionsPanel({ scenario, update, messages, part }: Props) {
             </span>
             .
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <NumberField
-              label="Pensions, wages, and interest (household)"
-              kind="currency"
-              min={0}
-              value={a.otherOrdinaryIncome}
-              externalError={err('otherOrdinaryIncome')}
-              onCommit={(v) => set({ otherOrdinaryIncome: v })}
-              testId="other-income"
-            />
-            <NumberField
-              label="Qualified dividends and gains"
-              kind="currency"
-              min={0}
-              value={a.qualifiedInvestmentIncome}
-              externalError={err('qualifiedInvestmentIncome')}
-              onCommit={(v) => set({ qualifiedInvestmentIncome: v })}
-              testId="qualified-income"
-            />
-          </div>
-          <p className="field-hint -mt-1">Per year, in today's dollars; grows with inflation.</p>
+          <NumberField
+            label="Qualified dividends and gains / yr"
+            kind="currency"
+            min={0}
+            value={a.qualifiedInvestmentIncome}
+            externalError={err('qualifiedInvestmentIncome')}
+            onCommit={(v) => set({ qualifiedInvestmentIncome: v })}
+            hint="In today's dollars; grows with inflation. Not counting the taxable account below, which is modeled separately."
+            testId="qualified-income"
+          />
         </>
       )}
 

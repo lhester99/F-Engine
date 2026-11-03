@@ -146,7 +146,10 @@ export type FilingStatus = 'single' | 'joint';
  * never calculated.
  */
 export interface AnalysisSettings {
-  /** Pensions, wages, interest, and other ordinary income (household). */
+  /**
+   * Flat other ordinary income, every year (legacy; the app now uses the income
+   * timeline, scenario.incomeItems, and sets this to 0).
+   */
   otherOrdinaryIncome: number;
   /** Qualified dividends and long-term capital gains. */
   qualifiedInvestmentIncome: number;
@@ -203,6 +206,30 @@ export interface HeirSettings {
   stateTaxRate: number;
 }
 
+/** Kinds of income on the income timeline; each is taxed as ordinary income. */
+export type IncomeKind = 'wages' | 'pension' | 'annuity' | 'rental' | 'interest' | 'other';
+
+/**
+ * One income on the income timeline: when it starts and stops (by its owner's
+ * age), whether it grows with inflation, and how much continues for a surviving
+ * spouse. Generic types only; never a name.
+ */
+export interface IncomeItem {
+  id: string;
+  kind: IncomeKind;
+  /** Whose income it is; its start and end ages are this person's ages. */
+  ownerId: string;
+  /** Per year. In today's dollars if it grows with inflation; otherwise the fixed amount paid each year. */
+  amount: number;
+  /** First age it is received (null: already received). */
+  startAge: number | null;
+  /** Last age it is received (null: for life, or to the end of the projection). */
+  endAge: number | null;
+  growsWithInflation: boolean;
+  /** Share that continues after the owner's death (0–1); for example a pension's survivor benefit. */
+  survivorShare: number;
+}
+
 export interface Scenario {
   /** First projection year. Balances are as of December 31 of the prior year. */
   startYear: number;
@@ -219,6 +246,8 @@ export interface Scenario {
   cashFlow: CashFlowSettings;
   survivorship: SurvivorshipSettings;
   heirs: HeirSettings;
+  /** Wages, pensions, annuities, rental income, interest, and other income, each with its own start and end age. */
+  incomeItems?: IncomeItem[];
 }
 
 export type MessageSeverity = 'error' | 'warning' | 'info';

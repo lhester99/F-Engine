@@ -82,11 +82,26 @@ export function validateScenario(s: Scenario): EngineMessage[] {
         }
       }
       for (const [v, field, label] of [
-        [sv.otherIncomeAfter, 'otherIncomeAfter', 'Income that continues'],
+        [sv.otherIncomeAfter, 'otherIncomeAfter', 'Dividends and tax-exempt interest that continue'],
         [sv.spendingAfter, 'spendingAfter', 'Spending that continues'],
       ] as const) {
         if (!isNum(v) || v < 0 || v > 2) err(field, `${label} must be between 0% and 200%.`, field);
       }
+    }
+  }
+
+  // Income timeline.
+  for (const item of s.incomeItems ?? []) {
+    const owner = s.people.find((p) => p.id === item.ownerId);
+    if (!owner) err('income-owner', 'An income item belongs to someone no longer in the plan; remove it or choose who receives it.', 'incomeItems');
+    if (!isNum(item.amount) || item.amount < 0) err('income-amount', 'Income amounts must be zero or positive.', 'incomeItems');
+    if (item.startAge !== null && !isWholeAge(item.startAge)) err('income-start', 'Income start ages must be whole numbers from 0 to 120.', 'incomeItems');
+    if (item.endAge !== null && !isWholeAge(item.endAge)) err('income-end', 'Income end ages must be whole numbers from 0 to 120.', 'incomeItems');
+    if (item.startAge !== null && item.endAge !== null && item.endAge < item.startAge) {
+      err('income-range', 'An income’s last age must be on or after its first age.', 'incomeItems');
+    }
+    if (!isNum(item.survivorShare) || item.survivorShare < 0 || item.survivorShare > 1) {
+      err('income-survivor', 'The share continuing for a survivor must be between 0% and 100%.', 'incomeItems');
     }
   }
 

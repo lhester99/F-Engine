@@ -23,11 +23,13 @@ Build order (each step usable on its own): 1) federal tax engine, bracket view, 
 
 3. SCOPE FENCE (strict)
 Do NOT build: Social Security claiming analysis, pension decisions, budgeting or spending plans, income-gap analysis, Monte Carlo, estate tax, trusts, insurance, portfolio management or asset allocation advice, or general financial planning. Every feature must directly serve the Roth conversion and RMD decision. If it doesn't, leave it out.
+Scope rule (owner, November 3, 2026): IN is anything that changes taxable income or the tax rate in a given year (when wages end, when a pension or annuity starts, part-time or rental income, a one-time gain, a different state rate). OUT is anything about how the client lives or spends, or what they should choose (budgets, spending goals, Social Security claiming age, pension lump sum vs. annuity, insurance, investments). The client tells the advisor what income they will have and when; the app shows what that does to conversions and never advises on the income choices themselves.
 Allowed (approved by the owner October 28–29, 2026):
 - Federal income tax calculated from current brackets: standard deduction, age-65 additions, the 2025–2028 senior deduction, taxation of Social Security benefits (benefit amounts are entered, never projected), qualified dividends and long-term gains, and the net investment income tax. State tax is one flat rate the advisor enters. Tax figures are labeled estimates; never present them as guaranteed "savings".
 - IRMAA tier detection and estimated surcharges. IRMAA thresholds, surcharges, tax brackets, and deductions are dated, editable values in data/; later years are projected at an entered inflation rate and labeled as projections.
 - A taxable brokerage account and a cash account, used only to hold unneeded RMDs and to pay conversion taxes, with simple entered growth and tax-drag assumptions. The advisor enters how much of each RMD is spent.
 - Spouses, an assumed age at the first death, spousal rollover to the survivor, and single filing for the survivor.
+- Income timeline (approved November 3, 2026): Social Security for each person, plus wages, pensions, annuities, rental income, interest, and other income, each with a start and end age, inflation growth on or off, and a survivor share.
 - Heirs: the 10-year rule for non-spouse beneficiaries, a tax rate the advisor enters for heirs, and step-up in basis for taxable assets.
   - Added in step 4, pending owner confirmation: an optional estimate of heirs' tax from their own income and brackets (number of heirs, each heir's income, filing status, state rate), from the owner's request to show how an inheritance can push heirs in their peak earning years into a higher bracket.
 
