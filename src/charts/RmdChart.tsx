@@ -14,6 +14,8 @@ interface Props {
   showConversions: boolean;
   selectedYear: number | null;
   onSelectYear: (year: number) => void;
+  /** Id of the client (people[0]); other people's conversions are the spouse's. */
+  clientId?: string;
 }
 
 export const SERIES_COLORS = {
@@ -33,18 +35,55 @@ interface Row {
   strategy: number;
   /** Null in years without a conversion, so no marker is drawn. */
   conversion: number | null;
+  /** Who converted this year: sets the marker (square, circle, star). */
+  converter: Converter | null;
+  clientConversion: number;
+  spouseConversion: number;
 }
 
-export function buildRmdRows(baseline: YearResult[], strategy: YearResult[], view: RmdView, axis: AxisMode): Row[] {
+/** Who made the year's Roth conversion. */
+export type Converter = 'client' | 'spouse' | 'both';
+
+/** Client's and spouse's conversions for a year, and who converted. */
+export function conversionsBy(y: YearResult, clientId: string | undefined) {
+  let client = 0;
+  let spouse = 0;
+  for (const p of y.people) {
+    if (clientId === undefined || p.personId === clientId) client += p.conversionGross;
+    else spouse += p.conversionGross;
+  }
+  const converter: Converter | null = client > 0 && spouse > 0 ? 'both' : client > 0 ? 'client' : spouse > 0 ? 'spouse' : null;
+  return { client, spouse, converter };
+}
+
+export function buildRmdRows(
+  baseline: YearResult[],
+  strategy: YearResult[],
+  view: RmdView,
+  axis: AxisMode,
+  clientId?: string,
+): Row[] {
   const pick = (y: YearResult) => (view === 'required' ? y.totals.requiredRmd : y.totals.taxableDistribution);
-  return strategy.map((s, i) => ({
-    year: s.year,
-    age: s.age,
-    x: axis === 'age' ? s.age : s.year,
-    baseline: baseline[i] ? pick(baseline[i]) : 0,
-    strategy: pick(s),
-    conversion: s.totals.conversionGross > 0 ? s.totals.conversionGross : null,
-  }));
+  return strategy.map((s, i) => {
+    const by = conversionsBy(s, clientId);
+    return {
+      year: s.year,
+      age: s.age,
+      x: axis === 'age' ? s.age : s.year,
+      baseline: baseline[i] ? pick(baseline[i]) : 0,
+      strategy: pick(s),
+      conversion: s.totals.conversionGross > 0 ? s.totals.conversionGross : null,
+      converter: by.converter,
+      clientConversion: by.client,
+      spouseConversion: by.spouse,
+    };
+  });
+}
+
+/** Marker shapes used on the conversion line (in legend order). */
+export function convertersPresent(strategy: YearResult[], clientId?: string): Converter[] {
+  const seen = new Set(strategy.map((y) => conversionsBy(y, clientId).converter));
+  return (['client', 'spouse', 'both'] as const).filter((c) => seen.has(c));
 }
 
 /** Diagonal hatch so the baseline differs from the strategy by texture, not only color. */
@@ -59,14 +98,45 @@ export function HatchDefs() {
   );
 }
 
-/** Square markers distinguish the conversion series from bars by shape. */
-export function SquareDot(props: { cx?: number; cy?: number; index?: number }) {
-  const { cx, cy, index } = props;
-  if (cx === undefined || cy === undefined) return <g key={index} />;
-  return <rect key={index} x={cx - 4} y={cy - 4} width={8} height={8} fill={SERIES_COLORS.conversion} stroke="#fff" strokeWidth={1.5} />;
+/** Points of a five-pointed star centered at (cx, cy). */
+export function starPoints(cx: number, cy: number, outer = 8, inner = 3.6): string {
+  return Array.from({ length: 10 }, (_, i) => {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+  }).join(' ');
 }
 
-function ChartTooltip({ active, payload, view }: { active?: boolean; payload?: { payload: Row }[]; view: RmdView }) {
+/** A conversion marker: square for the client, circle for the spouse, star when both convert. */
+export function ConversionMarker({ cx, cy, shape }: { cx: number; cy: number; shape: Converter }) {
+  const common = { fill: SERIES_COLORS.conversion, stroke: '#fff', strokeWidth: 1.5 };
+  if (shape === 'spouse') return <circle cx={cx} cy={cy} r={4.75} {...common} />;
+  if (shape === 'both') return <polygon points={starPoints(cx, cy)} {...common} />;
+  return <rect x={cx - 4} y={cy - 4} width={8} height={8} {...common} />;
+}
+
+/** Recharts dot renderer: the marker shape follows who converted that year. */
+export function ConversionDot(props: { cx?: number; cy?: number; index?: number; payload?: Row }) {
+  const { cx, cy, index, payload } = props;
+  if (cx === undefined || cy === undefined || !payload?.converter) return <g key={index} />;
+  return (
+    <g key={index} data-converter={payload.converter}>
+      <ConversionMarker cx={cx} cy={cy} shape={payload.converter} />
+    </g>
+  );
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  view,
+  hasSpouse,
+}: {
+  active?: boolean;
+  payload?: { payload: Row }[];
+  view: RmdView;
+  hasSpouse?: boolean;
+}) {
   if (!active || !payload?.length) return null;
   const row = payload[0]!.payload;
   const name = view === 'required' ? 'Required RMD' : 'Taxable IRA distributions';
@@ -80,10 +150,18 @@ function ChartTooltip({ active, payload, view }: { active?: boolean; payload?: {
         <dd className="text-right font-semibold text-ink">{formatUsd(row.strategy)}</dd>
         <dt className="text-ink-2">{name}, no strategy</dt>
         <dd className="text-right text-ink">{formatUsd(row.baseline)}</dd>
-        {row.conversion !== null && (
+        {row.conversion !== null && row.converter !== 'both' && (
           <>
-            <dt className="text-ink-2">Roth conversion</dt>
+            <dt className="text-ink-2">Roth conversion{row.spouseConversion > 0 ? ' (spouse)' : row.converter && hasSpouse ? ' (client)' : ''}</dt>
             <dd className="text-right text-ink">{formatUsd(row.conversion)}</dd>
+          </>
+        )}
+        {row.converter === 'both' && (
+          <>
+            <dt className="text-ink-2">Roth conversion, client</dt>
+            <dd className="text-right text-ink">{formatUsd(row.clientConversion)}</dd>
+            <dt className="text-ink-2">Roth conversion, spouse</dt>
+            <dd className="text-right text-ink">{formatUsd(row.spouseConversion)}</dd>
           </>
         )}
       </dl>
@@ -92,8 +170,9 @@ function ChartTooltip({ active, payload, view }: { active?: boolean; payload?: {
   );
 }
 
-export function RmdChart({ baseline, strategy, view, axis, showConversions, selectedYear, onSelectYear }: Props) {
-  const rows = buildRmdRows(baseline, strategy, view, axis);
+export function RmdChart({ baseline, strategy, view, axis, showConversions, selectedYear, onSelectYear, clientId }: Props) {
+  const rows = buildRmdRows(baseline, strategy, view, axis, clientId);
+  const hasSpouse = strategy.some((y) => y.people.some((p) => clientId !== undefined && p.personId !== clientId));
   const selected = rows.find((r) => r.year === selectedYear);
   const selection = useChartSelection(rows, onSelectYear, PLOT_INSETS);
 
@@ -126,7 +205,7 @@ export function RmdChart({ baseline, strategy, view, axis, showConversions, sele
             width={56}
           />
           {selected && <ReferenceArea x1={selected.x} x2={selected.x} fill="rgba(31,78,140,0.10)" ifOverflow="visible" />}
-          <Tooltip content={<ChartTooltip view={view} />} cursor={{ fill: 'rgba(31,78,140,0.06)' }} />
+          <Tooltip content={<ChartTooltip view={view} hasSpouse={hasSpouse} />} cursor={{ fill: 'rgba(31,78,140,0.06)' }} />
           <Bar dataKey="baseline" name="No strategy" fill="url(#hatch-baseline)" radius={[3, 3, 0, 0]} isAnimationActive={false} />
           <Bar dataKey="strategy" name="Current strategy" fill={SERIES_COLORS.strategy} radius={[3, 3, 0, 0]} isAnimationActive={false} />
           {showConversions && (
@@ -136,8 +215,8 @@ export function RmdChart({ baseline, strategy, view, axis, showConversions, sele
               type="linear"
               stroke={SERIES_COLORS.conversion}
               strokeWidth={2}
-              dot={SquareDot}
-              activeDot={SquareDot}
+              dot={ConversionDot}
+              activeDot={ConversionDot}
               isAnimationActive={false}
             />
           )}

@@ -7,7 +7,7 @@ import { WealthChart } from './charts/WealthChart';
 import { CashFlowPanel } from './inputs/CashFlowPanel';
 import { IncomeChart } from './charts/IncomeChart';
 import { ConversionPlanTable } from './components/ConversionPlanTable';
-import { RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/RmdChart';
+import { convertersPresent, RmdChart, SERIES_COLORS, type AxisMode, type RmdView } from './charts/RmdChart';
 import type { SavedStrategy } from './calculations/compare';
 import { Disclosures } from './components/Disclosures';
 import { Findings } from './components/Findings';
@@ -164,6 +164,17 @@ export default function App() {
     // Let React drop interactive-only UI before the print snapshot.
     setTimeout(() => window.print(), 50);
   };
+
+  // Conversion markers: square = client, circle = spouse, star = both in the same year.
+  const markerShape = { client: 'square', spouse: 'circle', both: 'star' } as const;
+  const present = convertersPresent(strategy.years, scenario.people[0]!.id);
+  const conversionLegend =
+    scenario.people.length < 2
+      ? [{ label: 'Roth conversions (not RMDs)', swatch: <LineSwatch color={SERIES_COLORS.conversion} marker="square" /> }]
+      : (present.length ? present : (['client'] as const)).map((c) => ({
+          label: c === 'both' ? 'Roth conversions, client and spouse' : `Roth conversion, ${c}`,
+          swatch: <LineSwatch color={SERIES_COLORS.conversion} marker={markerShape[c]} />,
+        }));
 
   const caption =
     view === 'required'
@@ -410,13 +421,14 @@ export default function App() {
                         showConversions={showConversions}
                         selectedYear={selectedYear}
                         onSelectYear={toggleYear}
+                        clientId={scenario.people[0]!.id}
                       />
                       <ChartLegend
                         label="Chart legend"
                         items={[
                           { label: 'No strategy (baseline)', swatch: <HatchSwatch /> },
                           { label: 'Current strategy', swatch: <SolidSwatch color={SERIES_COLORS.strategy} /> },
-                          ...(showConversions ? [{ label: 'Roth conversions (not RMDs)', swatch: <LineSwatch color={SERIES_COLORS.conversion} marker="square" /> }] : []),
+                          ...(showConversions ? conversionLegend : []),
                         ]}
                       />
                       <p className="text-xs text-ink-2" data-testid="chart-caption">

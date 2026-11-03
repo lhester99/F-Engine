@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { starPoints } from './RmdChart';
 
 export interface LegendItem {
   label: string;
@@ -39,9 +40,11 @@ export const HatchSwatch = () => (
   </svg>
 );
 
-export const LineSwatch = ({ color, dashed, marker }: { color: string; dashed?: boolean; marker?: 'square' }) => (
+export const LineSwatch = ({ color, dashed, marker }: { color: string; dashed?: boolean; marker?: 'square' | 'circle' | 'star' }) => (
   <svg width="24" height="14">
     <line x1="1" y1="7" x2="23" y2="7" stroke={color} strokeWidth="2" strokeDasharray={dashed ? '5 3' : undefined} />
     {marker === 'square' && <rect x="8" y="3" width="8" height="8" fill={color} />}
+    {marker === 'circle' && <circle cx="12" cy="7" r="4.5" fill={color} />}
+    {marker === 'star' && <polygon points={starPoints(12, 7, 6.5, 2.8)} fill={color} />}
   </svg>
 );

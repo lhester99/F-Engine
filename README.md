@@ -81,7 +81,9 @@ trade-off with its breakeven rate, and IRMAA years.
 **Tab 1, RMD Projections:** one bar per year (by age or calendar year). Switch
 between *Required RMDs* and *Taxable IRA Distributions*. A "No strategy" baseline
 (same inputs, no conversions or QCDs) appears beside each bar, shown with a striped
-pattern. Conversions can be shown as a separate line. Click or tap a year for a full
+pattern. Conversions can be shown as a separate green line; its marker shows who converted that
+year: a square for the client, a circle for the spouse, and a star when both convert
+(the tooltip then shows each person's amount). Click or tap a year for a full
 breakdown, baseline versus strategy, in plain-language groups: what was taken out of the
 IRAs, taxes, how the conversion tax was paid, where the RMD money went, and balances on
 December 31 (rows that are $0 in both columns are hidden). "More detail" holds the
@@ -247,7 +249,7 @@ verification notes are in [`docs/research.md`](docs/research.md).
 
 ## Testing
 
-- `npm test`: 201 calculation and component tests, including IRS boundary cases,
+- `npm test`: 203 calculation and component tests, including IRS boundary cases,
   hand-calculated multi-year projections, hand-calculated federal tax cases (Social
   Security taxation, senior deduction, capital-gains stacking, NIIT), fill-to-bracket
   conversions, the QCD contribution offset, IRMAA tiers and indexing, a

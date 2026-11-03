@@ -506,3 +506,28 @@ test('Tax Brackets tab: Roth conversion summary above the chart', async ({ page 
   await expect(page.locator('[data-testid="bracket-chart"] .recharts-bar-rectangle').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
+
+test('conversion markers: square for the client, circle for the spouse, star for both', async ({ page }) => {
+  await openInputs(page);
+  const addSpouse = page.getByRole('button', { name: 'Add spouse' });
+  await addSpouse.scrollIntoViewIfNeeded();
+  await addSpouse.click();
+  // Client converts at 70–74 (2026–2030); the spouse, two years younger, at 70–74 (2028–2032).
+  const apply = page.getByRole('button', { name: 'Apply to range' });
+  await apply.scrollIntoViewIfNeeded();
+  await apply.click();
+  await page.getByRole('group', { name: 'Convert from' }).getByRole('button', { name: 'Spouse’s IRAs' }).click();
+  await apply.click();
+  const chart = page.getByTestId('rmd-chart');
+  await chart.scrollIntoViewIfNeeded();
+  // Count marker shapes at distinct x positions (the hovered or tapped year also gets a highlight copy).
+  const positions = (shape: string) =>
+    chart.locator(shape).evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().x))).size);
+  await expect.poll(() => positions('g[data-converter="client"] rect')).toBe(2);
+  await expect.poll(() => positions('g[data-converter="both"] polygon')).toBe(3);
+  await expect.poll(() => positions('g[data-converter="spouse"] circle')).toBe(2);
+  const legend = page.getByRole('list', { name: 'Chart legend', exact: true }).first();
+  await expect(legend).toContainText('Roth conversion, client');
+  await expect(legend).toContainText('Roth conversion, spouse');
+  await expect(legend).toContainText('Roth conversions, client and spouse');
+});
